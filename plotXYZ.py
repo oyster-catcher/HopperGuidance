@@ -23,7 +23,7 @@ def plot(data,traj,title="",size=400,duration=30):
   if traj:
     plot_line(ax,traj,'time','x',color='blue')
   ax.grid()
-  P.subplot2grid((2,4),(0,1), colspan=1, rowspan=1)
+  P.subplot2grid((2,4),(1,0), colspan=1, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("vx")
@@ -33,7 +33,7 @@ def plot(data,traj,title="",size=400,duration=30):
   plot_line(ax,traj,'time','vx',color='blue')
   ax.grid()
 
-  P.subplot2grid((2,4),(1,0), colspan=1, rowspan=1)
+  P.subplot2grid((2,4),(0,1), colspan=1, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("y")
@@ -42,7 +42,7 @@ def plot(data,traj,title="",size=400,duration=30):
   plot_line(ax,data,'time','y',color='black')
   plot_line(ax,traj,'time','y',color='blue')
   ax.grid()
-  P.subplot2grid((2,4),(0,2), colspan=1, rowspan=1)
+  P.subplot2grid((2,4),(1,1), colspan=1, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("vy")
@@ -53,7 +53,7 @@ def plot(data,traj,title="",size=400,duration=30):
     plot_line(ax,traj,'time','vy',color='blue')
   ax.grid()
 
-  P.subplot2grid((2,4),(1,2), colspan=1, rowspan=1)
+  P.subplot2grid((2,4),(0,2), colspan=1, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("z")
@@ -64,7 +64,7 @@ def plot(data,traj,title="",size=400,duration=30):
     plot_line(ax,traj,'time','z',label='solution',color='blue')
   ax.grid()
   ax.legend()
-  P.subplot2grid((2,4),(0,3), colspan=1, rowspan=1)
+  P.subplot2grid((2,4),(1,2), colspan=1, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("vz")
@@ -76,7 +76,7 @@ def plot(data,traj,title="",size=400,duration=30):
   ax.grid()
 
   # Throttle
-  P.subplot2grid((2,4),(1,2), colspan=1, rowspan=1)
+  P.subplot2grid((2,4),(0,3), colspan=1, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("mag(accel)")
@@ -107,10 +107,10 @@ def plot(data,traj,title="",size=400,duration=30):
   # XY
   P.subplot2grid((2,4),(1,3), colspan=1, rowspan=1)
   ax = P.gca()
-  ax.set_xlabel("t")
-  ax.set_ylabel("mag(accel)")
-  ax.set_xlim([-200,200])
-  ax.set_ylim([0,400])
+  ax.set_xlabel("x")
+  ax.set_ylabel("y")
+  ax.set_xlim([-size,size])
+  ax.set_ylim([0,2*size])
 
   # plot side view of X,Y
   xx,yy=[],[]
