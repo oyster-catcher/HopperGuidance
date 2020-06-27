@@ -25,7 +25,7 @@ namespace HopperGuidance
         Color aligncol = new Color(0,0.1f,1.0f,1.0f); // blue
         Trajectory _traj; // trajectory of solutio
         double _startTime = 0; // Start solution starts to normalize vessel times to start at 0
-        Transform _logTransform;
+        Transform _logTransform = null;
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
         Vector3d _targetPos;
         float _accelFactor = 1.21f; // max. accel = maxThrust/(totalMass*_accelFactor)
@@ -217,26 +217,28 @@ namespace HopperGuidance
                 int N = 5;
                 Vector3d[] thrusts;
                 Vector3d r0 = vessel.GetWorldPos3D();
-                Vector3d rr0 = vessel.GetSrfVelocity();
+                Vector3d v0 = vessel.GetSrfVelocity();
                 Vector3d att0 = vessel.transform.up; // pointing direction
-                Vector3 g = FlightGlobals.getGeeForceAtPosition(r0);
+                Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
                 double coneangle = 30;
                 _maxThrust = ComputeMaxThrust();
                 double amax = (_maxThrust/vessel.totalMass)/_accelFactor;
                 _startTime = Time.time;
                 int retval;
-                double bestT = Solve.golden_search_gfold(r0, rr0, att0, targetPos, Vector3d.zero, Tmin, Tmax, N, g, 0.01*_maxPercentThrust*amax, tol, coneangle,out retval,out thrusts);
+                // Use _logTransform so that Y is vertical direction, and the gravity which acts downwards in the Y direction
+                LogSetUpTransform(); // initialises _logTransform
+                double bestT = Solve.golden_search_gfold(r0, v0, att0, targetPos, Vector3d.zero, Tmin, Tmax, N, g.magnitude, _logTransform, 0.01*_maxPercentThrust*amax, tol, coneangle,out retval,out thrusts);
                 if (retval > 0)
                 {
                   for(int i=0; i<N; i++)
                   {
                     Debug.Log("a["+i+"] = "+thrusts[i]);
                   }
-                  Debug.Log("Found Solution: bestT=" + bestT);
+                  Debug.Log("Found Solution: bestT=" + bestT + " retval="+retval);
                   double dt = 0.05;
 
                   _traj = new Trajectory();
-                  _traj.Simulate(bestT, thrusts, r0, rr0, g, dt);
+                  _traj.Simulate(bestT, thrusts, r0, v0, g, dt);
                   _traj.CorrectFinal(targetPos, Vector3.zero);
                   Debug.Log("Traj length="+_traj.Length());
 
@@ -248,7 +250,6 @@ namespace HopperGuidance
                   vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
                   Debug.Log("Enabled");
                   vessel.OnFlyByWire += new FlightInputCallback(Fly);
-                  LogSetUpTransform();
                   if (_logging) {LogStart("vessel.dat");}
                   // Write solution
                   if (_logging) {_traj.WriteLog("solution.dat", _logTransform);}

@@ -42,7 +42,8 @@ namespace HopperGuidance
     }
 #endif
 
-    public static double gfold(double[] r0, double[] rr0, double[] att0, double[] rf, double[] rrf, double T, int N, double[] g, double amax, double thrustConeAngle, out double[,] thrusts, out int retval)
+    // It is expected that g is position and acts in the direction Y downwards
+    public static double gfold(double[] r0, double[] v0, double[] att0, double[] rf, double[] vf, double T, int N, double g, double amax, double thrustConeAngle, out double[,] thrusts, out int retval)
     {
       int fidelity = 20;
       thrusts = null;
@@ -56,10 +57,10 @@ namespace HopperGuidance
       // f(x) = SUM |Ti|   // all thrusts
       // Exact constraints
       //   Final position = rf
-      //   Final velocity = rrf
+      //   Final velocity = vf
       //   Start position = r0
-      //   Start velocity = rr0
-      //   Gravity = g (vector)
+      //   Start velocity = v0
+      //   Gravity = g (acts downloads in Y direction)
       //   Initial mass = m
       // Ideally minimise
       //   SUM(|thrust|)
@@ -134,13 +135,13 @@ namespace HopperGuidance
       for( int i = 0 ; i < N ; i++ )
       {
         // final r function sums to this
-        c[0,N*3] = rf[0] - (r0[0] + rr0[0]*T + 0.5*T*T*g[0]); // X constant
-        c[1,N*3] = rf[1] - (r0[1] + rr0[1]*T + 0.5*T*T*g[1]); // Y constant
-        c[2,N*3] = rf[2] - (r0[2] + rr0[2]*T + 0.5*T*T*g[2]); // Z constant
+        c[0,N*3] = rf[0] - (r0[0] + v0[0]*T); // X constant
+        c[1,N*3] = rf[1] - (r0[1] + v0[1]*T - 0.5*T*T*g); // Y constant
+        c[2,N*3] = rf[2] - (r0[2] + v0[2]*T); // Z constant
         // final v function sums to this
-        c[3,N*3] = rrf[0] - (rr0[0] + T*g[0]);
-        c[4,N*3] = rrf[1] - (rr0[1] + T*g[1]);
-        c[5,N*3] = rrf[2] - (rr0[2] + T*g[2]);
+        c[3,N*3] = vf[0] - v0[0];
+        c[4,N*3] = vf[1] - (v0[1] - T*g);
+        c[5,N*3] = vf[2] - v0[2];
       }
 
 
@@ -221,15 +222,15 @@ namespace HopperGuidance
    }
 
    // If retval>0 than success. If retval<0 then various kind of failure. See https://www.alglib.net/translator/man/manual.csharp.html#minqpreportclass
-   public static double gfold(Vector3d r0, Vector3d rr0, Vector3d att0, Vector3d rf, Vector3d rrf, double T, int N, Vector3d g, double amax, double coneangle, out int retval, out Vector3d [] thrusts)
+   public static double gfold(Vector3d r0, Vector3d v0, Vector3d att0, Vector3d rf, Vector3d vf, double T, int N, double g, double amax, double coneangle, out int retval, out Vector3d [] thrusts)
    {
       double [] _r0 = convToDouble3(r0);
-      double [] _rr0 = convToDouble3(rr0);
+      double [] _v0 = convToDouble3(v0);
       double [] _att0 = convToDouble3(att0);
       double [] _rf = convToDouble3(rf);
-      double [] _rrf = convToDouble3(rrf);
-      double [] _g = convToDouble3(g);
-      double fuel = gfold(_r0, _rr0, _att0, _rf, _rrf, T, N, _g, amax, coneangle, out double[,] _thrusts, out retval);
+      double [] _vf = convToDouble3(vf);
+      double [,] _thrusts = new double[N,3];
+      double fuel = gfold(_r0, _v0, _att0, _rf, _vf, T, N, g, amax, coneangle, out _thrusts, out retval);
       thrusts = null;
       if (retval > 0)
       {
@@ -246,11 +247,24 @@ namespace HopperGuidance
 #endif
 
 #if (KSP)
-    public static double golden_search_gfold(Vector3d r0, Vector3d rr0, Vector3d att0, Vector3d rf, Vector3d rrf, double Tmin, double Tmax, int N, Vector3d g, double amax, double coneangle, double tol, out int retval, out Vector3d[] thrusts)
+    public static double golden_search_gfold(Vector3d r0, Vector3d v0, Vector3d att0, Vector3d rf, Vector3d vf, double Tmin, double Tmax, int N, double g, Transform transform, double amax, double coneangle, double tol, out int retval, out Vector3d[] thrusts)
 #else
-    public static double golden_search_gfold(double[] r0, double[] rr0, double [] att0, double[] rf, double[] rrf, double Tmin, double Tmax, int N, double [] g, double amax, double coneangle, double tol, out int retval, out double[,] thrusts)
+    public static double golden_search_gfold(double[] r0, double[] v0, double [] att0, double[] rf, double[] vf, double Tmin, double Tmax, int N, double g, double amax, double coneangle, double tol, out int retval, out double[,] thrusts)
 #endif
     {
+#if (KSP)
+      if (transform != null)
+      {
+        r0 = transform.InverseTransformPoint(r0);
+        v0 = transform.InverseTransformVector(v0);
+        att0 = transform.InverseTransformVector(att0);
+        rf = transform.InverseTransformPoint(rf);
+        vf = transform.InverseTransformVector(vf);
+      }
+      Debug.Log("r0="+r0);
+      Debug.Log("v0="+v0);
+#endif
+
       // golden section search
       // to find the minimum of f on [a,b]
       // f: a strictly unimodal function on [a,b]
@@ -271,8 +285,8 @@ namespace HopperGuidance
       d = a + (b - a) / gr;
       while (Math.Abs(c - d) > tol)
       {
-        fc=gfold(r0,rr0,att0,rf,rrf,c,N,g,amax,coneangle,out retval,out thrusts);
-        fd=gfold(r0,rr0,att0,rf,rrf,d,N,g,amax,coneangle,out retval,out thrusts);
+        fc=gfold(r0,v0,att0,rf,vf,c,N,g,amax,coneangle,out retval,out thrusts);
+        fd=gfold(r0,v0,att0,rf,vf,d,N,g,amax,coneangle,out retval,out thrusts);
         if (fc < fd)
             {b = d;}
         else
@@ -282,16 +296,25 @@ namespace HopperGuidance
         c = b - (b - a) / gr;
         d = a + (b - a) / gr;
       }
-      gfold(r0,rr0,att0,rf,rrf,(b+a)/2,N,g,amax,coneangle,out retval,out thrusts);
+      gfold(r0,v0,att0,rf,vf,(b+a)/2,N,g,amax,coneangle,out retval,out thrusts);
+#if (KSP)
+      if ((retval > 0) && (transform != null))
+      {
+        for(int i=0; i<N; i++)
+        {
+          thrusts[i] = transform.TransformVector(thrusts[i]);
+        }
+      }
+#endif
       return (b + a) / 2;
     }
 
     static int Main(string[] args)
     {
       // Initial position
-      Vector3d r0 = new Vector3d(-50,300,0);
+      Vector3d r0 = new Vector3d(-200,300,0);
       // Initial velocity
-      Vector3d v0 = new Vector3d(50,30,0);
+      Vector3d v0 = new Vector3d(100,10,0);
       // Initial attitude
       Vector3d att0 = new Vector3d(1,0,0);
       // Final position
@@ -310,7 +333,7 @@ namespace HopperGuidance
       double tol = 0.5; // find best duration down to this tolerance
       double coneangle = 30;
       int retval;
-      double bestT = golden_search_gfold(r0,v0,att0,rf,vf,Tmin,Tmax,N,g,amax,coneangle,tol,out retval,out thrusts);
+      double bestT = golden_search_gfold(r0,v0,att0,rf,vf,Tmin,Tmax,N,g.magnitude,null,amax,coneangle,tol,out retval,out thrusts);
       if (retval > 0)
       {
         double dt = 0.2;
