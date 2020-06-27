@@ -24,3 +24,18 @@ currently has the following limitations.
   minimized for each trajectory of a given duration rather than the sum of magnitudes (SOCP lets you
   use magnitudes)
 - It doesn't to work out whether you have enough fuel to reach the landing point so you might run out.
+
+Prerequistes
+============
+
+Tested with KSP version 1.8.1. May work with later versions.
+
+Installing
+==========
+
+Copy GameData to your KSP installation
+
+Using
+=====
+
+Creates a new part, HopperGuidanceCore. Right-click to get its UI up.

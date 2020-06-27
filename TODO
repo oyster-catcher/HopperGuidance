@@ -1,0 +1,8 @@
+- Better handling of when there is no solution
+- Add constraints to keep above ground
+- Add separate colour for thrust vectors
+- Allow toggling visualization of track
+- Fix bugs with showing/hidding and with duplicate targets/tracks
+- Let target be moved again
+- Make ClosestToTrajectory() interpolate from nearest points (might not be necessary)
+- Ensure simulation of trajectory (consider keyframe based method) ends a end-point and adjust if not
