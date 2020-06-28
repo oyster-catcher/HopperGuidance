@@ -1,5 +1,3 @@
-#define KSP
-
 using System;
 using UnityEngine;
 using KSPAssets;
@@ -28,7 +26,23 @@ namespace HopperGuidance
       return w;
     }
 
-#if (KSP)
+    // Calculate weights on position and velocity from thrust vectors up to time tX
+    public static void RVWeightsToTime(double tX, double T,int N, double dt, out double[] wr, out double[] wv)
+    {
+      wr = new double[N];
+      wv = new double[N];
+      for(double t = 0; t < tX; t += dt)
+      {
+        double tr = tX - t - dt; // remaining time after applying acceleration
+        double [] w = BasisWeights(t,T,N); // Vector for all N weights at time, t
+        for(int i = 0 ; i < N ; i++)
+        {
+          wr[i] += tr*w[i]*dt + 0.5*w[i]*dt*dt;
+          wv[i] += w[i]*dt;
+        }
+      }
+    }
+
     public static void OrthogonalVectors(Vector3d v, out Vector3d a, out Vector3d b)
     {
       a = new Vector3d(-v.y,v.x,0);
@@ -40,10 +54,9 @@ namespace HopperGuidance
       System.Console.WriteLine("v="+v+" a="+a+" b="+b);
       System.Console.WriteLine("v.a="+Vector3d.Dot(v,a)+" v.b="+Vector3d.Dot(v,b));
     }
-#endif
 
     // It is expected that g is position and acts in the direction Y downwards
-    public static double gfold(double[] r0, double[] v0, double[] att0, double[] rf, double[] vf, double T, int N, double g, double amax, double thrustConeAngle, out double[,] thrusts, out int retval)
+    public static double gfold(double[] r0, double[] v0, double[] att0, double[] rf, double[] vf, double T, int N, double g, double amax, double minDescentAngle, double minFinalDescentAngle, double amin, out double[,] thrusts, out int retval)
     {
       int fidelity = 20;
       thrusts = null;
@@ -69,7 +82,6 @@ namespace HopperGuidance
       //   SUM(thrust^2)
       // Special constraints
       //   Initial thrust constraints to be parallel to initial attitude
-
 
       double dt = (T/(double)N)/fidelity;
 
@@ -111,67 +123,141 @@ namespace HopperGuidance
       // 1 constraint on final Y position
       // 1 constraint on final X vel.
       // 1 constraint on final Y vel.
-      // 1 constraint for each Ty[i]>0
 
-      double [,] c = new double[9,N*3+1]; // zeroed?
-      int [] ct = new int[9]; // type of constrain, =, > or <  (default to 0 -> =)
+      int constraints = 3+3; // rf, vf
 
-      for(double t = 0; t < T; t += dt)
+      // Constrain initial attitude
+      //constraints += 3;
+
+      // for minDescentAngle, N points for 4 planes to make square 'cones'
+      constraints += 4*N;
+      int k=0;
+
+      // for amin constraint to keep thrust downwards
+      constraints += N;
+
+      double [,] c = new double[constraints,N*3+1]; // zeroed?
+      int [] ct = new int[constraints]; // type of constrain, =, > or <  (default to 0 -> =)
+
+      RVWeightsToTime(T,T,N,dt,out double [] wr,out double [] wv);
+      for(int i = 0 ; i < N ; i++)
       {
-        double tr = T - t - dt; // remaining time after applying acceleration
-        double [] w = BasisWeights(t,T,N); // Vector for all N weights at time, t
-        for(int i = 0 ; i < N ; i++)
-        {
-          // constrain final r=[0,0,0]
-          c[0,i*3+0] += tr*w[i]*dt + 0.5*w[i]*dt*dt;
-          c[1,i*3+1] += tr*w[i]*dt + 0.5*w[i]*dt*dt;
-          c[2,i*3+2] += tr*w[i]*dt + 0.5*w[i]*dt*dt;
-          // constrain final v=[0,0,0]
-          c[3,i*3+0] += w[i]*dt;
-          c[4,i*3+1] += w[i]*dt;
-          c[5,i*3+2] += w[i]*dt;
-        }
-      }
-      for( int i = 0 ; i < N ; i++ )
-      {
+        // proportions of thrusts[i] for XYZ for position
+        c[k+0,i*3+0]  = wr[i];
+        c[k+1,i*3+1]  = wr[i];
+        c[k+2,i*3+2]  = wr[i];
         // final r function sums to this
-        c[0,N*3] = rf[0] - (r0[0] + v0[0]*T); // X constant
-        c[1,N*3] = rf[1] - (r0[1] + v0[1]*T - 0.5*T*T*g); // Y constant
-        c[2,N*3] = rf[2] - (r0[2] + v0[2]*T); // Z constant
+        c[k+0,N*3] = rf[0] - (r0[0] + v0[0]*T); // X constant
+        c[k+1,N*3] = rf[1] - (r0[1] + v0[1]*T - 0.5*T*T*g); // Y constant
+        c[k+2,N*3] = rf[2] - (r0[2] + v0[2]*T); // Z constant
+        // proportions of thrusts[i] for XYZ for velocity
+        c[k+3,i*3+0]  = wv[i];
+        c[k+4,i*3+1]  = wv[i];
+        c[k+5,i*3+2]  = wv[i];
         // final v function sums to this
-        c[3,N*3] = vf[0] - v0[0];
-        c[4,N*3] = vf[1] - (v0[1] - T*g);
-        c[5,N*3] = vf[2] - v0[2];
+        c[k+3,N*3] = vf[0] - v0[0];
+        c[k+4,N*3] = vf[1] - (v0[1] - T*g);
+        c[k+5,N*3] = vf[2] - v0[2];
       }
-
-
-      // TODO: This isn't working I think!
-      // Add constraint that all thrusts to be within a cone of coneangle degress
-      // of the g, gravity vector, i.e. downwards
-//      for(int i=0;i<N;i++)
-//      {
-//        double gmag = Math.Sqrt(g[0]*g[0]+g[1]*g[1]+g[2]*g[2]);
-//        double cx = g[0]/gmag;
-//        double cy = g[1]/gmag;
-//        double cz = g[2]/gmag;
-//        c[6+i,i*3] = cx;
-//        c[6+i,i*3+1] = cy;
-//        c[6+i,i*3+2] = cz;
-//        c[6+i,N*3] = Math.Cos(Math.PI*coneangle/180.0); // RHS
-//        ct[6+i] = -1; // LHS < RHS
-//      }
+      k += 6;
 
       // Constrain initial thrust to be the same as att0
       // which will be small by will point craft in the correct direction
-      c[6,0] = 1.0; // thrust[0].x
-      c[6,N*3] = att0[0]; // =att0.x
-      ct[6] = 0;
-      c[7,1] = 1.0; // thrust[1].y
-      c[7,N*3] = att0[1]; // =att0.x
-      ct[7] = 0;
-      c[8,2] = 1.0; // thrust[2].z
-      c[8,N*3] = att0[2]; // =att0.x
-      ct[8] = 0;
+#if (false)
+      c[k,0] = 1.0; // thrust[0].x
+      c[k,N*3] = att0[0]; // =att0.x
+      ct[k] = 0;
+      c[k+1,1] = 1.0; // thrust[1].y
+      c[k+1,N*3] = att0[1]; // =att0.x
+      ct[k+1] = 0;
+      c[k+2,2] = 1.0; // thrust[2].z
+      c[k+2,N*3] = att0[2]; // =att0.x
+      ct[k+2] = 0;
+      k+=3;
+#endif
+
+      // Constrain N intermediate positions to be within minimumDescentAngle
+      for( int j=0; j<N; j++ )
+      {
+        double tX = T*((double)(j+1)/(N+2));
+        System.Console.WriteLine("T="+T+" j="+j+" tX="+tX);
+        //tX = 0.5*T; // centre
+        // Get whole weight vector up to time t
+        RVWeightsToTime(tX,T,N,dt,out wr,out wv);
+       
+        double vx = Math.Sin(minDescentAngle*Math.PI/180.0); 
+        double vy = Math.Cos(minDescentAngle*Math.PI/180.0); 
+        System.Console.WriteLine("ang="+minDescentAngle+ "vx="+vx+" vy="+vy);
+        //vx = 1.0;
+        //vy = 1.0;
+        double [] V1 = new double [] {vx,vy,0}; // Normal vector of plane to be above
+        double [] V2 = new double [] {-vx,vy,0}; // Normal vector of plane to be above
+        double [] V3 = new double [] {0,vy,vx}; // Normal vector of plane to be above
+        double [] V4 = new double [] {0,vy,-vx}; // Normal vector of plane to be above
+        for(int i = 0 ; i < N ; i++)
+        {
+          if (i == N-1) // Use constraint for final descent angle
+          {
+            vx = Math.Sin(minFinalDescentAngle*Math.PI/180.0); 
+            vy = Math.Cos(minFinalDescentAngle*Math.PI/180.0); 
+            V1 = new double [] {vx,vy,0}; // Normal vector of plane to be above
+            V2 = new double [] {-vx,vy,0}; // Normal vector of plane to be above
+            V3 = new double [] {0,vy,vx}; // Normal vector of plane to be above
+            V4 = new double [] {0,vy,-vx}; // Normal vector of plane to be above
+            System.Console.WriteLine("ang="+minFinalDescentAngle+ " vx="+vx+" vy="+vy);
+          }
+          // proportions of thrusts[i] for XYZ for position
+          // 45 degrees when X<0
+          c[k+0,i*3+0] = V1[0] * wr[i]; // X
+          c[k+0,i*3+1] = V1[1] * wr[i]; // Y
+          c[k+0,i*3+2] = V1[2] * wr[i]; // Z
+          // proportions of thrusts[i] for XYZ for position
+          // 45 degrees when X<0
+          c[k+1,i*3+0] = V2[0] * wr[i]; // X
+          c[k+1,i*3+1] = V2[1] * wr[i]; // Y
+          c[k+1,i*3+2] = V2[2] * wr[i]; // Z
+          // proportions of thrusts[i] for XYZ for position
+          // 45 degrees when X<0
+          c[k+2,i*3+0] = V3[0] * wr[i]; // X
+          c[k+2,i*3+1] = V3[1] * wr[i]; // Y
+          c[k+2,i*3+2] = V3[2] * wr[i]; // Z
+          // proportions of thrusts[i] for XYZ for position
+          // 45 degrees when X<0
+          c[k+3,i*3+0] = V4[0] * wr[i]; // X
+          c[k+3,i*3+1] = V4[1] * wr[i]; // Y
+          c[k+3,i*3+2] = V4[2] * wr[i]; // Z
+        }
+        // LHS factors to tX[i] and tY[i]
+        // Final X + Y + Z
+        c[k+0,N*3] = V1[0] * (rf[0] - (r0[0] + v0[0]*tX))
+                   + V1[1] * (rf[1] - (r0[1] + v0[1]*tX - 0.5*tX*tX*g))
+                   + V1[2] * (rf[2] - (r0[2] + v0[2]*tX)); // RHS
+        ct[k+0] = 1; // LHS > RHS
+        c[k+1,N*3] = V2[0] * (rf[0] - (r0[0] + v0[0]*tX))
+                   + V2[1] * (rf[1] - (r0[1] + v0[1]*tX - 0.5*tX*tX*g))
+                   + V2[2] * (rf[2] - (r0[2] + v0[2]*tX)); // RHS
+        ct[k+1] = 1; // LHS > RHS
+        c[k+2,N*3] = V3[0] * (rf[0] - (r0[0] + v0[0]*tX))
+                   + V3[1] * (rf[1] - (r0[1] + v0[1]*tX - 0.5*tX*tX*g))
+                   + V3[2] * (rf[2] - (r0[2] + v0[2]*tX)); // RHS
+        ct[k+2] = 1; // LHS > RHS
+        c[k+3,N*3] = V4[0] * (rf[0] - (r0[0] + v0[0]*tX))
+                   + V4[1] * (rf[1] - (r0[1] + v0[1]*tX - 0.5*tX*tX*g))
+                   + V4[2] * (rf[2] - (r0[2] + v0[2]*tX)); // RHS
+        ct[k+3] = 1; // LHS > RHS
+        k += 4;
+      }
+
+      // constraint thrust to be downwards > amin
+#if (true)
+      for( int i=0; i<N; i++)
+      {
+        c[k,i*3+1] = 1.0; // weight on T[i].y
+        c[k,N*3] = amin; // RHS
+        ct[k] = 1; // LHS > RHS
+        k += 1;
+      }
+#endif
 
       // zeroes for equality constraints
       alglib.minqpsetlc(state, c, ct);
@@ -215,14 +301,13 @@ namespace HopperGuidance
       return fuel;
   }
 
-#if (KSP)
    static double[] convToDouble3(Vector3d v)
    {
        return new double[] { v.x, v.y, v.z };
    }
 
    // If retval>0 than success. If retval<0 then various kind of failure. See https://www.alglib.net/translator/man/manual.csharp.html#minqpreportclass
-   public static double gfold(Vector3d r0, Vector3d v0, Vector3d att0, Vector3d rf, Vector3d vf, double T, int N, double g, double amax, double coneangle, out int retval, out Vector3d [] thrusts)
+   public static double gfold(Vector3d r0, Vector3d v0, Vector3d att0, Vector3d rf, Vector3d vf, double T, int N, double g, double amax, double minDescentAngle, double minFinalDescentAngle, double amin, out int retval, out Vector3d [] thrusts)
    {
       double [] _r0 = convToDouble3(r0);
       double [] _v0 = convToDouble3(v0);
@@ -230,7 +315,7 @@ namespace HopperGuidance
       double [] _rf = convToDouble3(rf);
       double [] _vf = convToDouble3(vf);
       double [,] _thrusts = new double[N,3];
-      double fuel = gfold(_r0, _v0, _att0, _rf, _vf, T, N, g, amax, coneangle, out _thrusts, out retval);
+      double fuel = gfold(_r0, _v0, _att0, _rf, _vf, T, N, g, amax, minDescentAngle, minFinalDescentAngle, amin, out _thrusts, out retval);
       thrusts = null;
       if (retval > 0)
       {
@@ -244,26 +329,32 @@ namespace HopperGuidance
       }
       return fuel;
    }
+
+#if (UNITY)
+  public static double golden_search_gfold(Vector3d r0, Vector3d v0, Vector3d att0, Vector3d rf, Vector3d vf, double Tmin, double Tmax, int N, double g, Transform transform, double amax, double minDescentAngle, double minFinalDescentAngle, double amin, double tol, out int retval, out Vector3d[] thrusts)
+  {
+    if (transform != null)
+    {
+      r0 = transform.InverseTransformPoint(r0);
+      v0 = transform.InverseTransformVector(v0);
+      att0 = transform.InverseTransformVector(att0);
+      rf = transform.InverseTransformPoint(rf);
+      vf = transform.InverseTransformVector(vf);
+    }
+    double fuel = golden_search_gfold(r0, v0, att0, rf, vf, Tmin, Tmax, N, g, amax, minDescentAngle, minFinalDescentAngle, amin, tol, out retval, out thrusts);
+    if (transform)
+    {
+      for(int i=0; i<N; i++)
+      {
+        thrusts[i] = transform.TransformVector(thrusts[i]);
+      }
+    }
+    return fuel;
+  }
 #endif
 
-#if (KSP)
-    public static double golden_search_gfold(Vector3d r0, Vector3d v0, Vector3d att0, Vector3d rf, Vector3d vf, double Tmin, double Tmax, int N, double g, Transform transform, double amax, double coneangle, double tol, out int retval, out Vector3d[] thrusts)
-#else
-    public static double golden_search_gfold(double[] r0, double[] v0, double [] att0, double[] rf, double[] vf, double Tmin, double Tmax, int N, double g, double amax, double coneangle, double tol, out int retval, out double[,] thrusts)
-#endif
+  public static double golden_search_gfold(Vector3d r0, Vector3d v0, Vector3d att0, Vector3d rf, Vector3d vf, double Tmin, double Tmax, int N, double g, double amax, double minDescentAngle, double minFinalDescentAngle, double amin, double tol, out int retval, out Vector3d[] thrusts)
     {
-#if (KSP)
-      if (transform != null)
-      {
-        r0 = transform.InverseTransformPoint(r0);
-        v0 = transform.InverseTransformVector(v0);
-        att0 = transform.InverseTransformVector(att0);
-        rf = transform.InverseTransformPoint(rf);
-        vf = transform.InverseTransformVector(vf);
-      }
-      Debug.Log("r0="+r0);
-      Debug.Log("v0="+v0);
-#endif
 
       // golden section search
       // to find the minimum of f on [a,b]
@@ -285,8 +376,8 @@ namespace HopperGuidance
       d = a + (b - a) / gr;
       while (Math.Abs(c - d) > tol)
       {
-        fc=gfold(r0,v0,att0,rf,vf,c,N,g,amax,coneangle,out retval,out thrusts);
-        fd=gfold(r0,v0,att0,rf,vf,d,N,g,amax,coneangle,out retval,out thrusts);
+        fc=gfold(r0,v0,att0,rf,vf,c,N,g,amax,minDescentAngle,minFinalDescentAngle,amin,out retval,out thrusts);
+        fd=gfold(r0,v0,att0,rf,vf,d,N,g,amax,minDescentAngle,minFinalDescentAngle,amin,out retval,out thrusts);
         if (fc < fd)
             {b = d;}
         else
@@ -296,27 +387,18 @@ namespace HopperGuidance
         c = b - (b - a) / gr;
         d = a + (b - a) / gr;
       }
-      gfold(r0,v0,att0,rf,vf,(b+a)/2,N,g,amax,coneangle,out retval,out thrusts);
-#if (KSP)
-      if ((retval > 0) && (transform != null))
-      {
-        for(int i=0; i<N; i++)
-        {
-          thrusts[i] = transform.TransformVector(thrusts[i]);
-        }
-      }
-#endif
+      gfold(r0,v0,att0,rf,vf,(b+a)/2,N,g,amax,minDescentAngle,minFinalDescentAngle,amin,out retval,out thrusts);
       return (b + a) / 2;
     }
 
     static int Main(string[] args)
     {
       // Initial position
-      Vector3d r0 = new Vector3d(-200,300,0);
+      Vector3d r0 = new Vector3d(500,600,0);
       // Initial velocity
-      Vector3d v0 = new Vector3d(100,10,0);
+      Vector3d v0 = new Vector3d(-20,10,0);
       // Initial attitude
-      Vector3d att0 = new Vector3d(1,0,0);
+      Vector3d att0 = new Vector3d(0,1,0);
       // Final position
       Vector3d rf = new Vector3d(0,0,0);
       // Final velocity
@@ -331,12 +413,14 @@ namespace HopperGuidance
       double Tmin = 2;
       double Tmax = 30;
       double tol = 0.5; // find best duration down to this tolerance
-      double coneangle = 30;
+      double minDescentAngle = 40;
+      double minFinalDescentAngle = 40;
+      double amin = 1.0;
       int retval;
-      double bestT = golden_search_gfold(r0,v0,att0,rf,vf,Tmin,Tmax,N,g.magnitude,null,amax,coneangle,tol,out retval,out thrusts);
+      double bestT = golden_search_gfold(r0,v0,att0,rf,vf,Tmin,Tmax,N,g.magnitude,amax,minDescentAngle,minFinalDescentAngle,amin,tol,out retval,out thrusts);
       if (retval > 0)
       {
-        double dt = 0.2;
+        double dt = 0.5;
         System.Console.WriteLine("bestT="+bestT);
         Trajectory traj = new Trajectory();
         traj.Simulate(bestT,thrusts,r0,v0,g,dt);
@@ -354,7 +438,6 @@ namespace HopperGuidance
         System.Console.WriteLine("Written solution.dat. View with plotXYZ.py solution.dat");
 
         traj.FindClosest(new Vector3d(0,500,0), new Vector3d(0,-80,0), out Vector3d close_r, out Vector3d close_v, out Vector3d close_a, out double close_t, 1, 1);
-
         OrthogonalVectors(new Vector3d(10,-10,5),out Vector3d a,out Vector3d b);
         OrthogonalVectors(new Vector3d(0,0,10),out a,out b);
       }
