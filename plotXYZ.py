@@ -9,7 +9,7 @@ def plot_line(ax,data,fx,fy,color='black',label=''):
   yy=[float(d[fy]) for d in data]
   ax.plot(xx,yy,color=color,label=label)
 
-def plot(data,traj,title="",size=400,duration=30):
+def plot(data,traj,title="",size=400,duration=30,amult=15,askip=3):
   # altitude against time, and throttle
   fig = P.figure(1)
 
@@ -115,10 +115,20 @@ def plot(data,traj,title="",size=400,duration=30):
   # plot side view of X,Y
   xx,yy=[],[]
   throttle=[]
+  for i,d in enumerate(data):
+    if (i%askip==0):
+      xx = []
+      yy = []
+      xx.append(d['x'])
+      yy.append(d['y'])
+      xx.append(d['x']+d['ax']*amult)
+      yy.append(d['y']+d['ay']*amult)
+      ax.plot(xx,yy,color='red',alpha=0.5)
+  xx = []
+  yy = []
   for d in data:
-    T=np.array([d['ax'],d['ay'],d['az']])
     xx.append(d['x'])
-    yy.append( d['y'] )
+    yy.append(d['y'])
   ax.plot(xx,yy,color='black')
   ax.grid()
 
