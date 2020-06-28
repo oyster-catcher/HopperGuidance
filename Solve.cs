@@ -180,14 +180,11 @@ namespace HopperGuidance
       for( int j=0; j<N; j++ )
       {
         double tX = T*((double)(j+1)/(N+2));
-        System.Console.WriteLine("T="+T+" j="+j+" tX="+tX);
-        //tX = 0.5*T; // centre
         // Get whole weight vector up to time t
         RVWeightsToTime(tX,T,N,dt,out wr,out wv);
        
         double vx = Math.Sin(minDescentAngle*Math.PI/180.0); 
         double vy = Math.Cos(minDescentAngle*Math.PI/180.0); 
-        System.Console.WriteLine("ang="+minDescentAngle+ "vx="+vx+" vy="+vy);
         //vx = 1.0;
         //vy = 1.0;
         double [] V1 = new double [] {vx,vy,0}; // Normal vector of plane to be above
@@ -204,7 +201,6 @@ namespace HopperGuidance
             V2 = new double [] {-vx,vy,0}; // Normal vector of plane to be above
             V3 = new double [] {0,vy,vx}; // Normal vector of plane to be above
             V4 = new double [] {0,vy,-vx}; // Normal vector of plane to be above
-            System.Console.WriteLine("ang="+minFinalDescentAngle+ " vx="+vx+" vy="+vy);
           }
           // proportions of thrusts[i] for XYZ for position
           // 45 degrees when X<0
