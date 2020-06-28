@@ -13,7 +13,8 @@ namespace HopperGuidance
     // Take a set of thrust vectors at positions 0, dt, 2*dt, etc...
     // and return a higher fidelity track of positions and thrust directions: r, rrr
     // at intervals of simdt
-    public void Simulate(double T, Vector3d[] thrusts, Vector3d r0, Vector3d v0, Vector3d g, double a_dt)
+    // if extendTime > 0 than add this much extra time as final position and velocity with acceleration to counteract g
+    public void Simulate(double T, Vector3d[] thrusts, Vector3d r0, Vector3d v0, Vector3d g, double a_dt, double extendTime=0)
     {
       // Simulate
       dt = a_dt;
@@ -22,10 +23,11 @@ namespace HopperGuidance
       int j = 0;
       int N = thrusts.Length;
       int M = (int)(T/dt+1);
+      int extendM = M + (int)(extendTime/dt);
       double t=0.5*dt;
-      r = new Vector3d[M];
-      v = new Vector3d[M];
-      a = new Vector3d[M];
+      r = new Vector3d[extendM];
+      v = new Vector3d[extendM];
+      a = new Vector3d[extendM];
       while(j<M)
       {
         r[j] = cr;
@@ -36,11 +38,17 @@ namespace HopperGuidance
         {
           ca = ca + w[i] * thrusts[i];
         }
-        //Debug.Log("r="+(Vector3)cr+" v="+(Vector3)cv+ "ca="+(Vector3)ca);
         a[j] = ca;
         cr += cv*dt + 0.5*ca*dt*dt + 0.5*g*dt*dt;
         cv += ca*dt + g*dt;
         t += dt;
+        j++;
+      }
+      while(j < extendM)
+      {
+        r[j] = cr;
+        v[j] = cv;
+        a[j] = -g;
         j++;
       }
     }
@@ -50,8 +58,6 @@ namespace HopperGuidance
     {
       Vector3d r_err = r[Length()-1] - rf;
       Vector3d v_err = v[Length()-1] - vf;
-      //Debug.Log("Final position error="+r_err);
-      //Debug.Log("Final velocity error="+v_err);
       for( int i = 0 ; i < Length() ; i++ )
       {
         r[i] = r[i] - r_err*((double)i/Length());
@@ -90,7 +96,6 @@ namespace HopperGuidance
           cdist = d;
         }
       }
-      Debug.Log("Found "+ci+" in "+r.Length);
       if (ci!=-1)
       {
         closest_r = r[ci];
@@ -125,7 +130,6 @@ namespace HopperGuidance
         t += dt;
       }
       f.Close();
-      //Debug.Log("Final target: "+tr);
     }
 
 //    static int Main(string[] argv)
