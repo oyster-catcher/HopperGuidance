@@ -13,8 +13,7 @@ namespace HopperGuidance
     // Take a set of thrust vectors at positions 0, dt, 2*dt, etc...
     // and return a higher fidelity track of positions and thrust directions: r, rrr
     // at intervals of simdt
-    // if extendTime > 0 than add this much extra time as final position and velocity with acceleration to counteract g
-    public void Simulate(double T, Vector3d[] thrusts, Vector3d r0, Vector3d v0, Vector3d g, double a_dt, double extendTime=0)
+    public void Simulate(double T, Vector3d[] thrusts, Vector3d r0, Vector3d v0, Vector3d g, double a_dt, double extendTime)
     {
       // Simulate
       dt = a_dt;
@@ -23,12 +22,12 @@ namespace HopperGuidance
       int j = 0;
       int N = thrusts.Length;
       int M = (int)(T/dt+1);
-      int extendM = M + (int)(extendTime/dt);
-      double t=0.5*dt;
+      int extendM = (int)((T+extendTime)/dt+1);
+      double t=0;
       r = new Vector3d[extendM];
       v = new Vector3d[extendM];
       a = new Vector3d[extendM];
-      while(j<M)
+      while(j < M)
       {
         r[j] = cr;
         v[j] = cv;
@@ -44,11 +43,14 @@ namespace HopperGuidance
         t += dt;
         j++;
       }
+      // Continue with same position and velocity and acceleration
+      // to equal gravity
       while(j < extendM)
       {
         r[j] = cr;
         v[j] = cv;
-        a[j] = -g;
+        a[j] = -g*dt;
+        t += dt;
         j++;
       }
     }
@@ -58,6 +60,8 @@ namespace HopperGuidance
     {
       Vector3d r_err = r[Length()-1] - rf;
       Vector3d v_err = v[Length()-1] - vf;
+      //Debug.Log("Final position error="+r_err);
+      //Debug.Log("Final velocity error="+v_err);
       for( int i = 0 ; i < Length() ; i++ )
       {
         r[i] = r[i] - r_err*((double)i/Length());
@@ -78,13 +82,14 @@ namespace HopperGuidance
       return r.Length;
     }
 
-    public bool FindClosest(Vector3d a_r, Vector3d a_v,
+    public double FindClosest(Vector3d a_r, Vector3d a_v,
                             out Vector3d closest_r, out Vector3d closest_v, out Vector3d closest_a, out double closest_t,
                             double rWeight = 0.2, double vWeight = 0.4)
     {
       // Find closest point in speed and position and returns the index
       int ci = -1;
       double cdist = 99999999;
+      double rdist = 99999999;
       for(int i=0;i<r.Length; i++)
       {
         double dr = (a_r-r[i]).magnitude;
@@ -94,15 +99,17 @@ namespace HopperGuidance
         {
           ci = i;
           cdist = d;
+          rdist = dr;
         }
       }
+      Debug.Log("Found "+ci+" in "+r.Length);
       if (ci!=-1)
       {
         closest_r = r[ci];
         closest_v = v[ci];
         closest_a = a[ci];
         closest_t = ci*dt;
-        return true;
+        return rdist;
       }
       else
       {
@@ -110,7 +117,7 @@ namespace HopperGuidance
         closest_v = Vector3d.zero;
         closest_a = Vector3d.zero;
         closest_t = 0;
-        return false;
+        return rdist;
       }
     }
 
@@ -130,6 +137,7 @@ namespace HopperGuidance
         t += dt;
       }
       f.Close();
+      //Debug.Log("Final target: "+tr);
     }
 
 //    static int Main(string[] argv)
