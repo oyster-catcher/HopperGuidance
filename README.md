@@ -25,6 +25,8 @@ currently has the following limitations.
   use magnitudes)
 - It doesn't to work out whether you have enough fuel to reach the landing point so you might run out.
 
+See the research paper "G-FOLD: A Real-Time Implementable Fuel Optimal Large Divert Guidance Algorithm for Planetary Pinpoint Landing" https://www.researchgate.net/publication/258676350_G-FOLD_A_Real-Time_Implementable_Fuel_Optimal_Large_Divert_Guidance_Algorithm_for_Planetary_Pinpoint_Landing.
+
 Prerequistes
 ============
 
