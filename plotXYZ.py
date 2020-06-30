@@ -13,7 +13,7 @@ def plot(data,traj,title="",size=400,duration=30,amult=15,askip=3):
   # altitude against time, and throttle
   fig = P.figure(1)
 
-  P.subplot2grid((2,4),(0,0), colspan=1, rowspan=1)
+  P.subplot2grid((3,5),(0,0), colspan=1, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("x")
@@ -23,7 +23,7 @@ def plot(data,traj,title="",size=400,duration=30,amult=15,askip=3):
   if traj:
     plot_line(ax,traj,'time','x',color='blue')
   ax.grid()
-  P.subplot2grid((2,4),(1,0), colspan=1, rowspan=1)
+  P.subplot2grid((3,5),(0,1), colspan=1, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("vx")
@@ -33,7 +33,7 @@ def plot(data,traj,title="",size=400,duration=30,amult=15,askip=3):
   plot_line(ax,traj,'time','vx',color='blue')
   ax.grid()
 
-  P.subplot2grid((2,4),(0,1), colspan=1, rowspan=1)
+  P.subplot2grid((3,5),(1,0), colspan=1, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("y")
@@ -42,7 +42,7 @@ def plot(data,traj,title="",size=400,duration=30,amult=15,askip=3):
   plot_line(ax,data,'time','y',color='black')
   plot_line(ax,traj,'time','y',color='blue')
   ax.grid()
-  P.subplot2grid((2,4),(1,1), colspan=1, rowspan=1)
+  P.subplot2grid((3,5),(1,1), colspan=1, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("vy")
@@ -53,7 +53,7 @@ def plot(data,traj,title="",size=400,duration=30,amult=15,askip=3):
     plot_line(ax,traj,'time','vy',color='blue')
   ax.grid()
 
-  P.subplot2grid((2,4),(0,2), colspan=1, rowspan=1)
+  P.subplot2grid((3,5),(2,0), colspan=1, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("z")
@@ -64,7 +64,7 @@ def plot(data,traj,title="",size=400,duration=30,amult=15,askip=3):
     plot_line(ax,traj,'time','z',label='solution',color='blue')
   ax.grid()
   ax.legend()
-  P.subplot2grid((2,4),(1,2), colspan=1, rowspan=1)
+  P.subplot2grid((3,5),(2,1), colspan=1, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("vz")
@@ -76,12 +76,12 @@ def plot(data,traj,title="",size=400,duration=30,amult=15,askip=3):
   ax.grid()
 
   # Throttle
-  P.subplot2grid((2,4),(0,3), colspan=1, rowspan=1)
+  P.subplot2grid((3,5),(0,2), colspan=1, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("mag(accel)")
   ax.set_xlim([0,duration])
-  ax.set_ylim([0,20])
+  ax.set_ylim([0,35])
 
   # plot desired magnitude of acceleration
   if traj and ('ax' in traj[0]):
@@ -105,7 +105,7 @@ def plot(data,traj,title="",size=400,duration=30,amult=15,askip=3):
     ax.grid()
 
   # XY
-  P.subplot2grid((2,4),(1,3), colspan=1, rowspan=1)
+  P.subplot2grid((3,5),(1,2), colspan=3, rowspan=2)
   ax = P.gca()
   ax.set_xlabel("x")
   ax.set_ylabel("y")
