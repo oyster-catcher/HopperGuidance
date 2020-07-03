@@ -76,7 +76,7 @@ def plot(data,traj,title="",size=400,duration=30,amult=15,askip=3):
   ax.grid()
 
   # Throttle
-  P.subplot2grid((3,5),(0,2), colspan=1, rowspan=1)
+  P.subplot2grid((3,5),(0,2), colspan=3, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("t")
   ax.set_ylabel("mag(accel)")
@@ -113,23 +113,30 @@ def plot(data,traj,title="",size=400,duration=30,amult=15,askip=3):
   ax.set_ylim([0,2*size])
 
   # plot side view of X,Y
-  xx,yy=[],[]
-  throttle=[]
-  for i,d in enumerate(data):
-    if (i%askip==0):
+  colors = ['blue','black']
+  for j,dat in enumerate([traj]):
+    if dat:
+      xx,yy=[],[]
+      throttle=[]
+      for i,d in enumerate(dat):
+        if (i%askip==0):
+          xx = []
+          yy = []
+          xx.append(d['x'])
+          yy.append(d['y'])
+          xx.append(d['x']+d['ax']*amult)
+          yy.append(d['y']+d['ay']*amult)
+      ax.plot(xx,yy,color='red',alpha=0.5)
+
+
+  for j,dat in enumerate([traj,data]):
+    if dat:
       xx = []
       yy = []
-      xx.append(d['x'])
-      yy.append(d['y'])
-      xx.append(d['x']+d['ax']*amult)
-      yy.append(d['y']+d['ay']*amult)
-      ax.plot(xx,yy,color='red',alpha=0.5)
-  xx = []
-  yy = []
-  for d in data:
-    xx.append(d['x'])
-    yy.append(d['y'])
-  ax.plot(xx,yy,color='black')
+      for d in dat:
+        xx.append(d['x'])
+        yy.append(d['y'])
+      ax.plot(xx,yy,color=colors[j])
   ax.grid()
 
   P.show()
