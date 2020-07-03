@@ -12,9 +12,7 @@ namespace HopperGuidance
     public class HopperGuidance : PartModule
     {
         GameObject _tgt_obj = null; // new GameObject("Target");
-        LineRenderer _tgt_line = null;
         GameObject _track_obj = null; // new GameObject("Track");
-        LineRenderer _track_line = null;
         GameObject _align_obj = null; // new GameObject("Track");
         LineRenderer _align_line = null;
         PID3d _pid3d = new PID3d();
@@ -31,7 +29,7 @@ namespace HopperGuidance
         Vector3d _targetPos;
         float _accelFactor = 1.21f; // max. accel = maxThrust/(totalMass*_accelFactor)
         bool _logging = true;
-        double disengageDistance = 100;
+        double disengageDistance = 10000;
         double extendTime = 5; // extend trajectory to slowly descent to touch down
 
         //[UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 0.0001f)]
@@ -84,60 +82,60 @@ namespace HopperGuidance
 
         public void DrawTarget(Vector3d pos, Transform transform, Color color, double size=10)
         {
-          if (_tgt_line == null)
+          if (_tgt_obj != null)
           {
-            _tgt_obj = new GameObject("Target");
-            _tgt_line= _tgt_obj.AddComponent<LineRenderer>();
+            Destroy(_tgt_obj);
           }
-          _tgt_line.transform.parent = transform;
-          _tgt_line.useWorldSpace = false;
-          _tgt_line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
-          _tgt_line.material.color = color;
-          _tgt_line.startWidth = 0.4f;
-          _tgt_line.endWidth = 0.4f;
-          _tgt_line.positionCount = 8;
-          _tgt_line.SetPosition(0,pos-transform.up);
-          _tgt_line.SetPosition(1,pos+transform.up);
-          _tgt_line.SetPosition(2,pos);
-          _tgt_line.SetPosition(3,pos-transform.forward);
-          _tgt_line.SetPosition(4,pos+transform.forward);
-          _tgt_line.SetPosition(5,pos);
-          _tgt_line.SetPosition(6,pos-transform.right);
-          _tgt_line.SetPosition(7,pos+transform.right);
+          _tgt_obj = new GameObject("Target");
+          LineRenderer line= _tgt_obj.AddComponent<LineRenderer>();
+          line.transform.parent = transform;
+          line.useWorldSpace = false;
+          line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
+          line.material.color = color;
+          line.startWidth = 0.4f;
+          line.endWidth = 0.4f;
+          line.positionCount = 8;
+          line.SetPosition(0,pos-transform.up);
+          line.SetPosition(1,pos+transform.up);
+          line.SetPosition(2,pos);
+          line.SetPosition(3,pos-transform.forward);
+          line.SetPosition(4,pos+transform.forward);
+          line.SetPosition(5,pos);
+          line.SetPosition(6,pos-transform.right);
+          line.SetPosition(7,pos+transform.right);
         }
 
         public void DrawTrack(Trajectory traj, Transform transform, Color color, float amult=1)
         {
-            Debug.Log("DrawTrack N="+traj.Length());
-            if (_track_line == null)
+            if (_track_obj != null)
             {
-              Debug.Log("Making gameObject");
-              _track_obj = new GameObject("Track");
-              _track_line= _track_obj.AddComponent<LineRenderer>();
+              Destroy(_track_obj); // delete old track
             }
-            _track_line.transform.parent = transform;
-            _track_line.useWorldSpace = false;
-            _track_line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
-            _track_line.material.color = color;
-            _track_line.startWidth = 0.4f;
-            _track_line.endWidth = 0.4f;
-            _track_line.positionCount = traj.Length();
+            _track_obj = new GameObject("Track");
+            LineRenderer line = _track_obj.AddComponent<LineRenderer>();
+            line.transform.parent = transform;
+            line.useWorldSpace = false;
+            line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
+            line.material.color = color;
+            line.startWidth = 0.4f;
+            line.endWidth = 0.4f;
+            line.positionCount = traj.Length();
             int j = 0;
             for (int i = 0; i < traj.Length(); i++)
             {
-              _track_line.SetPosition(j++,_traj.r[i]);
+              line.SetPosition(j++,_traj.r[i]);
               // Draw accelerations
-              GameObject obj = new GameObject("Accel");
-              LineRenderer line = obj.AddComponent<LineRenderer>();
-              line.transform.parent = transform;
-              line.useWorldSpace = false;
-              line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
-              line.material.color = thrustcol;
-              line.startWidth = 0.4f;
-              line.endWidth = 0.4f;
-              line.positionCount = 2;
-              line.SetPosition(0,_traj.r[i]);
-              line.SetPosition(1,_traj.r[i] + _traj.a[i]*amult);
+              //GameObject obj = new GameObject("Accel");
+              //LineRenderer line = obj.AddComponent<LineRenderer>();
+              //line.transform.parent = transform;
+              //line.useWorldSpace = false;
+              //line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
+              //line.material.color = thrustcol;
+              //line.startWidth = 0.4f;
+              //line.endWidth = 0.4f;
+              //line.positionCount = 2;
+              //line.SetPosition(0,_traj.r[i]);
+              //line.SetPosition(1,_traj.r[i] + _traj.a[i]*amult);
             }
         }
 
@@ -164,8 +162,18 @@ namespace HopperGuidance
         public override void OnStart(StartState state)
         {
             base.OnStart(state);
+            Disable();
             Debug.Log("OnStart");
         }
+
+//        public override void OnDestroy()
+//        {
+//            base.OnDestroy();
+//            Disable();
+//            if (_tgt_obj!=null) {Destroy(_tgt_obj);}
+//            if (_track_obj!=null) {Destroy(_track_obj);}
+//            Debug.Log("OnEnd");
+//        }
 
         public void LogSetUpTransform()
         {
@@ -227,9 +235,18 @@ namespace HopperGuidance
         {
           _enabled = false;
           Debug.Log("Disabled");
-          if (_logging) {LogStop();}
+          if (_track_obj != null) {Destroy(_track_obj); _track_obj=null;}
+          if (_align_obj != null) {Destroy(_align_obj); _align_obj=null;}
+          LogStop();
           vessel.Autopilot.Disable();
           vessel.OnFlyByWire -= new FlightInputCallback(Fly);
+          Events["OnToggle"].guiName = "Enable autopilot";
+        }
+
+        ~HopperGuidance()
+        {
+          Debug.Log("~HopperGuidance()");
+          Disable();
         }
 
         [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Enable autopilot", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
@@ -330,7 +347,8 @@ namespace HopperGuidance
           // Get nearest point on trajectory in position and velocity
           // use both so we can handle when the trajectory crosses itself,
           // and it works a bit better anyway if velocity and position are not in step
-          if (vessel == null)
+          if ((vessel == null) || (vessel.state != Vessel.State.ACTIVE) ||
+              (vessel.situation == Vessel.Situations.LANDED) || (vessel.situation == Vessel.Situations.SPLASHED))
           {
             Disable();
             return;
@@ -391,12 +409,12 @@ namespace HopperGuidance
           if (_logging) {LogData(_vesselWriter,Time.time-_startTime,vessel.GetWorldPos3D(),vessel.GetSrfVelocity(),F);}
         }
 
-//        public override void OnUpdate()
-//        {
-//          base.OnUpdate();
-//          _targetPos = vessel.mainBody.GetWorldSurfacePosition(tgtLatitude, tgtLongitude, tgtAltitude);
-//          DrawTarget(_targetPos,vessel.mainBody.transform,targetcol);
-//        }
+        public override void OnUpdate()
+        {
+          base.OnUpdate();
+          //_targetPos = vessel.mainBody.GetWorldSurfacePosition(tgtLatitude, tgtLongitude, tgtAltitude);
+          //DrawTarget(_targetPos,vessel.mainBody.transform,targetcol);
+        }
 
         [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Set Target Here", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
         public void SetTargetHere()
