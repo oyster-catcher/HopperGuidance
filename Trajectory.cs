@@ -62,7 +62,8 @@ namespace HopperGuidance
       Vector3d a_to_p = P - A;
       Vector3d a_to_b = B - A;
       double atb2 = a_to_b.x*a_to_b.x + a_to_b.y*a_to_b.y + a_to_b.z*a_to_b.z;
-      double atp_dot_atb = Vector3d.Dot(a_to_p,a_to_p);
+      //double atp_dot_atb = Vector3d.Dot(a_to_p,a_to_p);
+      double atp_dot_atb = Vector3d.Dot(a_to_b,a_to_p);
       t = atp_dot_atb / atb2; // The normalized "distance" from a to your closest point
       if (t<0) {t=0;}
       if (t>1) {t=1;}
@@ -122,7 +123,7 @@ namespace HopperGuidance
           rdist = dr;
         }
       }
-      Debug.Log("Found "+ci+" in "+r.Length);
+      //Debug.Log("Found "+ci+" in "+r.Length);
       if (ci!=-1)
       {
         closest_r = r[ci];
