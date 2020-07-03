@@ -1,6 +1,7 @@
 //#define ATTITUDE0
 //#define DESCENTANGLE
-//#define THRUSTDOWNWARDS
+#define THRUSTDOWNWARDS
+#define FINALTHRUSTDIR
 #define MAXVELOCITY
 
 using System;
@@ -84,7 +85,7 @@ namespace HopperGuidance
     public static double gfold(double[] r0, double[] v0, double[] att0, double[] rf, double[] vf, double T, int N, double g, double amin, double amax, double minDescentAngle, double minFinalDescentAngle, double vmax, out double[,] thrusts, out int retval)
     {
       double fidelity = 10; // this many steps inbetween thrust positions
-      int numchecks = 8; // number of checks for descent angle
+      //int numchecks = 8; // number of checks for descent angle
       // TODO - Changing this seems to make a HUGE difference to the end position. It shouldn't
       thrusts = null;
 
@@ -167,6 +168,10 @@ namespace HopperGuidance
       constraints += N;
 #endif
 
+#if (FINALTHRUSTDIR)
+      constraints += 2; // make T[final].x=T[final].z=0
+#endif
+
 #if (MAXVELOCITY)
       constraints += 6*N;
 #endif
@@ -227,6 +232,17 @@ namespace HopperGuidance
         ct[k] = 1; // LHS > RHS
         k += 1;
       }
+#endif
+
+#if (FINALTHRUSTDIR) // keep horizontal final thrust to zero
+      c[k,(N-1)*3+0] = 1.0; // weight on T[i].x
+      c[k,N*3] = 0; // RHS
+      ct[k] = 0; // LHS = RHS
+      k += 1;
+      c[k,(N-1)*3+2] = 1.0; // weight on T[i].z
+      c[k,N*3] = 0; // RHS
+      ct[k] = 0; // LHS = RHS
+      k += 1;
 #endif
 
 #if (DESCENTANGLE)
@@ -499,10 +515,10 @@ namespace HopperGuidance
       double bestT = golden_search_gfold(r0,v0,att0,rf,vf,Tmin,Tmax,N,g.magnitude,amin,amax,minDescentAngle,minFinalDescentAngle,vmax,tol,out thrusts,out retval);
       if (retval > 0)
       {
-        double dt = 0.1;
+        double dt = 0.2;
         System.Console.WriteLine("bestT="+bestT);
         Trajectory traj = new Trajectory();
-        traj.Simulate(bestT,thrusts,r0,v0,g,dt,5);
+        traj.Simulate(bestT,thrusts,r0,v0,g,dt,0);
         //traj.CorrectFinal(rf, vf);
 
         System.IO.StreamWriter _slnWriter = new System.IO.StreamWriter("solution.dat");
@@ -514,6 +530,19 @@ namespace HopperGuidance
           t += dt;
         }
         _slnWriter.Close();
+        Vector3d A = new Vector3d(0,0,0);
+        Vector3d B = new Vector3d(100,0,0);
+        for(double x=0; x<100 ; x+= 8.2)
+        {
+          Vector3d P = new Vector3d(x,-4,8);
+          Vector3d X = Trajectory.FindClosestPointOnLine(A,B,P,out double t1);
+          System.Console.WriteLine("X="+X+" t="+t1);
+        }
+
+        traj.FindClosest(new Vector3d(180,900,0),new Vector3d(10,-10,0),
+                         out Vector3d c_r,out Vector3d c_v,out Vector3d c_a,out double c_t,1.0,1.0);
+        System.Console.WriteLine("c_r="+c_r+" c_v="+c_v+" c_a="+c_a);
+
         System.Console.WriteLine("Written solution.dat. View with plotXYZ.py solution.dat");
 
         traj.FindClosest(new Vector3d(0,500,0), new Vector3d(0,-80,0), out Vector3d close_r, out Vector3d close_v, out Vector3d close_a, out double close_t, 1, 1);
@@ -525,6 +554,7 @@ namespace HopperGuidance
       {
         System.Console.WriteLine("Failed to find a solution: error code "+retval);
       }
+
 
       return(0);
     }
