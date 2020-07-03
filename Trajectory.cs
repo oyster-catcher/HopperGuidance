@@ -62,7 +62,6 @@ namespace HopperGuidance
       Vector3d a_to_p = P - A;
       Vector3d a_to_b = B - A;
       double atb2 = a_to_b.x*a_to_b.x + a_to_b.y*a_to_b.y + a_to_b.z*a_to_b.z;
-      //double atp_dot_atb = Vector3d.Dot(a_to_p,a_to_p);
       double atp_dot_atb = Vector3d.Dot(a_to_b,a_to_p);
       t = atp_dot_atb / atb2; // The normalized "distance" from a to your closest point
       if (t<0) {t=0;}
@@ -70,15 +69,51 @@ namespace HopperGuidance
       return (A + a_to_b*t);
     }
 
+    // rA,rB describes a line from rA to rB and R is the position
+    // vA,vB describes a line from vA to vB and V is the velocity
+    // return the closest position and the parameter to from 0 to 1 (A to B)
+    public static double FindClosestPointOnLineRV(Vector3d rA,Vector3d rB, Vector3d vA, Vector3d vB,
+                                                  Vector3d r,Vector3d v,
+                                                  out Vector3d c_r, out Vector3d c_v, out double t,
+                                                  double rWeight=1, double vWeight=1)
+    {
+      //Vector3d a_to_p = P - A;
+      //Vector3d a_to_b = B - A;
+      Vector3d srA = rA * rWeight;
+      Vector3d srB = rB * rWeight;
+      Vector3d svA = vA * vWeight;
+      Vector3d svB = vB * vWeight;
+      Vector3d sr = r * rWeight;
+      Vector3d sv = v * vWeight;
+      double [] a_to_p = new double [] {sr.x-srA.x,  sr.y-srA.y,  sr.z-srA.z,  sv.x-svA.x,  sv.y-svA.y,  sv.z-svA.z};
+      double [] a_to_b = new double [] {srB.x-srA.x, srB.y-srA.y, srB.z-srA.z, svB.x-svA.x, svB.y-svA.y, svB.z-svA.z};
+      double atb2 = a_to_b[0]*a_to_b[0] + a_to_b[1]*a_to_b[1] + a_to_b[2]*a_to_b[2] +
+                    a_to_b[3]*a_to_b[3] + a_to_b[4]*a_to_b[4] + a_to_b[5]*a_to_b[5];
+      //double atp_dot_atb = Vector3d.Dot(a_to_b,a_to_p);
+      double atp_dot_atb = a_to_b[0]*a_to_p[0] + a_to_b[1]*a_to_p[1] + a_to_b[2]*a_to_p[2] +
+                           a_to_b[3]*a_to_p[3] + a_to_b[4]*a_to_p[4] + a_to_b[5]*a_to_p[5];
+      t = atp_dot_atb / atb2; // The normalized "distance" from a to your closest point
+      if (t<0) {t=0;}
+      if (t>1) {t=1;}
+      c_r = rA + (rB - rA) * t;
+      c_v = vA + (vB - vA) * t;
+      return rWeight*(c_r-r).magnitude + vWeight*(c_v-v).magnitude;
+    }
+
     // Correct final position in trajectory to cover up numeric errors
-    public void CorrectFinal(Vector3d rf, Vector3d vf)
+
+    // Correct final position in trajectory to cover up numeric errors
+    public void CorrectFinal(Vector3d rf, Vector3d vf, double maxerr=100)
     {
       Vector3d r_err = r[Length()-1] - rf;
       Vector3d v_err = v[Length()-1] - vf;
-      for( int i = 0 ; i < Length() ; i++ )
+      if (r_err.magnitude < maxerr)
       {
-        r[i] = r[i] - r_err*((double)i/Length());
-        v[i] = v[i] - v_err*((double)i/Length());
+        for( int i = 0 ; i < Length() ; i++ )
+        {
+          r[i] = r[i] - r_err*((double)i/Length());
+          v[i] = v[i] - v_err*((double)i/Length());
+        }
       }
     }
 
@@ -109,6 +144,7 @@ namespace HopperGuidance
     {
       // Find closest point in speed and position and returns the index
       int ci = -1;
+      double t;
       double cdist = 99999999;
       double rdist = 99999999;
       for(int i=0;i<r.Length; i++)
@@ -133,27 +169,26 @@ namespace HopperGuidance
         // Now check line-segment either side
         if (ci-1 >= 0)
         {
-          Vector3d r1 = FindClosestPointOnLine(r[ci-1],r[ci],a_r,out double t);
-          double dr = (a_r-r1).magnitude;
-          if (dr < cdist)
+          double d1 = FindClosestPointOnLineRV(r[ci-1],r[ci],v[ci-1],v[ci],a_r,a_v,
+                                               out Vector3d c_r,out Vector3d c_v,out t,rWeight,vWeight);
+          if (d1 < cdist)
           {
-            closest_r = r1;
-            closest_v = v[ci-1]*(1-t) + v[ci]*t;
-            closest_a = a[ci-1]*(1-t) + a[ci]*t;
-            cdist = dr;
+            closest_r = c_r;
+            closest_v = c_v;
+            closest_a = a[ci-1] + (a[ci] - a[ci-1])*t;
+            cdist = d1;
           }
         }
-
-        // Now check line-segment either side
         if (ci+1 < r.Length)
         {
-          Vector3d r2 = FindClosestPointOnLine(r[ci],r[ci+1],a_r,out double t);
-          double dr = (a_r-r2).magnitude;
-          if (dr < cdist)
+          double d2 = FindClosestPointOnLineRV(r[ci],r[ci+1],v[ci],v[ci+1],a_r,a_v,
+                                               out Vector3d c_r,out Vector3d c_v,out t,rWeight,vWeight);
+          if (d2 < cdist)
           {
-            closest_r = r2;
-            closest_v = v[ci]*(1-t) + v[ci+1]*t;
-            closest_a = a[ci]*(1-t) + a[ci+1]*t;
+            closest_r = c_r;
+            closest_v = c_v;
+            closest_a = a[ci] + (a[ci+1] - a[ci])*t;
+            cdist = d2;
           }
         }
         return rdist;
