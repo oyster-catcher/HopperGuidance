@@ -5,8 +5,6 @@ using UnityEngine.UI;
 
 using KSPAssets;
 
-//#define FLYPID
-
 namespace HopperGuidance
 {
     public class HopperGuidance : PartModule
@@ -15,19 +13,21 @@ namespace HopperGuidance
         GameObject _track_obj = null; // new GameObject("Track");
         GameObject _align_obj = null; // new GameObject("Track");
         LineRenderer _align_line = null;
+        LinkedList<GameObject> thrusts = new LinkedList<GameObject>();
         PID3d _pid3d = new PID3d();
         bool _enabled = false;
         float _maxThrust;
-        Color trackcol = new Color(0,1,0,0.5f); // transparent green
-        Color targetcol = new Color(1,0.2f,0.2f,0.5f); // transparent red
-        Color thrustcol = new Color(1,0.2f,0.2f,0.5f); // transparent red
-        Color aligncol = new Color(0,0.1f,1.0f,1.0f); // blue
-        Trajectory _traj; // trajectory of solutio
+        Color trackcol = new Color(0,1,0,0.3f); // transparent green
+        Color targetcol = new Color(1,0.2f,0.2f,0.3f); // transparent red
+        Color thrustcol = new Color(1,0.2f,0.2f,0.3f); // transparent red
+        Color aligncol = new Color(0,0.1f,1.0f,0.3f); // blue
+        Trajectory _traj; // trajectory of solution
         double _startTime = 0; // Start solution starts to normalize vessel times to start at 0
         Transform _logTransform = null;
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
         Vector3d _targetPos;
-        float _accelFactor = 1.21f; // max. accel = maxThrust/(totalMass*_accelFactor)
+        //float _accelFactor = 1.21f; // max. accel = maxThrust/(totalMass*_accelFactor)
+        float _accelFactor = 1.0f; // max. accel = maxThrust/(totalMass*_accelFactor)
         bool _logging = true;
         double disengageDistance = 10000;
         double extendTime = 5; // extend trajectory to slowly descent to touch down
@@ -43,13 +43,13 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Altitude", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
         float tgtAltitude = 74.7f;
 
-        [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 5f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min. descent angle", guiFormat = "F0", isPersistant = true, guiUnits = "m")]
-        float minDescentAngle = 30.0f;
+        [UI_FloatRange(minValue = 0.0f, maxValue = 10.0f, stepIncrement = 0.1f)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Final max side accel", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
+        float finalSideAMax = 1.0f;
 
-        [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 5f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min. final descent angle", guiFormat = "F0", isPersistant = true, guiUnits = "m")]
-        float minFinalDescentAngle = 30.0f;
+        //[UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 5f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min. descent angle", guiFormat = "F0", isPersistant = true, guiUnits = "m")]
+        float minDescentAngle = 30.0f;
 
         [UI_FloatRange(minValue = 0f, maxValue = 90f, stepIncrement = 5f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = true)]
@@ -59,9 +59,9 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust %", isPersistant = true, guiUnits = "%")]
         float maxPercentThrust = 50f;
 
-        [UI_FloatRange(minValue = 0, maxValue = 100f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min thrust (downwards) %", isPersistant = true, guiUnits = "%")]
-        float minPercentThrust = 1f;
+        //[UI_FloatRange(minValue = 0, maxValue = 100f, stepIncrement = 1f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min thrust (downwards) %", isPersistant = true, guiUnits = "%")]
+        //float minPercentThrust = 1f;
 
         [UI_FloatRange(minValue = 0.01f, maxValue = 1f, stepIncrement = 0.01f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Position gain", guiFormat = "F2", isPersistant = true)]
@@ -110,6 +110,14 @@ namespace HopperGuidance
             if (_track_obj != null)
             {
               Destroy(_track_obj); // delete old track
+              // delete old thrusts
+              LinkedListNode<GameObject> node = thrusts.First;
+              while(node != null)
+              {
+                Destroy(node.Value);
+                node = node.Next;
+              }
+              thrusts.Clear();
             }
             _track_obj = new GameObject("Track");
             LineRenderer line = _track_obj.AddComponent<LineRenderer>();
@@ -125,17 +133,18 @@ namespace HopperGuidance
             {
               line.SetPosition(j++,_traj.r[i]);
               // Draw accelerations
-              //GameObject obj = new GameObject("Accel");
-              //LineRenderer line = obj.AddComponent<LineRenderer>();
-              //line.transform.parent = transform;
-              //line.useWorldSpace = false;
-              //line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
-              //line.material.color = thrustcol;
-              //line.startWidth = 0.4f;
-              //line.endWidth = 0.4f;
-              //line.positionCount = 2;
-              //line.SetPosition(0,_traj.r[i]);
-              //line.SetPosition(1,_traj.r[i] + _traj.a[i]*amult);
+              GameObject obj = new GameObject("Accel");
+              thrusts.AddLast(obj);
+              LineRenderer line2 = obj.AddComponent<LineRenderer>();
+              line2.transform.parent = transform;
+              line2.useWorldSpace = false;
+              line2.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
+              line2.material.color = thrustcol;
+              line2.startWidth = 0.4f;
+              line2.endWidth = 0.4f;
+              line2.positionCount = 2;
+              line2.SetPosition(0,_traj.r[i]);
+              line2.SetPosition(1,_traj.r[i] + _traj.a[i]*amult);
             }
         }
 
@@ -237,6 +246,14 @@ namespace HopperGuidance
           Debug.Log("Disabled");
           if (_track_obj != null) {Destroy(_track_obj); _track_obj=null;}
           if (_align_obj != null) {Destroy(_align_obj); _align_obj=null;}
+          LinkedListNode<GameObject> node = thrusts.First;
+          while(node != null)
+          {
+            Destroy(node.Value);
+            node = node.Next;
+          }
+          thrusts.Clear();
+
           LogStop();
           vessel.Autopilot.Disable();
           vessel.OnFlyByWire -= new FlightInputCallback(Fly);
@@ -276,7 +293,7 @@ namespace HopperGuidance
                 int retval;
                 // Use _logTransform so that Y is vertical direction, and the gravity which acts downwards in the Y direction
                 LogSetUpTransform(); // initialises _logTransform
-                double bestT = Solve.golden_search_gfold(r0, v0, att0, targetPos, vf, Tmin, Tmax, N, g.magnitude, _logTransform, 0, 0.01*maxPercentThrust*amax, minDescentAngle, minFinalDescentAngle, vmax, tol, out thrusts, out retval);
+                double bestT = Solve.golden_search_gfold(r0, v0, att0, targetPos, vf, Tmin, Tmax, N, g.magnitude, _logTransform, 0, 0.01*maxPercentThrust*amax, minDescentAngle, minDescentAngle, vmax, finalSideAMax, tol, out thrusts, out retval);
                 if (retval > 0)
                 {
                   for(int i=0; i<N; i++)
@@ -284,7 +301,7 @@ namespace HopperGuidance
                     Debug.Log("a["+i+"] = "+thrusts[i]);
                   }
                   Debug.Log("Found Solution: bestT=" + bestT + " retval="+retval);
-                  double dt = 1.0;
+                  double dt = 0.2;
 
                   _traj = new Trajectory();
                   _traj.Simulate(bestT, thrusts, r0, v0, g, dt, extendTime);
@@ -390,9 +407,10 @@ namespace HopperGuidance
           Vector3d att = new Vector3d(vessel.transform.up.x,vessel.transform.up.y,vessel.transform.up.z);
           float ddot = (float)Vector3d.Dot(Vector3d.Normalize(att),Vector3d.Normalize(F));
           Debug.Log("ddot="+ddot+" at 45="+Mathf.Cos(45*Mathf.PI/180.0f));
-          if (ddot < Mathf.Cos((float)idleAngle*(Mathf.PI/180.0f)))
+          if ((ddot < Mathf.Cos((float)idleAngle*(Mathf.PI/180.0f))) && (throttle>0.01))
           {
-            throttle = 0.01f;
+            throttle = 0.001f; // some throttle to steer back
+            throttle = 0;
           }
 
           // Set throttle and direction
