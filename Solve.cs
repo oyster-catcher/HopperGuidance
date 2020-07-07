@@ -1,5 +1,5 @@
 #define MINDESCENTANGLE
-#define THRUSTDOWNWARDS
+#define MAXTHRUSTANGLE
 #define FINALTHRUSTDIR
 #define MAXVELOCITY
 //#define DUMP
@@ -22,9 +22,10 @@ namespace HopperGuidance
     public double amin = 0;
     public double amax = 30;
     public double vmax = 1000;
-    public double minDescentAngle = 0;
-    public double finalHorizontalAMax = 100;
+    public double minDescentAngle = 10;
     public double tol = 0.5;
+    public double maxThrustAngle = 90;
+    public double maxFinalThrustAngle = 20;
     public int fidelity = 10;
 
     // Last stored inputs to GFold() (after transformation)
@@ -80,7 +81,7 @@ namespace HopperGuidance
     public string DumpString()
     {
       string msg = ((retval>=1)&&(retval<=5))?"SUCCEED":"FAIL";
-      return string.Format("HopperGuidance: "+msg+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" rf="+Vec2Str(rf)+" vf="+Vec2Str(vf)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" finalHorizontalAMax="+finalHorizontalAMax);
+      return string.Format("HopperGuidance: "+msg+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" rf="+Vec2Str(rf)+" vf="+Vec2Str(vf)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxFinalThrustAngle="+maxFinalThrustAngle);
     }
  
     public static double [] BasisWeights(double t, double a_T, int N)
@@ -200,11 +201,7 @@ namespace HopperGuidance
       for(int i=0;i<N;i++)
       {
         bndl[i*3]   = -amax;
-#if (THRUSTDOWNWARDS)
-        bndl[i*3+1] = 0;
-#else
         bndl[i*3+1] = -amax;
-#endif
         bndl[i*3+2] = -amax;
         bndu[i*3]   = amax;
         bndu[i*3+1] = amax;
@@ -226,12 +223,12 @@ namespace HopperGuidance
       constraints += 4*numchecks;
 #endif
 
-#if (FINALTHRUSTDIR)
-      constraints += 4; // make T[final].x < finalHorizontalAMax  T[final].z < finalHorizontalAMax
-#endif
-
 #if (MAXVELOCITY)
       constraints += 6*N;
+#endif
+
+#if (MAXTHRUSTANGLE)
+      constraints += 4*N;
 #endif
       int k=0;
 
@@ -266,25 +263,6 @@ namespace HopperGuidance
         c[k+5,N*3] = vf[2] - v0[2];
       }
       k+=6;
-
-#if (FINALTHRUSTDIR) // keep horizontal final thrust to zero
-      c[k,(N-1)*3+0] = 1.0; // weight on T[i].x
-      c[k,N*3] = finalHorizontalAMax; // RHS
-      ct[k] = -1; // LHS < RHS
-      k += 1;
-      c[k,(N-1)*3+0] = 1.0; // weight on T[i].x
-      c[k,N*3] = -finalHorizontalAMax; // RHS
-      ct[k] = 1; // LHS > RHS
-      k += 1;
-      c[k,(N-1)*3+2] = 1.0; // weight on T[i].z
-      c[k,N*3] = finalHorizontalAMax; // RHS
-      ct[k] = -1; // LHS < RHS
-      k += 1;
-      c[k,(N-1)*3+2] = 1.0; // weight on T[i].z
-      c[k,N*3] = -finalHorizontalAMax; // RHS
-      ct[k] = 1; // LHS > RHS
-      k += 1;
-#endif
 
 #if (MINDESCENTANGLE)
       // Constrain N intermediate positions to be within minimumDescentAngle
@@ -378,6 +356,47 @@ namespace HopperGuidance
         c[k+5,N*3] = - v0[2] + vmax;
         ct[k+5] = -1; // incV@tx + v0 -g*tX < +vmax
         k+=6;
+      }
+#endif
+
+#if (MAXTHRUSTANGLE)
+      // Constrain thrust directions to be within angle of vertical
+      for( int i=0; i<N; i++ )
+      {
+        // Calculate Normal for plane to be above (like an upside down pyramid)
+        double vx = Math.Cos(maxThrustAngle*Math.PI/180.0);
+        double vy = Math.Sin(maxThrustAngle*Math.PI/180.0);
+        if (i==N-1)
+        {
+          vx = Math.Cos(maxFinalThrustAngle*Math.PI/180.0);
+          vy = Math.Sin(maxFinalThrustAngle*Math.PI/180.0);
+        }
+        double [] V1 = new double [] {vx,vy,0}; // Normal vector of plane to be above
+        double [] V2 = new double [] {-vx,vy,0}; // Normal vector of plane to be above
+        double [] V3 = new double [] {0,vy,vx}; // Normal vector of plane to be above
+        double [] V4 = new double [] {0,vy,-vx}; // Normal vector of plane to be above
+        // proportions of thrusts[i] for XYZ for position
+        // 45 degrees when X<0
+        c[k+0,i*3+0] = V1[0]; // X
+        c[k+0,i*3+1] = V1[1]; // Y
+        c[k+0,i*3+2] = V1[2]; // Z
+        // proportions of thrusts[i] for XYZ for position
+        c[k+1,i*3+0] = V2[0]; // X
+        c[k+1,i*3+1] = V2[1]; // Y
+        c[k+1,i*3+2] = V2[2]; // Z
+        // proportions of thrusts[i] for XYZ for position
+        c[k+2,i*3+0] = V3[0]; // X
+        c[k+2,i*3+1] = V3[1]; // Y
+        c[k+2,i*3+2] = V3[2]; // Z
+        // proportions of thrusts[i] for XYZ for position
+        c[k+3,i*3+0] = V4[0]; // X
+        c[k+3,i*3+1] = V4[1]; // Y
+        c[k+3,i*3+2] = V4[2]; // Z
+        ct[k+0] = 1; // LHS > RHS
+        ct[k+1] = 1; // LHS > RHS
+        ct[k+2] = 1; // LHS > RHS
+        ct[k+3] = 1; // LHS > RHS
+        k += 4;
       }
 #endif
 
@@ -604,8 +623,10 @@ namespace HopperGuidance
             solver.Tmin = d;
           else if (k=="Tmax")
             solver.Tmax = d;
-          else if (k=="finalHorizontalAMax")
-            solver.finalHorizontalAMax = d;
+          else if (k=="maxFinalThrustAngle")
+            solver.maxFinalThrustAngle = d;
+          else if (k=="maxThrustAngle")
+            solver.maxThrustAngle = d;
           else
           {
             System.Console.Error.WriteLine("No such parameter: {0}",k);
@@ -626,6 +647,7 @@ namespace HopperGuidance
         Trajectory traj = new Trajectory();
         Vector3d vg = new Vector3d(0,-solver.g,0);
         traj.Simulate(bestT, thrusts, r0, v0, vg, solver.dt, 0);
+        traj.CorrectFinal(Vector3d.zero,Vector3d.zero);
         traj.Write(null);
         final_r_err = (traj.r[traj.r.Length-1] - rf).magnitude;
       }

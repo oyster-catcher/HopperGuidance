@@ -22,3 +22,10 @@ for finalsideamax in 5 2 1 0;
   do mono ./Solve.exe r0=[100,100,0] v0=[0,-10,0] Tmin=1 Tmax=300 N=5 g=9.8 amax=15 finalHorizontalAMax=$finalsideamax > test3.finalHorizontalAMax=$finalsideamax.dat
 done
 ./plotXYZ.py $scales test3.finalHorizontalAMax={0,1,2,5}.dat
+
+# Test max thrust angle
+scales="--xmax 1200 --ymax 900 --numchecks 5"
+for ang in 10 20 40 60 80;
+  do mono ./Solve.exe r0=[400,400,0] v0=[40,10,0] Tmin=1 Tmax=300 N=5 g=9.8 amax=15 maxThrustAngle=$ang > test4.maxThrustAngle=$ang.dat
+done
+./plotXYZ.py $scales test4.*.dat

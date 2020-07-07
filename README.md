@@ -68,6 +68,7 @@ Parameters for (1) are used to compute the trajectory and can be used to control
 - Min. descent angle - imagine an upside down cone with the apex at the landing point. The cone describes to safe area of descent. A high angle to the ground means the craft must descent steeply, only getting near the ground at the landing point.
 - Max thrust - how much of the available thrust to use. Set this slow and the descent will be slow and careful. You can use more than 100% since the calculation is done when calculating the trajectory you might have lost weight due to fuel usage and you will have spare acceleration by landing.
 - Max velocity - Keep velocity below this limit
+- Maximum thrust angle - This defines the maximum attitude of the craft from vertical
 
 Parameters for (2) describe what to do when the craft is off the trajectory. The nearest point on the trajectory is marked by a blue line from the craft to the trajectory. This nearest point takes into account and position and velocity with a little more weight for velocity. This makes the craft behave more smoothly rather than blindy aiming for the nearest point in position. So the craft tries to match the position and velocity of the nearest point. If calculates a correct to the thrust vector to try and minimise the discrepancy. Six PID controllers are used to achieve this. 3 for the X,Y and Z positions and 3 for X, Y and Z velocities.
 

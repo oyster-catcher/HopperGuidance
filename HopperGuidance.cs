@@ -43,10 +43,6 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Altitude", guiFormat = "F1", isPersistant = false, guiUnits = "m")]
         float tgtAltitude = 74.7f;
 
-        [UI_FloatRange(minValue = 0.0f, maxValue = 30.0f, stepIncrement = 1.0f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Final max side accel", guiFormat = "F1", isPersistant = false, guiUnits = "m")]
-        float finalSideAMax = 1.0f;
-
         [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 5f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = false, guiUnits = "m")]
         float minDescentAngle = 20.0f;
@@ -55,6 +51,13 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max velocity", guiFormat = "F1", isPersistant = false)]
         float maxErrV = 50f; // Max. vel to add to get towards target
 
+        [UI_FloatRange(minValue = 5f, maxValue = 90f, stepIncrement = 5f)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust angle", guiFormat = "F1", isPersistant = false)]
+        float maxThrustAngle = 45f; // Max. thrust angle from vertical
+
+        [UI_FloatRange(minValue = 5f, maxValue = 90f, stepIncrement = 5f)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max final thrust angle", guiFormat = "F1", isPersistant = false)]
+        float maxFinalThrustAngle = 20f; // Max. final thrust angle from vertical
 
         [UI_FloatRange(minValue = 0, maxValue = 200f, stepIncrement = 5f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust %", isPersistant = false, guiUnits = "%")]
@@ -277,7 +280,8 @@ namespace HopperGuidance
                 solver.N = 5;
                 solver.g = g.magnitude;
                 solver.minDescentAngle = minDescentAngle;
-                solver.finalHorizontalAMax = finalSideAMax;
+                solver.maxThrustAngle = maxThrustAngle;
+                solver.maxFinalThrustAngle = maxFinalThrustAngle;
 
                 int retval;
                 // Use _logTransform so that Y is vertical direction, and the gravity which acts downwards in the Y direction
