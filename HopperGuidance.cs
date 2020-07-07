@@ -48,24 +48,26 @@ namespace HopperGuidance
         float finalSideAMax = 1.0f;
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 5f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min. descent angle", guiFormat = "F0", isPersistant = false, guiUnits = "m")]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = false, guiUnits = "m")]
         float minDescentAngle = 20.0f;
 
-        [UI_FloatRange(minValue = 0f, maxValue = 90f, stepIncrement = 5f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = false)]
-        float idleAngle = 90.0f;
+        [UI_FloatRange(minValue = 1f, maxValue = 100f, stepIncrement = 1f)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max velocity", guiFormat = "F1", isPersistant = false)]
+        float maxErrV = 50f; // Max. vel to add to get towards target
+
 
         [UI_FloatRange(minValue = 0, maxValue = 200f, stepIncrement = 5f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust %", isPersistant = false, guiUnits = "%")]
         float maxPercentThrust = 100f;
 
+        [UI_FloatRange(minValue = 0f, maxValue = 90f, stepIncrement = 5f)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = false)]
+        float idleAngle = 90.0f;
+
         [UI_FloatRange(minValue = 0.01f, maxValue = 1f, stepIncrement = 0.01f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Position gain", guiFormat = "F2", isPersistant = false)]
         float kP1 = 0.3f; // If 1 then at 1m error aim to close a 1m/s
 
-        [UI_FloatRange(minValue = 1f, maxValue = 100f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Max velocity", guiFormat = "F1", isPersistant = false)]
-        float maxErrV = 50f; // Max. vel to add to get towards target
 
         [UI_FloatRange(minValue = 0.0f, maxValue = 2f, stepIncrement = 0.1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Velocity gain", guiFormat = "F1", isPersistant = false)]
