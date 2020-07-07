@@ -103,7 +103,7 @@ namespace HopperGuidance
     // Correct final position in trajectory to cover up numeric errors
 
     // Correct final position in trajectory to cover up numeric errors
-    public void CorrectFinal(Vector3d rf, Vector3d vf, double maxerr=100)
+    public bool CorrectFinal(Vector3d rf, Vector3d vf, double maxerr=100)
     {
       Vector3d r_err = r[Length()-1] - rf;
       Vector3d v_err = v[Length()-1] - vf;
@@ -114,7 +114,9 @@ namespace HopperGuidance
           r[i] = r[i] - r_err*((double)i/Length());
           v[i] = v[i] - v_err*((double)i/Length());
         }
+        return true;
       }
+      return false;
     }
 
     public void Init(double a_dt, Vector3d [] ar, Vector3d [] av, Vector3d [] a_a)
@@ -140,7 +142,7 @@ namespace HopperGuidance
 
     public double FindClosest(Vector3d a_r, Vector3d a_v,
                             out Vector3d closest_r, out Vector3d closest_v, out Vector3d closest_a, out double closest_t,
-                            double rWeight = 0.3, double vWeight = 0.7)
+                            double rWeight = 0.4, double vWeight = 0.6)
     {
       // Find closest point in speed and position and returns the index
       int ci = -1;
@@ -159,7 +161,6 @@ namespace HopperGuidance
           rdist = dr;
         }
       }
-      //Debug.Log("Found "+ci+" in "+r.Length);
       if (ci!=-1)
       {
         closest_r = r[ci];
@@ -203,24 +204,57 @@ namespace HopperGuidance
       }
     }
 
-    public void WriteLog(string filename, Transform transform)
+    public void Write(string filename = null, Transform transform = null)
     {
-      System.IO.StreamWriter f = new System.IO.StreamWriter(filename);
+      System.IO.StreamWriter f;
+      if (filename != null)
+        f = new System.IO.StreamWriter(filename);
+      else
+        f = new System.IO.StreamWriter(System.Console.OpenStandardOutput());
       double t = 0;
-      Vector3d tr = Vector3.zero;
+      Vector3d tr = Vector3d.zero;
       Vector3d tv,ta;
       f.WriteLine("time x y z vx vy vz ax ay az");
       for(int i = 0 ; i < Length() ; i++)
       {
-        tr = transform.InverseTransformPoint(r[i]);
-        tv = transform.InverseTransformVector(v[i]);
-        ta = transform.InverseTransformVector(a[i]);
+        if (transform)
+        {
+          tr = transform.InverseTransformPoint(r[i]);
+          tv = transform.InverseTransformVector(v[i]);
+          ta = transform.InverseTransformVector(a[i]);
+        } else {
+          tr = r[i];
+          tv = v[i];
+          ta = a[i];
+        }
         f.WriteLine(string.Format("{0} {1:F5} {2:F5} {3:F5} {4:F5} {5:F5} {6:F5} {7:F1} {8:F1} {9:F1}",t,tr.x,tr.y,tr.z,tv.x,tv.y,tv.z,ta.x,ta.y,ta.z));
         t += dt;
       }
       f.Close();
-      //Debug.Log("Final target: "+tr);
     }
+
+    public void Write(string filename = null)
+    {
+      System.IO.StreamWriter f;
+      if (filename != null)
+        f = new System.IO.StreamWriter(filename);
+      else
+        f = new System.IO.StreamWriter(System.Console.OpenStandardOutput());
+      double t = 0;
+      Vector3d tr = Vector3d.zero;
+      Vector3d tv,ta;
+      f.WriteLine("time x y z vx vy vz ax ay az");
+      for(int i = 0 ; i < Length() ; i++)
+      {
+        tr = r[i];
+        tv = v[i];
+        ta = a[i];
+        f.WriteLine(string.Format("{0} {1:F5} {2:F5} {3:F5} {4:F5} {5:F5} {6:F5} {7:F1} {8:F1} {9:F1}",t,tr.x,tr.y,tr.z,tv.x,tv.y,tv.z,ta.x,ta.y,ta.z));
+        t += dt;
+      }
+      f.Close();
+    }
+
 
 //    static int Main(string[] argv)
 //    {
