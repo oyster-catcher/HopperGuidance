@@ -30,7 +30,6 @@ namespace HopperGuidance
     // Last stored inputs to GFold() (after transformation)
     public Vector3d r0;
     public Vector3d v0;
-    public Vector3d att0;
     public Vector3d rf;
     public Vector3d vf;
 
@@ -73,11 +72,15 @@ namespace HopperGuidance
       System.Console.WriteLine("]");
     }
 #endif
+    public string Vec2Str(Vector3d v)
+    {
+      return string.Format("[{0:F1},{0:F1},{0:F1}]",v.x,v.y,v.z);
+    }
 
     public string DumpString()
     {
-      string msg = (retval>0)?"SUCCEED":"FAIL";
-      return string.Format("HopperGuidance: "+msg+" N="+N+" r0="+r0+" v0="+v0+" rf="+rf+" vf="+vf+" g="+g);;
+      string msg = ((retval>=1)&&(retval<=5))?"SUCCEED":"FAIL";
+      return string.Format("HopperGuidance: "+msg+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" rf="+Vec2Str(rf)+" vf="+Vec2Str(vf)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" finalHorizontalAMax="+finalHorizontalAMax);
     }
  
     public static double [] BasisWeights(double t, double a_T, int N)
@@ -143,7 +146,7 @@ namespace HopperGuidance
 
     // It is expected that g is position and acts in the direction Y downwards
     // returns fuel used
-    public double GFold(double[] r0, double[] v0, double[] att0, double[] rf, double[] vf, double T,
+    public double GFold(double[] r0, double[] v0, double[] rf, double[] vf, double T,
                         out double[,] a_thrusts, out int a_retval)
     {
       double fidelity = 10; // this many steps inbetween thrust positions
@@ -439,17 +442,16 @@ namespace HopperGuidance
    }
 
    // If retval>0 than success. If retval<0 then various kind of failure. See https://www.alglib.net/translator/man/manual.csharp.html#minqpreportclass
-   public double GFold(Vector3d a_r0, Vector3d a_v0, Vector3d a_att0, Vector3d a_rf, Vector3d a_vf, double a_T,
+   public double GFold(Vector3d a_r0, Vector3d a_v0, Vector3d a_rf, Vector3d a_vf, double a_T,
                        out Vector3d [] a_thrusts, out int a_retval)
    {
       T = a_T;
       double [] _r0 = convToDouble3(a_r0);
       double [] _v0 = convToDouble3(a_v0);
-      double [] _att0 = convToDouble3(a_att0);
       double [] _rf = convToDouble3(a_rf);
       double [] _vf = convToDouble3(a_vf);
       double [,] _thrusts = new double[N,3];
-      double fuel = GFold(_r0, _v0, _att0, _rf, _vf, T, out _thrusts, out a_retval);
+      double fuel = GFold(_r0, _v0, _rf, _vf, T, out _thrusts, out a_retval);
       a_thrusts = null;
       if (retval > 0)
       {
@@ -465,13 +467,12 @@ namespace HopperGuidance
    }
 
 
-    public double GoldenSearchGFold(Vector3d a_r0, Vector3d a_v0, Vector3d a_att0, Vector3d a_rf, Vector3d a_vf,
+    public double GoldenSearchGFold(Vector3d a_r0, Vector3d a_v0, Vector3d a_rf, Vector3d a_vf,
                                     out Vector3d [] o_thrusts, out double o_fuel, out int o_retval)
     {
       // Store best solution values
       r0 = Vector3d.zero;
       v0 = Vector3d.zero;
-      att0 = Vector3d.zero;
       rf = Vector3d.zero;
       vf = Vector3d.zero;
       retval = -1;
@@ -499,8 +500,8 @@ namespace HopperGuidance
       d = a + (b - a) / gr;
       while (Math.Abs(c - d) > tol)
       {
-        fc = GFold(a_r0,a_v0,a_att0,a_rf,a_vf,c,out o_thrusts,out retvalc);
-        fd = GFold(a_r0,a_v0,a_att0,a_rf,a_vf,d,out o_thrusts,out retvald);
+        fc = GFold(a_r0,a_v0,a_rf,a_vf,c,out o_thrusts,out retvalc);
+        fd = GFold(a_r0,a_v0,a_rf,a_vf,d,out o_thrusts,out retvald);
         if (fc < fd)
             {b = d;}
         else
@@ -511,7 +512,7 @@ namespace HopperGuidance
         d = a + (b - a) / gr;
       }
 
-      o_fuel = GFold(a_r0,a_v0,a_att0,a_rf,a_vf,0.5*(a+b),out o_thrusts,out o_retval);
+      o_fuel = GFold(a_r0,a_v0,a_rf,a_vf,0.5*(a+b),out o_thrusts,out o_retval);
       retval = o_retval;
       if ((o_retval<1) || (o_retval>5))
       {
@@ -521,7 +522,6 @@ namespace HopperGuidance
       {
         r0 = a_r0;
         v0 = a_v0;
-        att0 = a_att0;
         rf = a_rf;
         vf = a_vf;
       }
@@ -533,18 +533,17 @@ namespace HopperGuidance
   // Transforms positions and velocity (Y should be vertical)
   // Inverse transforms on output
   // if retval>0 than a set of N thrusts should be in the output vars
-  public double GoldenSearchGFold(Vector3d a_r0, Vector3d a_v0, Vector3d a_att0, Vector3d a_rf, Vector3d a_vf, Transform transform,
+  public double GoldenSearchGFold(Vector3d a_r0, Vector3d a_v0, Vector3d a_rf, Vector3d a_vf, Transform transform,
                                   out Vector3d[] o_thrusts, out double o_fuel, out int o_retval)
   {
     if (transform != null)
     {
       a_r0 = transform.InverseTransformPoint(a_r0);
       a_v0 = transform.InverseTransformVector(a_v0);
-      a_att0 = transform.InverseTransformVector(a_att0);
       a_rf = transform.InverseTransformPoint(a_rf);
       a_vf = transform.InverseTransformVector(a_vf);
     }
-    double bestT = GoldenSearchGFold(a_r0, a_v0, a_att0, a_rf, a_vf, out o_thrusts, out o_fuel, out o_retval);
+    double bestT = GoldenSearchGFold(a_r0, a_v0, a_rf, a_vf, out o_thrusts, out o_fuel, out o_retval);
 
     if ((transform != null) && (o_retval>=1) && (o_retval<=5))
     {
@@ -557,12 +556,11 @@ namespace HopperGuidance
   }
 #endif
 
-    static void RunTest(string[] args)
+    static int RunTest(string[] args)
     {
       Solve solver = new Solve();
       Vector3d r0 = Vector3d.zero;
       Vector3d v0 = Vector3d.zero;
-      Vector3d att0 = new Vector3d(0,1,0);
       Vector3d rf = Vector3d.zero;
       Vector3d vf = Vector3d.zero;
       Vector3d c;
@@ -585,63 +583,63 @@ namespace HopperGuidance
             rf = c;
           else if (k=="vf")
             vf = c;
-          else if (k=="att0")
-            att0 = c;
         } else {
           d = Convert.ToDouble(v);
           System.Console.Error.WriteLine(k+"="+d);
           if (k=="N")
             solver.N = (int)d;
-          if (k=="amin")
+          else if (k=="amin")
             solver.amin = d;
-          if (k=="amax")
+          else if (k=="amax")
             solver.amax = d;
-          if (k=="g")
+          else if (k=="g")
             solver.g = d;
-          if (k=="minDescentAngle")
+          else if (k=="minDescentAngle")
             solver.minDescentAngle = d;
-          if (k=="tol")
+          else if (k=="tol")
             solver.tol = d;
-          if (k=="vmax")
+          else if (k=="vmax")
             solver.vmax = d;
-          if (k=="Tmin")
+          else if (k=="Tmin")
             solver.Tmin = d;
-          if (k=="Tmax")
+          else if (k=="Tmax")
             solver.Tmax = d;
-          if (k=="finalHorizontalAMax")
+          else if (k=="finalHorizontalAMax")
             solver.finalHorizontalAMax = d;
+          else
+          {
+            System.Console.Error.WriteLine("No such parameter: {0}",k);
+            return(1);
+          }
         }
       }
       // Now run Solver
       double fuel;
       int retval;
       Vector3d [] thrusts;
-      double bestT = solver.GoldenSearchGFold(r0,v0,att0,rf,vf,out thrusts,out fuel,out retval);
+      double bestT = solver.GoldenSearchGFold(r0,v0,rf,vf,out thrusts,out fuel,out retval);
 
+      System.Console.Error.WriteLine(solver.DumpString());
       if ((retval>=1) && (retval<=5))
       {
-        System.Console.Error.WriteLine("r0="+r0+" fuel="+fuel+" bestT="+bestT+" thrusts="+thrusts.Length+" dt="+solver.dt);
         double final_r_err = 0;
         Trajectory traj = new Trajectory();
         Vector3d vg = new Vector3d(0,-solver.g,0);
         traj.Simulate(bestT, thrusts, r0, v0, vg, solver.dt, 0);
         traj.Write(null);
         final_r_err = (traj.r[traj.r.Length-1] - rf).magnitude;
-      System.Console.Error.WriteLine("PASS bestT="+bestT+" final_r_err="+final_r_err);
-      } else {
-        System.Console.Error.WriteLine("FAIL retval="+retval);
       }
+      return(0);
     }
 
     static int Main(string[] args)
     {
       if (args.Length == 0) {
-        System.Console.Error.WriteLine("usage: Solve.exe k=v ... - set of key=value pairs from r0,v0,att0,rf,vf,Tmin,Tmax,amin,amax,g,minDescentAngle,tol,vmax which also have defaults");
+        System.Console.Error.WriteLine("usage: Solve.exe k=v ... - set of key=value pairs from r0,v0,rf,vf,Tmin,Tmax,amin,amax,g,minDescentAngle,tol,vmax which also have defaults");
         return(1);
       } else {
-        RunTest(args);
+        return RunTest(args);
       }
-      return(0);
     }
   }
 }

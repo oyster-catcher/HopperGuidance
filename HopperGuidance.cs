@@ -260,7 +260,6 @@ namespace HopperGuidance
                 Vector3d[] thrusts;
                 Vector3d r0 = vessel.GetWorldPos3D();
                 Vector3d v0 = vessel.GetSrfVelocity();
-                Vector3d att0 = vessel.transform.up; // pointing direction
                 Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
                 Vector3d vf = new Vector3d(0,0,0);
                 _maxThrust = ComputeMaxThrust();
@@ -292,7 +291,7 @@ namespace HopperGuidance
 
                 // Compute trajectory to landing spot
                 double fuel;
-                double bestT = solver.GoldenSearchGFold(r0, v0, att0, targetPos, vf, _logTransform, out thrusts, out fuel, out retval);
+                double bestT = solver.GoldenSearchGFold(r0, v0, targetPos, vf, _logTransform, out thrusts, out fuel, out retval);
                 Debug.Log(solver.DumpString());
                 if ((retval>=1) && (retval<=5))
                 {
