@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import argparse
 import sys
 import pylab as P
 import numpy as np
@@ -9,137 +10,128 @@ def plot_line(ax,data,fx,fy,color='black',label=''):
   yy=[float(d[fy]) for d in data]
   ax.plot(xx,yy,color=color,label=label)
 
-def plot(data,traj,title="",size=400,duration=30,amult=15,askip=3):
+def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
+         vxmin,vxmax,vymin,vymax,vzmin,vzmax,tmax=30,amult=1,askip=3,numchecks=None,filenames=[]):
+
+  colors=['red','blue','green','black','pink','grey','purple','salmon']
+  amax = 40
+
   # altitude against time, and throttle
   fig = P.figure(1)
 
   P.subplot2grid((3,5),(0,0), colspan=1, rowspan=1)
   ax = P.gca()
-  ax.set_xlabel("t")
+  ax.set_xlabel("time")
   ax.set_ylabel("x")
-  ax.set_xlim([0,duration])
-  ax.set_ylim([-size,size])
-  plot_line(ax,data,'time','x',color='black')
-  if traj:
-    plot_line(ax,traj,'time','x',color='blue')
+  ax.set_xlim([0,tmax])
+  ax.set_ylim([xmin,xmax])
+  for col,data in zip(colors,datas):
+    plot_line(ax,data,'time','x',color=col)
   ax.grid()
+
   P.subplot2grid((3,5),(0,1), colspan=1, rowspan=1)
   ax = P.gca()
-  ax.set_xlabel("t")
+  ax.set_xlabel("time")
   ax.set_ylabel("vx")
-  ax.set_xlim([0,duration])
-  ax.set_ylim([-500,500])
-  plot_line(ax,data,'time','vx',color='black')
-  plot_line(ax,traj,'time','vx',color='blue')
+  ax.set_xlim([0,tmax])
+  ax.set_ylim([vxmin,vxmax])
+  for col,data in zip(colors,datas):
+    plot_line(ax,data,'time','vx',color=col)
   ax.grid()
 
   P.subplot2grid((3,5),(1,0), colspan=1, rowspan=1)
   ax = P.gca()
-  ax.set_xlabel("t")
+  ax.set_xlabel("time")
   ax.set_ylabel("y")
-  ax.set_xlim([0,duration])
-  ax.set_ylim([-size,size])
-  plot_line(ax,data,'time','y',color='black')
-  plot_line(ax,traj,'time','y',color='blue')
+  ax.set_xlim([0,tmax])
+  ax.set_ylim([ymin,ymax])
+  for col,data in zip(colors,datas):
+    plot_line(ax,data,'time','y',color=col)
   ax.grid()
+
   P.subplot2grid((3,5),(1,1), colspan=1, rowspan=1)
   ax = P.gca()
-  ax.set_xlabel("t")
+  ax.set_xlabel("time")
   ax.set_ylabel("vy")
-  ax.set_xlim([0,duration])
-  ax.set_ylim([-100,100])
-  plot_line(ax,data,'time','vy',color='black')
-  if traj:
-    plot_line(ax,traj,'time','vy',color='blue')
+  ax.set_xlim([0,tmax])
+  ax.set_ylim([vymin,vymax])
+  for col,data in zip(colors,datas):
+    plot_line(ax,data,'time','vy',color=col)
   ax.grid()
 
   P.subplot2grid((3,5),(2,0), colspan=1, rowspan=1)
   ax = P.gca()
-  ax.set_xlabel("t")
+  ax.set_xlabel("time")
   ax.set_ylabel("z")
-  ax.set_xlim([0,duration])
-  ax.set_ylim([-size,size])
-  plot_line(ax,data,'time','z',label='vessel',color='black')
-  if traj:
-    plot_line(ax,traj,'time','z',label='solution',color='blue')
+  ax.set_xlim([0,tmax])
+  ax.set_ylim([zmin,zmax])
+  for col,data in zip(colors,datas):
+    plot_line(ax,data,'time','z',color=col)
   ax.grid()
   ax.legend()
   P.subplot2grid((3,5),(2,1), colspan=1, rowspan=1)
   ax = P.gca()
-  ax.set_xlabel("t")
+  ax.set_xlabel("time")
   ax.set_ylabel("vz")
-  ax.set_xlim([0,duration])
-  ax.set_ylim([-100,100])
-  plot_line(ax,data,'time','vz',color='black')
-  if traj:
-    plot_line(ax,traj,'time','vz',color='blue')
+  ax.set_xlim([0,tmax])
+  ax.set_ylim([vzmin,vzmax])
+  for col,data in zip(colors,datas):
+    plot_line(ax,data,'time','vz',color=col)
   ax.grid()
 
   # Throttle
   P.subplot2grid((3,5),(0,2), colspan=3, rowspan=1)
   ax = P.gca()
-  ax.set_xlabel("t")
+  ax.set_xlabel("time")
   ax.set_ylabel("mag(accel)")
-  ax.set_xlim([0,duration])
-  ax.set_ylim([0,35])
+  ax.set_xlim([0,tmax])
+  ax.set_ylim([0,amax])
 
   # plot desired magnitude of acceleration
-  if traj and ('ax' in traj[0]):
-    tt=[]
-    throttle=[]
-    for d in traj:
-      T=np.array([d['ax'],d['ay'],d['az']])
-      tt.append(d['time'])
-      throttle.append( np.linalg.norm(T) )
-    ax.plot(tt,throttle,color='blue')
-
-  if 'ax' in data[0]:
-    # plot desired magnitude of acceleration
+  for col,data in zip(colors,datas):
     tt=[]
     throttle=[]
     for d in data:
       T=np.array([d['ax'],d['ay'],d['az']])
       tt.append(d['time'])
       throttle.append( np.linalg.norm(T) )
-    ax.plot(tt,throttle,color='black')
-    ax.grid()
+    ax.plot(tt,throttle,color=col)
+  ax.grid()
 
   # XY
   P.subplot2grid((3,5),(1,2), colspan=3, rowspan=2)
   ax = P.gca()
   ax.set_xlabel("x")
   ax.set_ylabel("y")
-  ax.set_xlim([-size,size])
-  ax.set_ylim([0,2*size])
+  ax.set_xlim([xmin,xmax])
+  ax.set_ylim([ymin,ymax])
 
   # plot side view of X,Y
-  colors = ['blue','black']
-  for j,dat in enumerate([traj]):
-    if dat:
-      xx,yy=[],[]
-      throttle=[]
-      for i,d in enumerate(dat):
-        if (i%askip==0):
-          xx = []
-          yy = []
-          xx.append(d['x'])
-          yy.append(d['y'])
-          xx.append(d['x']+d['ax']*amult)
-          yy.append(d['y']+d['ay']*amult)
-      ax.plot(xx,yy,color='red',alpha=0.5)
-
-
-  for j,dat in enumerate([traj,data]):
-    if dat:
+  for di,data in enumerate(datas):
+    xx,yy=[],[]
+    throttle=[]
+    for i,d in enumerate(data):
       xx = []
       yy = []
-      for d in dat:
-        xx.append(d['x'])
-        yy.append(d['y'])
-      ax.plot(xx,yy,color=colors[j])
-  ax.grid()
+      xx.append(d['x'])
+      yy.append(d['y'])
+      xx.append(d['x']+d['ax']*amult)
+      yy.append(d['y']+d['ay']*amult)
+      ax.plot(xx,yy,color=col,alpha=0.5)
+    plot_line(ax,data,'x','y',color=colors[di],label=filenames[di])
+    # Show checkpoints
+    if numchecks:
+      cx,cy=[],[]
+      gap = len(data)/(numchecks+1)
+      for i in range(gap,len(data)-gap,gap):
+        cx.append(data[i]['x'])
+        cy.append(data[i]['y'])
+      ax.plot(cx,cy,color=colors[di],marker='o',markersize=10,linestyle='')
 
+  ax.legend()
+  ax.grid()
   P.show()
+
 
 def read_data(fname):
   fields=None
@@ -157,25 +149,65 @@ def read_data(fname):
         pass
   return dat
 
-size=1200
-fncraft=sys.argv[1]
-try:
-  fntraj=sys.argv[2]
-  dat_traj=read_data(fntraj)
-except:
-  dat_traj=[]
+parser = argparse.ArgumentParser(description='Plot vessel data logs (or solutions) with X,Y,Z,VX,VY,VZ and Throttle in multiple plots')
+parser.add_argument('filename', nargs='+',
+                    help='Filename of TAB-separated data file, first line contains column names. Should contain time,x,y,z,vx,vy,vz,ax,ay,ax')
+parser.add_argument('--xmin', type=float, help='Minimum x position', default=None)
+parser.add_argument('--xmax', type=float, help='Maximum x position', default=None)
+parser.add_argument('--ymin', type=float, help='Minimum y position', default=None)
+parser.add_argument('--ymax', type=float, help='Maximum y position', default=None)
+parser.add_argument('--zmin', type=float, help='Minimum z position', default=None)
+parser.add_argument('--zmax', type=float, help='Maximum z position', default=None)
+parser.add_argument('--vxmin', type=float, help='Minimum vx position', default=None)
+parser.add_argument('--vxmax', type=float, help='Maximum vx position', default=None)
+parser.add_argument('--vymin', type=float, help='Minimum vy position', default=None)
+parser.add_argument('--vymax', type=float, help='Maximum vy position', default=None)
+parser.add_argument('--vzmin', type=float, help='Minimum vz position', default=None)
+parser.add_argument('--vzmax', type=float, help='Maximum vz position', default=None)
+parser.add_argument('--tmax', type=float, help='Maximum time', default=None)
+parser.add_argument('--numchecks', type=int, help='How many checkpoints to show (spaced evenly accept at t={0,T}', default=None)
+parser.add_argument('--amult', type=float, help='Multiplier for scale up thrust acceleration lines', default=1)
 
-dat_craft=read_data(fncraft)
-xmin = min([d['x'] for d in dat_craft])
-xmax = max([d['x'] for d in dat_craft])
-ymin = min([d['y'] for d in dat_craft])
-ymax = max([d['y'] for d in dat_craft])
-zmin = min([d['z'] for d in dat_craft])
-zmax = max([d['z'] for d in dat_craft])
-tmax = max([d['time'] for d in dat_craft])
-if dat_traj:
-  tmax2 = max([d['time'] for d in dat_traj])
-  tmax = max(tmax,tmax2)
-size = max([-xmin,xmax,-ymin,ymax,-zmin,zmax])
-size = size*1.2
-plot(dat_craft,dat_traj,size=size,duration=tmax)
+args = parser.parse_args()
+
+datas=[]
+for filename in args.filename:
+  datas.append(read_data(filename))
+
+alldata = []
+for data in datas:
+  alldata = alldata + data
+
+# Find min and max
+if not args.xmin:
+  args.xmin = min([d['x'] for d in alldata])
+if not args.xmax:
+  args.xmax = max([d['x'] for d in alldata])
+if not args.ymin:
+  args.ymin = min([d['y'] for d in alldata])
+if not args.ymax:
+  args.ymax = max([d['y'] for d in alldata])
+if not args.zmin:
+  args.zmin = min([d['z'] for d in alldata])
+if not args.zmax:
+  args.zmax = max([d['z'] for d in alldata])
+
+if not args.vxmin:
+  args.vxmin = min([d['vx'] for d in alldata])
+if not args.vxmax:
+  args.vxmax = max([d['vx'] for d in alldata])
+if not args.vymin:
+  args.vymin = min([d['vy'] for d in alldata])
+if not args.vymax:
+  args.vymax = max([d['vy'] for d in alldata])
+if not args.vzmin:
+  args.vzmin = min([d['vz'] for d in alldata])
+if not args.vzmax:
+  args.vzmax = max([d['vz'] for d in alldata])
+
+if not args.tmax:
+  args.tmax = max([d['time'] for d in alldata])
+
+plot(datas,args.filename,xmin=args.xmin,xmax=args.xmax,ymin=args.ymin,ymax=args.ymax,zmin=args.zmin,zmax=args.zmax,
+     vxmin=args.vxmin,vxmax=args.vxmax,vymin=args.vymin,vymax=args.vymax,vzmin=args.vzmin,vzmax=args.vzmax,tmax=args.tmax,
+     amult=args.amult,numchecks=args.numchecks,filenames=args.filename)
