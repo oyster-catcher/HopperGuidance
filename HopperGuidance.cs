@@ -32,12 +32,13 @@ namespace HopperGuidance
         double disengageDistance = 10000;
         double extendTime = 5; // extend trajectory to slowly descent to touch down
 
-        //[UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 0.0001f)]
+        [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 0.0001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = false)]
-        double tgtLatitude = -0.0972078;
+        float tgtLatitude = -0.0972078f;
 
+        [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 0.0001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Longitude", guiFormat = "F7", isPersistant = false)]
-        double tgtLongitude = -74.5576822;
+        float tgtLongitude = -74.5576822f;
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 1000.0f, stepIncrement = 0.001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Altitude", guiFormat = "F1", isPersistant = false, guiUnits = "m")]
@@ -430,8 +431,8 @@ namespace HopperGuidance
         public void SetTargetHere()
         {
             // Find vessel co-ordinates
-            tgtLatitude = vessel.latitude;
-            tgtLongitude = vessel.longitude;
+            tgtLatitude = (float)vessel.latitude;
+            tgtLongitude = (float)vessel.longitude;
             tgtAltitude = (float)FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D());
             CelestialBody body = vessel.mainBody;
             Vector3d targetPos = body.GetWorldSurfacePosition(tgtLatitude, tgtLongitude, tgtAltitude);
