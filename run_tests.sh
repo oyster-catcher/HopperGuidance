@@ -17,15 +17,14 @@ done
 
 # Test limit of horizontal acceleration at landing
 scales="--xmax 30 --ymax 20 --numchecks 5 --amult 0.5"
-#TODO finalsideamax >10 doesn't work - seems to do final 0.5*(a+b) step and fail
-for finalsideamax in 5 2 1 0;
-  do mono ./Solve.exe r0=[100,100,0] v0=[0,-10,0] Tmin=1 Tmax=300 N=5 g=9.8 amax=15 finalHorizontalAMax=$finalsideamax > test3.finalHorizontalAMax=$finalsideamax.dat
+for maxLandingThrustAngle in 0 10 20 40;
+  do mono ./Solve.exe r0=[100,100,0] v0=[0,-10,0] Tmin=1 Tmax=300 N=5 g=9.8 amax=15 maxLandingThrustAngle=$maxLandingThrustAngle > test3.maxLandingThrustAngle=$maxLandingThrustAngle.dat
 done
-./plotXYZ.py $scales test3.finalHorizontalAMax={0,1,2,5}.dat
+./plotXYZ.py $scales test3.maxLandingThrustAngle={0,10,20,40}.dat
 
 # Test max thrust angle
 scales="--xmax 1200 --ymax 900 --numchecks 5"
-for ang in 10 20 40 60 80;
-  do mono ./Solve.exe r0=[400,400,0] v0=[40,10,0] Tmin=1 Tmax=300 N=5 g=9.8 amax=15 maxThrustAngle=$ang > test4.maxThrustAngle=$ang.dat
+for ang in 10 20 60 120;
+  do mono ./Solve.exe r0=[400,400,0] v0=[40,10,0] Tmin=1 Tmax=300 N=5 g=9.8 amax=15 maxThrustAngle=$ang maxLandingThrustAngle=30 > test4.maxThrustAngle=$ang.dat
 done
 ./plotXYZ.py $scales test4.*.dat
