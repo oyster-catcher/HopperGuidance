@@ -1,4 +1,7 @@
-﻿using System.Collections.Generic;
+﻿#define LIMIT_ATTITUDE
+
+using System;
+using System.Collections.Generic;
 
 using UnityEngine;
 using UnityEngine.UI;
@@ -32,11 +35,11 @@ namespace HopperGuidance
         double disengageDistance = 10000;
         double extendTime = 5; // extend trajectory to slowly descent to touch down
 
-        [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 0.0001f)]
+        [UI_FloatRange(minValue = -90.0f, maxValue = 90.0f, stepIncrement = 0.0001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = false)]
         float tgtLatitude = -0.0972078f;
 
-        [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 0.0001f)]
+        [UI_FloatRange(minValue = -180.0f, maxValue = 180.0f, stepIncrement = 0.0001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Longitude", guiFormat = "F7", isPersistant = false)]
         float tgtLongitude = -74.5576822f;
 
@@ -44,23 +47,23 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Altitude", guiFormat = "F1", isPersistant = false, guiUnits = "m")]
         float tgtAltitude = 74.7f;
 
-        [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 5f)]
+        [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = false, guiUnits = "m")]
         float minDescentAngle = 20.0f;
 
-        [UI_FloatRange(minValue = 1f, maxValue = 100f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max velocity", guiFormat = "F1", isPersistant = false)]
+        [UI_FloatRange(minValue = 1, maxValue = 150, stepIncrement = 10f)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max velocity", guiFormat = "F0", isPersistant = false)]
         float maxErrV = 50f; // Max. vel to add to get towards target
 
-        [UI_FloatRange(minValue = 5f, maxValue = 90f, stepIncrement = 5f)]
+        [UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust angle", guiFormat = "F1", isPersistant = false)]
         float maxThrustAngle = 45f; // Max. thrust angle from vertical
 
-        [UI_FloatRange(minValue = 5f, maxValue = 90f, stepIncrement = 5f)]
+        [UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max final thrust angle", guiFormat = "F1", isPersistant = false)]
-        float maxFinalThrustAngle = 20f; // Max. final thrust angle from vertical
+        float maxLandingThrustAngle = 20f; // Max. final thrust angle from vertical
 
-        [UI_FloatRange(minValue = 0, maxValue = 200f, stepIncrement = 5f)]
+        [UI_FloatRange(minValue = 0, maxValue = 300f, stepIncrement = 5f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust %", isPersistant = false, guiUnits = "%")]
         float maxPercentThrust = 100f;
 
@@ -77,9 +80,13 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Velocity gain", guiFormat = "F1", isPersistant = false)]
         float kP2 = 1.0f; // If 1 then at 1m/s error in velocity acceleration at an extra 1m/s/s
 
-        [UI_FloatRange(minValue = 0.0f, maxValue = 100.0f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Max thrust", guiFormat = "F1", isPersistant = false)]
-        float maxErrPercentThrust = 20.0f; // Max acceleration to add to get towards target
+        //[UI_FloatRange(minValue = 0.0f, maxValue = 100.0f, stepIncrement = 1f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Max thrust", guiFormat = "F1", isPersistant = false)]
+        //float maxErrPercentThrust = 20.0f;
+
+        [UI_FloatRange(minValue = 0.0f, maxValue = 90.0f, stepIncrement = 1f)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Extra thrust angle", guiFormat = "F1", isPersistant = false)]
+        float errExtraThrustAngle = 10.0f; // Additional thrust angle from vertical allowed to correct for error
 
 
         public void DrawTarget(Vector3d pos, Transform transform, Color color, double size=10)
@@ -168,9 +175,15 @@ namespace HopperGuidance
             _align_line.SetPosition(1,r_to);
         }
 
-        public override void OnStart(StartState state)
+//        public override void OnStart(StartState state)
+//        {
+//            base.OnStart(state);
+//            Disable();
+//        }
+
+        public void OnDestroy()
         {
-            base.OnStart(state);
+            Debug.Log("HopperGuidance destroyed!");
             Disable();
         }
 
@@ -275,14 +288,14 @@ namespace HopperGuidance
                 Solve solver = new Solve();
                 solver.Tmin = 1;
                 solver.Tmax = 300; // 5 mins
-                solver.tol = 0.5;
-                solver.vmax = 50;
+                solver.tol = 0.1;
+                solver.vmax = maxErrV;
                 solver.amax = amax*maxPercentThrust*0.01;
                 solver.N = 5;
                 solver.g = g.magnitude;
                 solver.minDescentAngle = minDescentAngle;
                 solver.maxThrustAngle = maxThrustAngle;
-                solver.maxFinalThrustAngle = maxFinalThrustAngle;
+                solver.maxLandingThrustAngle = maxLandingThrustAngle;
 
                 int retval;
                 // Use _logTransform so that Y is vertical direction, and the gravity which acts downwards in the Y direction
@@ -313,7 +326,7 @@ namespace HopperGuidance
                   }
 
                   // Enable autopilot
-                  _pid3d.Init(kP1,0,0,kP2,0,0,maxErrV,(float)(0.01f*maxErrPercentThrust*amax),2.0f);
+                  _pid3d.Init(kP1,0,0,kP2,0,0,maxErrV,(float)(0.01f*maxPercentThrust*amax),2.0f);
                   _targetPos = vessel.mainBody.GetWorldSurfacePosition(tgtLatitude, tgtLongitude, tgtAltitude);
                   DrawTarget(_targetPos, body.transform, targetcol);
                   DrawTrack(_traj, body.transform, trackcol);
@@ -384,19 +397,69 @@ namespace HopperGuidance
             Disable();
             return;
           }
+          Debug.Log("dist r="+(dr-r)+" dist v="+(dv-v));
           DrawAlign(r,dr,vessel.mainBody.transform,aligncol);
           float throttle=0;
           Vector3 F = vessel.mainBody.transform.up; // default to up
           
-          if (da.magnitude > 0.01)
-          {
-            F = da;
-          }
-
           // Adjust thrust direction when off trajectory
           Vector3d F2 = GetFAdjust(r,v,dr,dv,Time.deltaTime,_logTransform);
-          F = F + F2;
-          float amax = (float)(_maxThrust/vessel.totalMass);  // F = m.a. We want, unit of throttle for each 1m/s/s
+          F = da + F2;
+
+#if (LIMIT_ATTITUDE)
+          // Restrict angle from vertical to thrust angle + allowed error
+          double maxAngle = maxThrustAngle + errExtraThrustAngle;
+          // Transform to Y is vertical
+          // TODO: Sin() is probably wrong!
+          F = _logTransform.InverseTransformVector(F);
+
+          // Calculate normal for plane at maxAngle (make it 2D)
+          if (F.y > 0)
+          {
+            // TODO: Working upside down?
+            // Note tan at 90 degrees goes infinite
+            double R = Math.Abs(F.y)*Math.Tan(maxAngle*Math.PI/180); // cone radius at this point
+            double x = Math.Sqrt(F.x*F.x + F.z*F.z);
+            if (F.y > 0)
+            {
+              if ((x > R)&&(maxAngle < 90)) // upright and thrust cone upwards
+              {
+                // Need to reduce fx (horizontal component of thrust until within cone)
+                // 0 = nx*fhor2 + ny*F.y;
+                // fhor2 = p*Math.Sqrt(F.x*F.x+F.z*F.z)
+                // fhor2 = Math.Sqrt(p1*F.x*F.x+p1*F.z*F.z)
+                // fhor2*fhor2 = p1*F.x*F.x + p1*F.z*F.z
+                // fhor2*Fhor2 = p1*(F.x*F.x + F.z*F.z)
+                // p1 = (fhor2*fhor2)/(F.x*F.x + F.z*F.z)
+                // need to scale back F.x and F.y to be on boundary
+                F.x = (float)((R/x)*F.x);
+                F.z = (float)((R/x)*F.z);
+                Debug.Log("Outside of thrust cone - R="+R+" F.x="+F.x+" F.z="+F.z+" scaling to "+F);
+              }
+              // If F.y > 0 and maxAngle > 90 then by definite we are inside upwards hemisphere
+            } else {
+              // If F.y < 0 and maxAngle < 90 we are definite outside thrust cone
+              if (maxAngle < 90)
+              {
+                // Project to nearest point inside thrust cone
+                Debug.Log("Zero thrust since in wrong hemisphere");
+                F.x = 0;
+                F.y = 0;
+                F.z = 0;
+              }
+              if ((x < R)&&(maxAngle > 90)) // Now we need to be outside of thrust cone
+              {
+                Debug.Log("Inside of upside down thrust cone -> zero thrust");
+                F.x = 0;
+                F.y = 0;
+                F.z = 0;
+              }
+            }
+          }
+
+          F = _logTransform.TransformVector(F);
+#endif
+          float amax = (float)(_maxThrust/vessel.totalMass); // F = m*a. We want, unit of throttle for each 1m/s/s
           throttle = _accelFactor*F.magnitude/(amax+0.001f); // protect against divide by zero
 
           // Shutoff throttle if pointing in wrong direction
@@ -404,7 +467,7 @@ namespace HopperGuidance
           float ddot = (float)Vector3d.Dot(Vector3d.Normalize(att),Vector3d.Normalize(F));
           if ((ddot < Mathf.Cos((float)idleAngle*(Mathf.PI/180.0f))) && (throttle>0.01))
           {
-            throttle = 0.001f; // some throttle to steer (if no RCS and main thruster gimbals)
+            throttle = 0; // some throttle to steer (if no RCS and main thruster gimbals)
           }
 
           // Set throttle and direction
