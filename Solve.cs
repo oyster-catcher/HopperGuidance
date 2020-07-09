@@ -24,8 +24,8 @@ namespace HopperGuidance
     public double vmax = 1000;
     public double minDescentAngle = 10;
     public double tol = 0.5;
-    public double maxThrustAngle = 90;
-    public double maxFinalThrustAngle = 20;
+    public double maxThrustAngle = 180;
+    public double maxLandingThrustAngle = 20;
     public int fidelity = 10;
 
     // Last stored inputs to GFold() (after transformation)
@@ -81,7 +81,7 @@ namespace HopperGuidance
     public string DumpString()
     {
       string msg = ((retval>=1)&&(retval<=5))?"SUCCEED":"FAIL";
-      return string.Format("HopperGuidance: "+msg+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" rf="+Vec2Str(rf)+" vf="+Vec2Str(vf)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxFinalThrustAngle="+maxFinalThrustAngle);
+      return string.Format("HopperGuidance: "+msg+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" rf="+Vec2Str(rf)+" vf="+Vec2Str(vf)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle);
     }
  
     public static double [] BasisWeights(double t, double a_T, int N)
@@ -228,7 +228,12 @@ namespace HopperGuidance
 #endif
 
 #if (MAXTHRUSTANGLE)
-      constraints += 4*N;
+      // Can't handle >90 since the space of possible thrust directions becomes
+      // non-convex :-(
+      if (maxThrustAngle<90)
+        constraints += 4*(N-1);
+      if (maxLandingThrustAngle<90)
+        constraints += 4;
 #endif
       int k=0;
 
@@ -364,39 +369,39 @@ namespace HopperGuidance
       for( int i=0; i<N; i++ )
       {
         // Calculate Normal for plane to be above (like an upside down pyramid)
-        double vx = Math.Cos(maxThrustAngle*Math.PI/180.0);
-        double vy = Math.Sin(maxThrustAngle*Math.PI/180.0);
+        double ang = maxThrustAngle;
         if (i==N-1)
+          ang = maxLandingThrustAngle;
+        if (ang < 90)
         {
-          vx = Math.Cos(maxFinalThrustAngle*Math.PI/180.0);
-          vy = Math.Sin(maxFinalThrustAngle*Math.PI/180.0);
+          double vx = Math.Cos(ang*Math.PI/180.0);
+          double vy = Math.Sin(ang*Math.PI/180.0);
+          double [] V1 = new double [] {vx,vy,0}; // Normal vector of plane to be above
+          double [] V2 = new double [] {-vx,vy,0}; // Normal vector of plane to be above
+          double [] V3 = new double [] {0,vy,vx}; // Normal vector of plane to be above
+          double [] V4 = new double [] {0,vy,-vx}; // Normal vector of plane to be above
+          // proportions of thrusts[i] for XYZ for position
+          c[k+0,i*3+0] = V1[0]; // X
+          c[k+0,i*3+1] = V1[1]; // Y
+          c[k+0,i*3+2] = V1[2]; // Z
+          // proportions of thrusts[i] for XYZ for position
+          c[k+1,i*3+0] = V2[0]; // X
+          c[k+1,i*3+1] = V2[1]; // Y
+          c[k+1,i*3+2] = V2[2]; // Z
+          // proportions of thrusts[i] for XYZ for position
+          c[k+2,i*3+0] = V3[0]; // X
+          c[k+2,i*3+1] = V3[1]; // Y
+          c[k+2,i*3+2] = V3[2]; // Z
+          // proportions of thrusts[i] for XYZ for position
+          c[k+3,i*3+0] = V4[0]; // X
+          c[k+3,i*3+1] = V4[1]; // Y
+          c[k+3,i*3+2] = V4[2]; // Z
+          ct[k+0] = 1; // LHS > RHS
+          ct[k+1] = 1; // LHS > RHS
+          ct[k+2] = 1; // LHS > RHS
+          ct[k+3] = 1; // LHS > RHS
+          k += 4;
         }
-        double [] V1 = new double [] {vx,vy,0}; // Normal vector of plane to be above
-        double [] V2 = new double [] {-vx,vy,0}; // Normal vector of plane to be above
-        double [] V3 = new double [] {0,vy,vx}; // Normal vector of plane to be above
-        double [] V4 = new double [] {0,vy,-vx}; // Normal vector of plane to be above
-        // proportions of thrusts[i] for XYZ for position
-        // 45 degrees when X<0
-        c[k+0,i*3+0] = V1[0]; // X
-        c[k+0,i*3+1] = V1[1]; // Y
-        c[k+0,i*3+2] = V1[2]; // Z
-        // proportions of thrusts[i] for XYZ for position
-        c[k+1,i*3+0] = V2[0]; // X
-        c[k+1,i*3+1] = V2[1]; // Y
-        c[k+1,i*3+2] = V2[2]; // Z
-        // proportions of thrusts[i] for XYZ for position
-        c[k+2,i*3+0] = V3[0]; // X
-        c[k+2,i*3+1] = V3[1]; // Y
-        c[k+2,i*3+2] = V3[2]; // Z
-        // proportions of thrusts[i] for XYZ for position
-        c[k+3,i*3+0] = V4[0]; // X
-        c[k+3,i*3+1] = V4[1]; // Y
-        c[k+3,i*3+2] = V4[2]; // Z
-        ct[k+0] = 1; // LHS > RHS
-        ct[k+1] = 1; // LHS > RHS
-        ct[k+2] = 1; // LHS > RHS
-        ct[k+3] = 1; // LHS > RHS
-        k += 4;
       }
 #endif
 
@@ -623,8 +628,8 @@ namespace HopperGuidance
             solver.Tmin = d;
           else if (k=="Tmax")
             solver.Tmax = d;
-          else if (k=="maxFinalThrustAngle")
-            solver.maxFinalThrustAngle = d;
+          else if (k=="maxLandingThrustAngle")
+            solver.maxLandingThrustAngle = d;
           else if (k=="maxThrustAngle")
             solver.maxThrustAngle = d;
           else
