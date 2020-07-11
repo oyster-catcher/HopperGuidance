@@ -26,6 +26,7 @@ namespace HopperGuidance
     public double maxThrustAngle = 180;
     public double maxLandingThrustAngle = 20;
     public int fidelity = 10;
+    public double timePenalty = 0; // If zero minimize fuel, as 1 then 1 extra second cost 1 fuel
 
     // Last stored inputs to GFold() - in natural space for solution
     // with Y as the up direction
@@ -457,7 +458,7 @@ namespace HopperGuidance
         retval = a_retval;
         fuel = 9e+20;
       }
-      return fuel;
+      return fuel + T*timePenalty;
   }
 
    static double[] convToDouble3(Vector3d v)
