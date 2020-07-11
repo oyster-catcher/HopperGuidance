@@ -136,6 +136,7 @@ Locations
 =========
 
 H-Pad: latitude=-0.0968071692165 longitude=-74.6172808614 altitude=180
+Island runway: latitude=-1.5190 longitude=-71.9005 altitude=150
 
 Details on the Algorithm
 ========================
