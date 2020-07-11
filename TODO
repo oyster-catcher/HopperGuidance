@@ -1,3 +1,4 @@
-- Fix bugs with showing/hidding and with duplicate targets/tracks
-- Let target be moved again
 - Let user click screen to select landing position
+- Large target so can see when zoomed out
+- Automatically set altitude to surface position?
+- Look at very slow turnaround by moon - trying to minimise fuel. Minimise time too?
