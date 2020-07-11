@@ -6,7 +6,6 @@
 
 using System;
 using System.IO;
-using UnityEngine;
 using KSPAssets;
 
 
@@ -28,7 +27,8 @@ namespace HopperGuidance
     public double maxLandingThrustAngle = 20;
     public int fidelity = 10;
 
-    // Last stored inputs to GFold() (after transformation)
+    // Last stored inputs to GFold() - in natural space for solution
+    // with Y as the up direction
     public Vector3d r0;
     public Vector3d v0;
     public Vector3d rf;
@@ -75,7 +75,7 @@ namespace HopperGuidance
 #endif
     public string Vec2Str(Vector3d v)
     {
-      return string.Format("[{0:F1},{0:F1},{0:F1}]",v.x,v.y,v.z);
+      return string.Format("[{0:F2},{1:F2},{2:F2}]",v.x,v.y,v.z);
     }
 
     public string DumpString()
@@ -536,7 +536,8 @@ namespace HopperGuidance
         d = a + (b - a) / gr;
       }
 
-      o_fuel = GFold(a_r0,a_v0,a_rf,a_vf,0.5*(a+b),out o_thrusts,out o_retval);
+      double bestT = 0.5*(a+b);
+      o_fuel = GFold(a_r0,a_v0,a_rf,a_vf,bestT,out o_thrusts,out o_retval);
       retval = o_retval;
       if ((o_retval<1) || (o_retval>5))
       {
@@ -550,35 +551,8 @@ namespace HopperGuidance
         vf = a_vf;
       }
       
-      return 0.5*(a+b);
+      return bestT;
     }
-
-#if (UNITY)
-  // Transforms positions and velocity (Y should be vertical)
-  // Inverse transforms on output
-  // if retval>0 than a set of N thrusts should be in the output vars
-  public double GoldenSearchGFold(Vector3d a_r0, Vector3d a_v0, Vector3d a_rf, Vector3d a_vf, Transform transform,
-                                  out Vector3d[] o_thrusts, out double o_fuel, out int o_retval)
-  {
-    if (transform != null)
-    {
-      a_r0 = transform.InverseTransformPoint(a_r0);
-      a_v0 = transform.InverseTransformVector(a_v0);
-      a_rf = transform.InverseTransformPoint(a_rf);
-      a_vf = transform.InverseTransformVector(a_vf);
-    }
-    double bestT = GoldenSearchGFold(a_r0, a_v0, a_rf, a_vf, out o_thrusts, out o_fuel, out o_retval);
-
-    if ((transform != null) && (o_retval>=1) && (o_retval<=5))
-    {
-      for(int i=0; i<N; i++)
-      {
-        o_thrusts[i] = transform.TransformVector(o_thrusts[i]);
-      }
-    }
-    return bestT;
-  }
-#endif
 
     static int RunTest(string[] args)
     {
