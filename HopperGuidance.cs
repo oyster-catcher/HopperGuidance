@@ -1,4 +1,4 @@
-﻿//#define LIMIT_ATTITUDE
+﻿#define LIMIT_ATTITUDE
 
 using System;
 using System.Collections.Generic;
@@ -38,15 +38,18 @@ namespace HopperGuidance
 
         [UI_FloatRange(minValue = -90.0f, maxValue = 90.0f, stepIncrement = 0.0001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = false)]
-        float tgtLatitude = -0.0972078f;
+        //float tgtLatitude = -0.0972078f;
+        float tgtLatitude = -0.0968071692165f; // H-Pad
 
         [UI_FloatRange(minValue = -180.0f, maxValue = 180.0f, stepIncrement = 0.0001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Longitude", guiFormat = "F7", isPersistant = false)]
-        float tgtLongitude = -74.5576822f;
+        //float tgtLongitude = -74.5576822f;
+        float tgtLongitude = -74.6172808614f; // H-Pad
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 10000.0f, stepIncrement = 0.001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Altitude", guiFormat = "F1", isPersistant = false, guiUnits = "m")]
-        float tgtAltitude = 74.7f;
+        //float tgtAltitude = 74.7f;
+        float tgtAltitude = 175f; // H-Pad
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = false, guiUnits = "m")]
@@ -54,7 +57,7 @@ namespace HopperGuidance
 
         [UI_FloatRange(minValue = 1, maxValue = 1500, stepIncrement = 10f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max velocity", guiFormat = "F0", isPersistant = false)]
-        float maxErrV = 50f; // Max. vel to add to get towards target
+        float maxV = 50f; // Max. vel to add to get towards target
 
         [UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust angle", guiFormat = "F1", isPersistant = false)]
@@ -67,6 +70,10 @@ namespace HopperGuidance
         [UI_FloatRange(minValue = 0, maxValue = 300f, stepIncrement = 5f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust %", isPersistant = false, guiUnits = "%")]
         float maxPercentThrust = 100f;
+
+        [UI_FloatRange(minValue = 0.0f, maxValue = 10.0f, stepIncrement = 0.1f)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Time penalty", guiFormat = "F1", isPersistant = false)]
+        float timePenalty = 10.0f; // Fuel penalty to every extra second
 
         [UI_FloatRange(minValue = 0f, maxValue = 90f, stepIncrement = 5f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = false)]
@@ -84,6 +91,7 @@ namespace HopperGuidance
         [UI_FloatRange(minValue = 0.0f, maxValue = 90.0f, stepIncrement = 1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Extra thrust angle", guiFormat = "F1", isPersistant = false)]
         float errExtraThrustAngle = 10.0f; // Additional thrust angle from vertical allowed to correct for error
+
 
 
         public void DrawTarget(Vector3d pos, Transform transform, Color color, float size=50)
@@ -312,13 +320,14 @@ namespace HopperGuidance
                 solver.Tmin = 1;
                 solver.Tmax = 300; // 5 mins
                 solver.tol = 0.1;
-                solver.vmax = maxErrV;
+                solver.vmax = maxV;
                 solver.amax = amax*maxPercentThrust*0.01;
                 solver.N = 5;
                 solver.g = g.magnitude;
                 solver.minDescentAngle = minDescentAngle;
                 solver.maxThrustAngle = maxThrustAngle;
                 solver.maxLandingThrustAngle = maxLandingThrustAngle;
+                solver.timePenalty = timePenalty;
 
                 int retval;
                 // Predict into future since solution makes 0.1-0.3 secs to compute
@@ -347,7 +356,7 @@ namespace HopperGuidance
                   _traj.CorrectFinal(rf,vf);
 
                   // Enable autopilot
-                  _pid3d.Init(kP1,0,0,kP2,0,0,maxErrV,(float)(0.01f*maxPercentThrust*amax),2.0f);
+                  _pid3d.Init(kP1,0,0,kP2,0,0,maxV,(float)(0.01f*maxPercentThrust*amax),2.0f);
                   // TODO - Testing out using in solution co-ordinates
                   DrawTrack(_traj, _logTransform, trackcol);
                   vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
