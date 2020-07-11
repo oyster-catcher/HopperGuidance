@@ -61,6 +61,7 @@ Parameters for (1) are used to compute the trajectory and can be used to control
 - Max thrust angle - the maximum allow angle the craft will tilt. If 90 degrees then the craft can tip from vertical to the horizontal position but no more
 - Max final thrust angle - the thrust angle for the touch down. This keeps the final descent more vertical if kept lower than max thrust angle
 - Max thrust - how much of the available thrust to use. Set this slow and the descent will be slow and careful. You can use more than 100% since the calculation is done when calculating the trajectory you might have lost weight due to fuel usage and you will have spare acceleration by landing.
+- Time penalty - by default with a time penalty of zero the solution will minimize fuel usage. Setting a penalty of time will encourage a faster time to landing at the expense of extra fuel. You might want to use this on low gravity otherwise your craft may be allowed to drift upwards so a long time to make best use of gravity
 
 Parameters for (2) describe what to do when the craft is off the trajectory. The nearest point on the trajectory is marked by a blue line from the craft to the trajectory. This nearest point takes into account and position and velocity with a little more weight for velocity. This makes the craft behave more smoothly rather than blindy aiming for the nearest point in position. So the craft tries to match the position and velocity of the nearest point. If calculates a correct to the thrust vector to try and minimise the discrepancy. Six PID controllers are used to achieve this. 3 for the X,Y and Z positions and 3 for X, Y and Z velocities.
 
@@ -131,6 +132,10 @@ make
 ```
 But I include the Visual Studio project as it may be easy to get running on a Windows machine or on a Mac with some configuration hacks. Any help on this much appreciated.
 
+Locations
+=========
+
+H-Pad: latitude=-0.0968071692165 longitude=-74.6172808614 altitude=180
 
 Details on the Algorithm
 ========================
