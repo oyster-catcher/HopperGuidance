@@ -29,10 +29,11 @@ namespace HopperGuidance
         Trajectory _traj; // trajectory of solution in world space?
         double _startTime = 0; // Start solution starts to normalize vessel times to start at 0
         Transform _logTransform = null;
+        double last_t = -1; // last time data was logged
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
         bool _logging = true;
         double disengageDistance = 10000;
-        double extendTime = 0.5f; // extend trajectory to slowly descent to touch down
+        double extendTime = 2.0f; // extend trajectory to slowly descent to touch down
 
         double setTgtLatitude, setTgtLongitude, setTgtAltitude;
 
@@ -49,7 +50,7 @@ namespace HopperGuidance
         [UI_FloatRange(minValue = 0.1f, maxValue = 10000.0f, stepIncrement = 0.001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Altitude", guiFormat = "F1", isPersistant = false, guiUnits = "m")]
         //float tgtAltitude = 74.7f;
-        float tgtAltitude = 175f; // H-Pad
+        float tgtAltitude = 176f; // H-Pad
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = false, guiUnits = "m")]
@@ -73,7 +74,7 @@ namespace HopperGuidance
 
         [UI_FloatRange(minValue = 0.0f, maxValue = 10.0f, stepIncrement = 0.1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Time penalty", guiFormat = "F1", isPersistant = false)]
-        float timePenalty = 10.0f; // Fuel penalty to every extra second
+        float timePenalty = 0.0f; // Fuel penalty to every extra second
 
         [UI_FloatRange(minValue = 0f, maxValue = 90f, stepIncrement = 5f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = false)]
@@ -245,16 +246,15 @@ namespace HopperGuidance
             _vesselWriter.Close();
           }
           _vesselWriter = null;
+          last_t = -1;
         }
 
         void LogData(System.IO.StreamWriter f, double t, Vector3 r, Vector3 v, Vector3 a)
         {
           if (f != null)
           {
-            r = _logTransform.TransformPoint(r);
-            v = _logTransform.TransformVector(v);
-            a = _logTransform.TransformVector(a);
             f.WriteLine(string.Format("{0} {1:F5} {2:F5} {3:F5} {4:F5} {5:F5} {6:F5} {7:F1} {8:F1} {9:F1}",t,r.x,r.y,r.z,v.x,v.y,v.z,a.x,a.y,a.z));
+            last_t = t;
           }
         }
 
@@ -311,7 +311,7 @@ namespace HopperGuidance
                 Vector3d v0 = vessel.GetSrfVelocity();
                 Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
                 Vector3d rf = Vector3d.zero;
-                Vector3d vf = new Vector3d(0,0,0);
+                Vector3d vf = new Vector3d(0,-0.1,0);
                 _maxThrust = ComputeMaxThrust();
                 _startTime = Time.time;
                 double amax = _maxThrust/vessel.totalMass;
@@ -350,7 +350,7 @@ namespace HopperGuidance
                   double dt = solver.dt;
                   _traj = new Trajectory(); // Transformed into world space
                   // Use g vector from solution calculation
-                  _traj.Simulate(bestT, thrusts, tr0, tv0, new Vector3d(0,-g.magnitude,0), 0.2*dt, extendTime);
+                  _traj.Simulate(bestT, thrusts, tr0, tv0, new Vector3d(0,-g.magnitude,0), dt, extendTime);
                   double fdist = (_traj.r[_traj.r.Length-1] - rf).magnitude;
                   Debug.Log("Final pos error = "+fdist);
                   _traj.CorrectFinal(rf,vf);
@@ -480,6 +480,13 @@ namespace HopperGuidance
           }
 
 #endif
+          // Logging
+          double t = Time.time - _startTime;
+          if ((_logging)&&(t+solver.dt >= last_t))
+          {
+            LogData(_vesselWriter,t,tr,tv,F); // Updates last_t
+          }
+
           F = _logTransform.TransformVector(F);
 
           float amax = (float)(_maxThrust/vessel.totalMass); // F = m*a. We want, unit of throttle for each 1m/s/s
@@ -502,8 +509,6 @@ namespace HopperGuidance
           vessel.Autopilot.SAS.lockedMode = false;
           state.mainThrottle = throttle;
 
-          // Logging
-          if (_logging) {LogData(_vesselWriter,Time.time-_startTime,vessel.GetWorldPos3D(),vessel.GetSrfVelocity(),F);}
         }
 
         public override void OnUpdate()
