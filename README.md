@@ -137,8 +137,9 @@ Locations
 
 Kerbin:
 
-KSC H-Pad: latitude=-0.0968 longitude=-74.6172 altitude=180
-Island ATC Tower: latitude=-1.5233 longitude=-71.911 altitude=182
+- KSC H-Pad: latitude=-0.0968 longitude=-74.6172 altitude=180
+- Island ATC Tower: latitude=-1.5233 longitude=-71.911 altitude=182
+- KSC Water tower: latitude=-0.0922 longitude=-74.55251 altitude=102
 
 Details on the Algorithm
 ========================
