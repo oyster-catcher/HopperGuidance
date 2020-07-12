@@ -25,7 +25,7 @@ namespace HopperGuidance
     public double tol = 0.5;
     public double maxThrustAngle = 180;
     public double maxLandingThrustAngle = 20;
-    public int fidelity = 10;
+    public int fidelity = 20;
     public double timePenalty = 0; // If zero minimize fuel, as 1 then 1 extra second cost 1 fuel
 
     // Last stored inputs to GFold() - in natural space for solution
