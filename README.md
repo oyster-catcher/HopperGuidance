@@ -135,18 +135,22 @@ But I include the Visual Studio project as it may be easy to get running on a Wi
 Locations
 =========
 
-H-Pad: latitude=-0.0968071692165 longitude=-74.6172808614 altitude=180
-Island runway: latitude=-1.5190 longitude=-71.9005 altitude=150
+Kerbin:
+
+KSC H-Pad: latitude=-0.0968 longitude=-74.6172 altitude=180
+Island ATC Tower: latitude=-1.5233 longitude=-71.911 altitude=182
 
 Details on the Algorithm
 ========================
 
-My implementation is not quite the same as the official G-FOLD algorithm. I made some simplifications due to the convex solver code I had available and in some cases due to my lack of understanding.
+My implementation is not quite the same as the 'proper' G-FOLD algorithm. I made some simplifications due to the convex solver code I had available and in some cases due to my lack of understanding.
 The full solution makes account of the consumption of fuel and the improved acceleration when mass drops due to this. Mine does not. If you run out of fuel then sorry.
-The proper G-FOLD uses a Second Order Cone Programming (SOCP) solver. This is fancy stuff, but bascially it means that various constraints such a thrust directions and minimum descent angle are all cones. You can see that they are since they are a maximum angle from the vertical in all directions.
-I couldn't find a SOCP solver but I could find a Quadratic Programming (QP) solver in the shape of alglib. See alglib.net. This means I use 4 planes rather than a cone so its an approximation that you probably wont notice.
-The biggest loss is that the solution choosen should be the one that minimises fuel and fulfills all the constraints. This is done by minimizing the magnitude of the thrust vectors multiplies by time. In a QP solution you can't minimise the magnitude so I had to minimise the square the thrust vectors over time. This means that you may end up with solutions that thrust by small amounts for longer. You may well notice this is low gravity environments like Mun when the craft spents a while using little thrust to turn around. I may change the algorithm to also minimise time rather than just fuel.
 
-Enjoy
+The proper G-FOLD uses a Second Order Cone Programming (SOCP) solver. This is fancy stuff, but bascially it means that various constraints such a thrust directions and minimum descent angle are all cones. You can see that they are since they are a maximum angle from the vertical in all directions.
+I couldn't find a SOCP solver but I could find a Quadratic Programming (QP) solver in the shape of alglib. See alglib.net. This means I use 4 planes rather than a cone so its an approximation that you probably won't notice.
+
+To follow the trajectory I use 6 PID controllers. There are a pair of controller for each X, Y and Z. The controllers are very simple using only the proportial element, kP. The 1st controller say for the X axis sets a target (or setpoint) for the velocity, VX given the error in the X position. kP is given by "Err. position gain". So this says aim to move towards the X position at this speed. Then the second PID for X set the acceleration in the X direction given the mismatch between the velocity desired given the target velocity and the current velocity. kP is this controller is set from "Err. velocity gain". This is done for the three dimensions and gives a desired correction thrust vector. Note this is onto of the thrust vector already computed from the solution. Finally we need to now the target position and velocity. This is calculated by finding the nearest position and velocity on the track with a weighting given to use. Plus we interpolate along the line segment from the solution via calculating the nearest 'point' to a line in six dimensions (position + velocity).  This combination leads to a smoother following of the solution track.
+
 Adrian Skilling
+
 adrian.skilling@gmail.com
