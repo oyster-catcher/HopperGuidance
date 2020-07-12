@@ -135,6 +135,8 @@ But I include the Visual Studio project as it may be easy to get running on a Wi
 Locations
 =========
 
+You can type these values in for the landing site. Yeah, or know that is quite awkward to do right now.
+
 Kerbin:
 
 - KSC H-Pad: latitude=-0.0968 longitude=-74.6172 altitude=180
