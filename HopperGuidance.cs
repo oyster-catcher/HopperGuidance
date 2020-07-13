@@ -32,24 +32,21 @@ namespace HopperGuidance
         double last_t = -1; // last time data was logged
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
         bool _logging = true;
-        double disengageDistance = 10000;
         double extendTime = 2.0f; // extend trajectory to slowly descent to touch down
-
         double setTgtLatitude, setTgtLongitude, setTgtAltitude;
+        float lastTgtLatitude, lastTgtLongitude, lastTgtAltitude;
+        bool pickingPositionTarget = false;
 
         [UI_FloatRange(minValue = -90.0f, maxValue = 90.0f, stepIncrement = 0.0001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = false)]
-        //float tgtLatitude = -0.0972078f;
         float tgtLatitude = -0.0968071692165f; // H-Pad
 
         [UI_FloatRange(minValue = -180.0f, maxValue = 180.0f, stepIncrement = 0.0001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Longitude", guiFormat = "F7", isPersistant = false)]
-        //float tgtLongitude = -74.5576822f;
         float tgtLongitude = -74.6172808614f; // H-Pad
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 10000.0f, stepIncrement = 0.001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Altitude", guiFormat = "F1", isPersistant = false, guiUnits = "m")]
-        //float tgtAltitude = 74.7f;
         float tgtAltitude = 176f; // H-Pad
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 1f)]
@@ -84,7 +81,6 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Position gain", guiFormat = "F2", isPersistant = false)]
         float kP1 = 0.3f; // If 1 then at 1m error aim to close a 1m/s
 
-
         [UI_FloatRange(minValue = 0.0f, maxValue = 2f, stepIncrement = 0.1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Velocity gain", guiFormat = "F1", isPersistant = false)]
         float kP2 = 1.0f; // If 1 then at 1m/s error in velocity acceleration at an extra 1m/s/s
@@ -92,8 +88,6 @@ namespace HopperGuidance
         [UI_FloatRange(minValue = 0.0f, maxValue = 90.0f, stepIncrement = 1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Extra thrust angle", guiFormat = "F1", isPersistant = false)]
         float errExtraThrustAngle = 10.0f; // Additional thrust angle from vertical allowed to correct for error
-
-
 
         public void DrawTarget(Vector3d pos, Transform transform, Color color, float size=50)
         {
@@ -185,18 +179,12 @@ namespace HopperGuidance
             _align_line.useWorldSpace = false;
             _align_line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
             _align_line.material.color = color;
-            _align_line.startWidth = 1.0f;
-            _align_line.endWidth = 1.0f;
+            _align_line.startWidth = 0.4f;
+            _align_line.endWidth = 0.4f;
             _align_line.positionCount = 2;
             _align_line.SetPosition(0,transform.TransformPoint(r_from));
             _align_line.SetPosition(1,transform.TransformPoint(r_to));
         }
-
-//        public override void OnStart(StartState state)
-//        {
-//            base.OnStart(state);
-//            Disable();
-//        }
 
         public void OnDestroy()
         {
@@ -272,6 +260,79 @@ namespace HopperGuidance
           return maxThrust;
         }
 
+        public void Enable()
+        {
+          Vector3d[] thrusts;
+          Vector3d r0 = vessel.GetWorldPos3D();
+          Vector3d v0 = vessel.GetSrfVelocity();
+          Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
+          Vector3d rf = Vector3d.zero;
+          Vector3d vf = new Vector3d(0,-0.1,0);
+          _maxThrust = ComputeMaxThrust();
+          _startTime = Time.time;
+          double amax = _maxThrust/vessel.totalMass;
+
+          solver = new Solve();
+          solver.Tmin = 1;
+          solver.Tmax = 300; // 5 mins
+          solver.tol = 0.1;
+          solver.vmax = maxV;
+          solver.amax = amax*maxPercentThrust*0.01;
+          solver.N = 5;
+          solver.g = g.magnitude;
+          solver.minDescentAngle = minDescentAngle;
+          solver.maxThrustAngle = maxThrustAngle;
+          solver.maxLandingThrustAngle = maxLandingThrustAngle;
+          solver.timePenalty = timePenalty;
+
+          int retval;
+          // Predict into future since solution makes 0.1-0.3 secs to compute
+          r0 = r0 + v0*predictTime + 0.5*g*predictTime*predictTime;
+          v0 = v0 + g*predictTime;
+
+          // Shut-off throttle
+          FlightCtrlState ctrl = new FlightCtrlState();
+          vessel.GetControlState(ctrl);
+          ctrl.mainThrottle = 0;
+
+          // Compute trajectory to landing spot
+          double fuel;
+          Vector3d tr0 = _logTransform.InverseTransformPoint(r0);
+          Vector3d tv0 = _logTransform.InverseTransformVector(v0);
+          double bestT = solver.GoldenSearchGFold(tr0, tv0, rf, vf, out thrusts, out fuel, out retval);
+          Debug.Log(solver.DumpString());
+          if ((retval>=1) && (retval<=5))
+          {
+             double dt = solver.dt;
+            _traj = new Trajectory(); // Transformed into world space
+            // Use g vector from solution calculation
+            _traj.Simulate(bestT, thrusts, tr0, tv0, new Vector3d(0,-g.magnitude,0), dt, extendTime);
+            double fdist = (_traj.r[_traj.r.Length-1] - rf).magnitude;
+            Debug.Log("Final pos error = "+fdist);
+            _traj.CorrectFinal(rf,vf);
+
+            // Enable autopilot
+            _pid3d.Init(kP1,0,0,kP2,0,0,maxV,(float)(0.01f*maxPercentThrust*amax),2.0f);
+            // TODO - Testing out using in solution co-ordinates
+            DrawTrack(_traj, _logTransform, trackcol);
+            vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
+            vessel.OnFlyByWire += new FlightInputCallback(Fly);
+            if (_logging) {LogStart("vessel.dat");}
+            // Write solution
+            if (_logging) {_traj.Write("solution.dat");}
+            _enabled = true;
+            Events["OnToggle"].guiName = "Disable autopilot";
+          }
+          else
+          {
+            Disable();
+            Events["OnToggle"].guiName = "Enable fail: Try again";
+            Debug.Log("Failure to find solution: error code "+retval);
+            string message = "Failure to find solution within constraints - try relaxing them";
+            ScreenMessages.PostScreenMessage(message, 3.0f, ScreenMessageStyle.UPPER_CENTER);
+          }
+        }
+
         public void Disable()
         {
           _enabled = false;
@@ -297,87 +358,24 @@ namespace HopperGuidance
           Disable();
         }
 
+        [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Pick target", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
+        public void PickTarget()
+        {
+          pickingPositionTarget = true;
+          string message = "Click to select a target";
+          ScreenMessages.PostScreenMessage(message, 3.0f, ScreenMessageStyle.UPPER_CENTER);
+          lastTgtLongitude = tgtLongitude;
+          lastTgtLatitude = tgtLatitude;
+          lastTgtAltitude = tgtAltitude;
+        }
+
         [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Enable autopilot", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
         public void OnToggle()
         {
-            if (!_enabled)
-            {
-
-                CelestialBody body = vessel.mainBody;
-                //_targetPos = body.GetWorldSurfacePosition(tgtLatitude, tgtLongitude, tgtAltitude);
-
-                Vector3d[] thrusts;
-                Vector3d r0 = vessel.GetWorldPos3D();
-                Vector3d v0 = vessel.GetSrfVelocity();
-                Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
-                Vector3d rf = Vector3d.zero;
-                Vector3d vf = new Vector3d(0,-0.1,0);
-                _maxThrust = ComputeMaxThrust();
-                _startTime = Time.time;
-                double amax = _maxThrust/vessel.totalMass;
-
-                solver = new Solve();
-                solver.Tmin = 1;
-                solver.Tmax = 300; // 5 mins
-                solver.tol = 0.1;
-                solver.vmax = maxV;
-                solver.amax = amax*maxPercentThrust*0.01;
-                solver.N = 5;
-                solver.g = g.magnitude;
-                solver.minDescentAngle = minDescentAngle;
-                solver.maxThrustAngle = maxThrustAngle;
-                solver.maxLandingThrustAngle = maxLandingThrustAngle;
-                solver.timePenalty = timePenalty;
-
-                int retval;
-                // Predict into future since solution makes 0.1-0.3 secs to compute
-                r0 = r0 + v0*predictTime + 0.5*g*predictTime*predictTime;
-                v0 = v0 + g*predictTime;
-
-                // Shut-off throttle
-                FlightCtrlState ctrl = new FlightCtrlState();
-                vessel.GetControlState(ctrl);
-                ctrl.mainThrottle = 0;
-
-                // Compute trajectory to landing spot
-                double fuel;
-                Vector3d tr0 = _logTransform.InverseTransformPoint(r0);
-                Vector3d tv0 = _logTransform.InverseTransformVector(v0);
-                double bestT = solver.GoldenSearchGFold(tr0, tv0, rf, vf, out thrusts, out fuel, out retval);
-                Debug.Log(solver.DumpString());
-                if ((retval>=1) && (retval<=5))
-                {
-                  double dt = solver.dt;
-                  _traj = new Trajectory(); // Transformed into world space
-                  // Use g vector from solution calculation
-                  _traj.Simulate(bestT, thrusts, tr0, tv0, new Vector3d(0,-g.magnitude,0), dt, extendTime);
-                  double fdist = (_traj.r[_traj.r.Length-1] - rf).magnitude;
-                  Debug.Log("Final pos error = "+fdist);
-                  _traj.CorrectFinal(rf,vf);
-
-                  // Enable autopilot
-                  _pid3d.Init(kP1,0,0,kP2,0,0,maxV,(float)(0.01f*maxPercentThrust*amax),2.0f);
-                  // TODO - Testing out using in solution co-ordinates
-                  DrawTrack(_traj, _logTransform, trackcol);
-                  vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
-                  vessel.OnFlyByWire += new FlightInputCallback(Fly);
-                  if (_logging) {LogStart("vessel.dat");}
-                  // Write solution
-                  if (_logging) {_traj.Write("solution.dat");}
-                  _enabled = true;
-                  Events["OnToggle"].guiName = "Disable autopilot";
-                }
-                else
-                {
-                  Disable();
-                  Events["OnToggle"].guiName = "Enable fail: Try again";
-                  Debug.Log("Failure to find solution: error code "+retval);
-                }
-            }
-            else
-            {
-                Disable();
-            } 
+          if (!_enabled)
+            Enable();
+          else
+            Disable();
         }
 
         // Use 3-D pairs of PIDs to calculate adjustment to force vector and optionally transfrom
@@ -520,6 +518,42 @@ namespace HopperGuidance
             LogSetUpTransform();
             DrawTarget(Vector3d.zero,_logTransform,targetcol);
           }
+          if (pickingPositionTarget)
+          {
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+              // Previous position
+              tgtLatitude = lastTgtLatitude;
+              tgtLongitude = lastTgtLongitude;
+              tgtAltitude = lastTgtAltitude;
+              LogSetUpTransform();
+              DrawTarget(Vector3d.zero,_logTransform,targetcol);
+              pickingPositionTarget = false;
+              return;
+            }
+            RaycastHit hit;
+            if (GuiUtils.GetMouseHit(vessel.mainBody,out hit))
+            {
+              // Picked
+              double lat, lon, alt;
+              vessel.mainBody.GetLatLonAlt(hit.point, out lat, out lon, out alt);
+              tgtLatitude = (float)lat;
+              tgtLongitude = (float)lon;
+              tgtAltitude = (float)alt;
+              LogSetUpTransform();
+              DrawTarget(Vector3d.zero,_logTransform,targetcol);
+              // TODO - Recompute trajectory is autopilot on
+
+              // If clicked stop picking
+              if (Input.GetMouseButtonDown(0))
+              {
+                pickingPositionTarget = false;
+                if (_enabled)
+                  Enable(); // recalculate trajectory
+                pickingPositionTarget = false;
+              }
+            }
+          }
         }
 
         [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Set Target Here", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
@@ -529,7 +563,6 @@ namespace HopperGuidance
             tgtLatitude = (float)vessel.latitude;
             tgtLongitude = (float)vessel.longitude;
             tgtAltitude = (float)FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D());
-            CelestialBody body = vessel.mainBody;
             LogSetUpTransform();
             DrawTarget(Vector3d.zero,_logTransform,targetcol);
         }
