@@ -9,8 +9,8 @@ namespace HopperGuidance
         public static bool GetMouseHit(CelestialBody body, out RaycastHit hit)
         {
           // Cast a ray from screen point
-          Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-          bool isHit = Physics.Raycast(ray.origin, ray.direction, out hit, Mathf.Infinity);
+          Ray ray = FlightCamera.fetch.mainCamera.ScreenPointToRay(Input.mousePosition);
+          bool isHit = Physics.Raycast(ray.origin, ray.direction, out hit, Mathf.Infinity, 1 << 15);
           return isHit;
         }
     }
