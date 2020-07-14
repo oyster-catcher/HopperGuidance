@@ -1,10 +1,10 @@
-- Let user click screen to select landing position
-- Large target so can see when zoomed out
 - Automatically set altitude to surface position?
-- Look at very slow turnaround by moon - trying to minimise fuel. Minimise time too?
 - Show/hide plotting lines
 - Improve target visuals
 - Make target viewable on map
 - Test on Realism Overhaul
 - Make videos
 - Try with different vechicles like Falcon 9
+- Stop pick target picking when outside main window
+- Fix pick target when higher on Mun
+- Look into why tracking is off on Mun. Another transform issues (like above)?
