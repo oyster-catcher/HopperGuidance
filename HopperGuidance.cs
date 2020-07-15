@@ -22,7 +22,7 @@ namespace HopperGuidance
         double predictTime = 0.5f;
         float _maxThrust;
         Color trackcol = new Color(0,1,0,0.3f); // transparent green
-        Color targetcol = new Color(1,0.2f,0.2f,0.3f); // transparent red
+        Color targetcol = new Color(1,1,0,0.5f); // solid yellow
         Color thrustcol = new Color(1,0.2f,0.2f,0.3f); // transparent red
         Color aligncol = new Color(0,0.1f,1.0f,0.3f); // blue
         Solve solver; // Stores solution inputs, output and trajectory
@@ -33,9 +33,13 @@ namespace HopperGuidance
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
         bool _logging = true;
         double extendTime = 2.0f; // extend trajectory to slowly descent to touch down
-        double setTgtLatitude, setTgtLongitude, setTgtAltitude;
+        double setTgtLatitude, setTgtLongitude, setTgtAltitude, setTgtSize;
         float lastTgtLatitude, lastTgtLongitude, lastTgtAltitude;
         bool pickingPositionTarget = false;
+
+        [UI_FloatRange(minValue = 5, maxValue = 500, stepIncrement = 5)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target size", guiFormat = "F0", isPersistant = false)]
+        float tgtSize = 10;
 
         [UI_FloatRange(minValue = -90.0f, maxValue = 90.0f, stepIncrement = 0.0001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = false)]
@@ -62,8 +66,8 @@ namespace HopperGuidance
         float maxThrustAngle = 45f; // Max. thrust angle from vertical
 
         [UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max final thrust angle", guiFormat = "F1", isPersistant = false)]
-        float maxLandingThrustAngle = 20f; // Max. final thrust angle from vertical
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max landing thrust angle", guiFormat = "F1", isPersistant = false)]
+        float maxLandingThrustAngle = 5f; // Max. final thrust angle from vertical
 
         [UI_FloatRange(minValue = 0, maxValue = 300f, stepIncrement = 5f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust %", isPersistant = false, guiUnits = "%")]
@@ -89,39 +93,97 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Extra thrust angle", guiFormat = "F1", isPersistant = false)]
         float errExtraThrustAngle = 10.0f; // Additional thrust angle from vertical allowed to correct for error
 
-        public void DrawTarget(Vector3d pos, Transform transform, Color color, float size=50)
+        // Quad should be described a,b,c,d in anti-clockwise order when looking at it
+        public void AddQuad(Vector3[] vertices, int vi, int[] triangles, int ti,
+                            Vector3d a, Vector3d b, Vector3d c, Vector3d d)
         {
+          vertices[vi+0] = a;
+          vertices[vi+1] = b;
+          vertices[vi+2] = c;
+          vertices[vi+3] = d;
+          triangles[ti++] = vi;
+          triangles[ti++] = vi+2;
+          triangles[ti++] = vi+1;
+          triangles[ti++] = vi;
+          triangles[ti++] = vi+3;
+          triangles[ti++] = vi+2;
+        }
+
+        public void DrawTarget(Vector3d pos, Transform transform, Color color, double size)
+        {
+          double[] r = new double[]{size*0.5,size*0.55,size*0.95,size};
           if (_tgt_obj != null)
           {
             Destroy(_tgt_obj);
           }
-          pos = transform.TransformPoint(pos); // convert to World Pos
+          pos = transform.TransformPoint(pos + 0.02f*Vector3.up); // convert to World Pos
 
-          Vector3d vx = new Vector3d(size,0,0);
-          Vector3d vy = new Vector3d(0,size,0);
-          Vector3d vz = new Vector3d(0,0,size);
+          Vector3d vx = new Vector3d(1,0,0);
+          Vector3d vy = new Vector3d(0,1,0);
+          Vector3d vz = new Vector3d(0,0,1);
 
           vx = transform.TransformVector(vx);
           vy = transform.TransformVector(vy);
           vz = transform.TransformVector(vz);
 
           _tgt_obj = new GameObject("Target");
-          LineRenderer line= _tgt_obj.AddComponent<LineRenderer>();
-          line.transform.parent = transform;
-          line.useWorldSpace = false; // was false
-          line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
-          line.material.color = color;
-          line.startWidth = 0.5f;
-          line.endWidth = 0.5f;
-          line.positionCount = 8;
-          line.SetPosition(0,pos-vy);
-          line.SetPosition(1,pos+vy);
-          line.SetPosition(2,pos);
-          line.SetPosition(3,pos-vx);
-          line.SetPosition(4,pos+vx);
-          line.SetPosition(5,pos);
-          line.SetPosition(6,pos-vz);
-          line.SetPosition(7,pos+vz);
+          MeshFilter meshf = _tgt_obj.AddComponent<MeshFilter>();
+          MeshRenderer meshr = _tgt_obj.AddComponent<MeshRenderer>();
+          meshr.transform.parent = transform;
+          meshr.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
+          meshr.material.color = color;
+          //meshr.shadowCastingMode = renderer.shadowCastingMode.Off;
+
+          Mesh mesh = new Mesh();
+          Vector3[] vertices = new Vector3[36*4+4+4+4];
+          int[] triangles = new int[(36*2*2-8+2+2+2)*3]; // take away gaps
+          int i,j;
+          int v=0,t=0;
+          for(j=0;j<4;j++) // four concentric rings
+          {
+            for(i=0;i<36;i++)
+            {
+              float a = -(i*10)*Mathf.PI/180.0f;
+              vertices[v++] = pos + vx*Mathf.Sin(a)*r[j] + vz*Mathf.Cos(a)*r[j];
+            }
+          }
+          for(j=0;j<2;j++)
+          {
+            int start = j*72;
+            for(i=0;i<36;i++)
+            {
+              if ((j==1) || (i%9!=0)) // make 4 gaps in inner ring
+              {
+                triangles[t++] = start+i;
+                triangles[t++] = start+(i+1)%36;
+                triangles[t++] = start+36+i%36;
+
+                triangles[t++] = start+(i+1)%36;
+                triangles[t++] = start+36+(i+1)%36;
+                triangles[t++] = start+36+i%36;
+              }
+            }
+          }
+          // Add cross across centre
+          Vector3 cx = vx*size*0.03;
+          Vector3 cz = vz*size*0.03;
+          float cs=8;
+          AddQuad(vertices,v,triangles,t,
+                  pos-cx*cs-cz,pos+cx*cs-cz,pos+cx*cs+cz,pos-cx*cs+cz);
+          v+=4; t+=6;
+          // One side
+          AddQuad(vertices,v,triangles,t,
+                  pos-cx+cz,pos+cx+cz,pos+cx+cz*cs,pos-cx+cz*cs);
+          v+=4; t+=6;
+          // Other size
+          AddQuad(vertices,v,triangles,t,
+                  pos-cx-cz*cs,pos+cx-cz*cs,pos+cx-cz,pos-cx-cz);
+          v+=4; t+=6;
+
+          mesh.vertices = vertices;
+          mesh.triangles = triangles;
+          mesh.RecalculateNormals();
+          meshf.mesh = mesh;
         }
 
         public void DrawTrack(Trajectory traj, Transform transform, Color color, float amult=1)
@@ -315,6 +377,7 @@ namespace HopperGuidance
             _pid3d.Init(kP1,0,0,kP2,0,0,maxV,(float)(0.01f*maxPercentThrust*amax),2.0f);
             // TODO - Testing out using in solution co-ordinates
             DrawTrack(_traj, _logTransform, trackcol);
+            DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
             vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
             vessel.OnFlyByWire += new FlightInputCallback(Fly);
             if (_logging) {LogStart("vessel.dat");}
@@ -512,11 +575,12 @@ namespace HopperGuidance
         public override void OnUpdate()
         {
           base.OnUpdate();
-          if ((tgtLatitude != setTgtLatitude) || (tgtLongitude != setTgtLongitude) || (tgtAltitude != setTgtAltitude))
+          if ((tgtLatitude != setTgtLatitude) || (tgtLongitude != setTgtLongitude) || (tgtAltitude != setTgtAltitude) || (tgtSize != setTgtSize))
           {
             Debug.Log("Target moved!!!");
             LogSetUpTransform();
-            DrawTarget(Vector3d.zero,_logTransform,targetcol);
+            DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
+            setTgtSize = tgtSize;
           }
           if (pickingPositionTarget)
           {
@@ -527,12 +591,12 @@ namespace HopperGuidance
               tgtLongitude = lastTgtLongitude;
               tgtAltitude = lastTgtAltitude;
               LogSetUpTransform();
-              DrawTarget(Vector3d.zero,_logTransform,targetcol);
+              DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
               pickingPositionTarget = false;
               return;
             }
             RaycastHit hit;
-            if (GuiUtils.GetMouseHit(vessel.mainBody,out hit))
+            if (GuiUtils.GetMouseHit(vessel.mainBody,out hit,part))
             {
               // Picked
               double lat, lon, alt;
@@ -541,7 +605,7 @@ namespace HopperGuidance
               tgtLongitude = (float)lon;
               tgtAltitude = (float)alt;
               LogSetUpTransform();
-              DrawTarget(Vector3d.zero,_logTransform,targetcol);
+              DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
               // TODO - Recompute trajectory is autopilot on
 
               // If clicked stop picking
@@ -564,7 +628,7 @@ namespace HopperGuidance
             tgtLongitude = (float)vessel.longitude;
             tgtAltitude = (float)FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D());
             LogSetUpTransform();
-            DrawTarget(Vector3d.zero,_logTransform,targetcol);
+            DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
         }
     }
 }
