@@ -143,6 +143,20 @@ Kerbin:
 - Island ATC Tower: latitude=-1.5233 longitude=-71.911 altitude=182
 - KSC Water tower: latitude=-0.0922 longitude=-74.55251 altitude=102
 
+ALGLIB
+======
+
+I make use of the free version of ALGLIB for convex optimisation. I use the free version provided until the GPL. Heres a description of ALGLIB from alglib.net
+
+ALGLIB is a cross-platform numerical analysis and data processing library. It supports several programming languages (C++, C#, Delphi) and several operating systems (Windows and POSIX, including Linux). ALGLIB features include:
+
+- Data analysis (classification/regression, statistics)
+- Optimization and nonlinear solvers
+- Interpolation and linear/nonlinear least-squares fitting
+- Linear algebra (direct algorithms, EVD/SVD), direct and iterative linear solvers
+- Fast Fourier Transform and many other algorithms
+- ALGLIB Project offers you several editions of ALGLIB:
+
 Details on the Algorithm
 ========================
 
