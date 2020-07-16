@@ -5,3 +5,4 @@
 - Better model for HopperGuidance core
 - Show path travelling to vessel
 - Replace time penalty with UI cycle, min fuel, min time, fuel+time
+- Get a working Visual Studio Project file
