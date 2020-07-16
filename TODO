@@ -1,8 +1,7 @@
-- Automatically set altitude to surface position?
-- Show/hide plotting lines
-- Make target viewable on map
 - Test on Realism Overhaul
 - Make videos
 - Try with different vechicles like Falcon 9
-- Look into why tracking is off on Mun. Another transform issues (like above)?
 - Automatically relax constraints is over velocity or low descent angle? - no suggest changes
+- Better model for HopperGuidance core
+- Show path travelling to vessel
+- Replace time penalty with UI cycle, min fuel, min time, fuel+time
