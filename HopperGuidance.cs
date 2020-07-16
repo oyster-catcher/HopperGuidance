@@ -34,6 +34,7 @@ namespace HopperGuidance
         bool _logging = true;
         double extendTime = 2.0f; // extend trajectory to slowly descent to touch down
         double setTgtLatitude, setTgtLongitude, setTgtAltitude, setTgtSize;
+        bool setShowTrack = true;
         float lastTgtLatitude, lastTgtLongitude, lastTgtAltitude;
         bool pickingPositionTarget = false;
 
@@ -92,6 +93,10 @@ namespace HopperGuidance
         [UI_FloatRange(minValue = 0.0f, maxValue = 90.0f, stepIncrement = 1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Extra thrust angle", guiFormat = "F1", isPersistant = false)]
         float errExtraThrustAngle = 10.0f; // Additional thrust angle from vertical allowed to correct for error
+
+        [UI_Toggle(disabledText = "Off", enabledText = "On")]
+        [KSPField(guiActive = true, guiActiveEditor = false, guiName = "Show track", isPersistant = false)]
+        bool showTrack = true;
 
         // Quad should be described a,b,c,d in anti-clockwise order when looking at it
         public void AddQuad(Vector3[] vertices, int vi, int[] triangles, int ti,
@@ -200,6 +205,9 @@ namespace HopperGuidance
               }
               thrusts.Clear();
             }
+            if (!showTrack)
+              return;
+
             _track_obj = new GameObject("Track");
             LineRenderer line = _track_obj.AddComponent<LineRenderer>();
             line.transform.parent = transform;
@@ -241,8 +249,8 @@ namespace HopperGuidance
             _align_line.useWorldSpace = false;
             _align_line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
             _align_line.material.color = color;
-            _align_line.startWidth = 0.4f;
-            _align_line.endWidth = 0.4f;
+            _align_line.startWidth = 0.3f;
+            _align_line.endWidth = 0.3f;
             _align_line.positionCount = 2;
             _align_line.SetPosition(0,transform.TransformPoint(r_from));
             _align_line.SetPosition(1,transform.TransformPoint(r_to));
@@ -581,6 +589,11 @@ namespace HopperGuidance
             LogSetUpTransform();
             DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
             setTgtSize = tgtSize;
+          }
+          if (showTrack != setShowTrack)
+          {
+            DrawTrack(_traj, _logTransform, trackcol);
+            setShowTrack = showTrack;
           }
           if (pickingPositionTarget)
           {
