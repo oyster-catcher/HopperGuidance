@@ -121,7 +121,7 @@ namespace HopperGuidance
           {
             Destroy(_tgt_obj);
           }
-          pos = transform.TransformPoint(pos + 0.02f*Vector3.up); // convert to World Pos
+          pos = transform.TransformPoint(pos); // convert to World Pos
 
           Vector3d vx = new Vector3d(1,0,0);
           Vector3d vy = new Vector3d(0,1,0);
