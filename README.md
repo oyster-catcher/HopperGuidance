@@ -107,8 +107,8 @@ Debugging
 =========
 
 If you have a problem look in the KSP directory for KSP.log
-Line proceeded by HopperGuidance and logging from this mod.
-You will be able to find the settings when the algorithm attempted to find a solution, and rerun it with Solve.exe outside of KSP. See below.
+Lines are proceeded by HopperGuidance:. 
+You will be able to find all the parameters when either a solution was requested and found or it failed. You can rerun by taking the parameters from the log line and using them directly on the command line of Solve.exe outside of KSP. See below.
 
 
 Testing
