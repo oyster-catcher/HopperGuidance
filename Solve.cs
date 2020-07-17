@@ -598,6 +598,11 @@ namespace HopperGuidance
             solver.Nmin = (int)d;
           else if (k=="Nmax")
             solver.Nmax = (int)d;
+          else if (k=="N")
+          {
+            solver.Nmin = (int)d;
+            solver.Nmax = (int)d;
+          }
           else if (k=="minDurationPerThrust")
             solver.minDurationPerThrust = d;
           else if (k=="amin")
