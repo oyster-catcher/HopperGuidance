@@ -31,7 +31,7 @@ namespace HopperGuidance
         Transform _logTransform = null;
         double last_t = -1; // last time data was logged
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
-        bool _logging = true;
+        bool _logging = false;
         double extendTime = 2.0f; // extend trajectory to slowly descent to touch down
         double setTgtLatitude, setTgtLongitude, setTgtAltitude, setTgtSize;
         bool setShowTrack = true;
