@@ -37,6 +37,7 @@ namespace HopperGuidance
         bool setShowTrack = true;
         float lastTgtLatitude, lastTgtLongitude, lastTgtAltitude;
         bool pickingPositionTarget = false;
+        double lowestY; // lowest Y part of vessel (recalculated at SetTargetHere(), PickTarget() and Enable())
 
         [UI_FloatRange(minValue = 5, maxValue = 500, stepIncrement = 5)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target size", guiFormat = "F0", isPersistant = false)]
@@ -60,7 +61,7 @@ namespace HopperGuidance
 
         [UI_FloatRange(minValue = 1, maxValue = 1500, stepIncrement = 10f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max velocity", guiFormat = "F0", isPersistant = false)]
-        float maxV = 50f; // Max. vel to add to get towards target
+        float maxV = 150f; // Max. vel to add to get towards target - not too large that vessel can't turn around
 
         [UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust angle", guiFormat = "F1", isPersistant = false)]
@@ -258,7 +259,7 @@ namespace HopperGuidance
 
         public void OnDestroy()
         {
-            Debug.Log("HopperGuidance destroyed!");
+            Debug.Log("HopperGuidance: OnDestroy()");
             Disable();
         }
 
@@ -316,6 +317,53 @@ namespace HopperGuidance
           }
         }
 
+        // Find Y offset to lowest part from origin of the vessel
+        double FindAltLowestPointOnVessel(out double miny)
+        {
+          Vector3 CoM, up;
+          RaycastHit craft;
+          float ASL, trueAlt, surfaceAlt, bottomAlt;
+
+          //CoM = this.vessel.findCenterOfMass();  //Gets CoM - no such function in KSP 1.8.1
+          CoM = vessel.localCoM;
+          //up = FlightGlobals.getUpAxis(CoM); //Gets up axis (needed for the raycast)
+          //ASL = FlightGlobals.getAltitudeAtPos(CoM);
+          //if (Physics.Raycast(CoM, -up, out craft, ASL + 10000f, 1 << 15))
+          //{
+          //  trueAlt = Mathf.Min(ASL, craft.distance); //Smallest value between ASL and distance from ground
+          //}
+
+          //else { trueAlt = ASL; }
+
+          Vector3 bottom = Vector3.zero; // Offset from CoM
+          up = FlightGlobals.getUpAxis(CoM); //Gets up axis
+          //Debug.Log("up="+up);
+          miny = 0;
+          double alt = FlightGlobals.getAltitudeAtPos(CoM);
+          //surfaceAlt = ASL - trueAlt;
+          //bottomAlt = trueAlt; //Initiation to be sure the loop doesn't return a false value
+          foreach (Part p in vessel.parts)
+          {
+            if (p.collider != null) //Makes sure the part actually has a collider to touch ground
+            {
+              Vector3 pbottom = p.collider.ClosestPointOnBounds(vessel.mainBody.position); //Gets the bottom point
+              double y = Vector3.Dot(up,pbottom);
+              //Debug.Log("bottom="+pbottom+" part="+p.name+" dist="+y);
+              if (FlightGlobals.getAltitudeAtPos(bottom) < alt)
+                alt = FlightGlobals.getAltitudeAtPos(bottom);
+              if (y < miny)
+              {
+                bottom = pbottom;
+                miny = y;
+              }
+            }
+          }
+          //Debug.Log("CoM="+CoM);
+          miny = miny - Vector3.Dot(up,CoM); // Add on offset of CoM
+          //Debug.Log("miny="+miny);
+          return alt;
+        }
+
         public float ComputeMaxThrust()
         {
           float maxThrust = 0;
@@ -332,11 +380,13 @@ namespace HopperGuidance
 
         public void Enable()
         {
+          lowestY = -vessel.vesselSize.y*0.4; // approximate if CoG at centre of vessel
+          //Debug.Log("lowestY="+lowestY);
           Vector3d[] thrusts;
           Vector3d r0 = vessel.GetWorldPos3D();
           Vector3d v0 = vessel.GetSrfVelocity();
           Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
-          Vector3d rf = Vector3d.zero;
+          Vector3d rf = new Vector3d(0,-lowestY,0); // a little above the surface
           Vector3d vf = new Vector3d(0,-0.1,0);
           _maxThrust = ComputeMaxThrust();
           _startTime = Time.time;
@@ -348,7 +398,9 @@ namespace HopperGuidance
           solver.tol = 0.1;
           solver.vmax = maxV;
           solver.amax = amax*maxPercentThrust*0.01;
-          solver.N = 5;
+          solver.Nmin = 2;
+          solver.Nmax = 10;
+          solver.minDurationPerThrust = 4;
           solver.g = g.magnitude;
           solver.minDescentAngle = minDescentAngle;
           solver.maxThrustAngle = maxThrustAngle;
@@ -378,7 +430,7 @@ namespace HopperGuidance
             // Use g vector from solution calculation
             _traj.Simulate(bestT, thrusts, tr0, tv0, new Vector3d(0,-g.magnitude,0), dt, extendTime);
             double fdist = (_traj.r[_traj.r.Length-1] - rf).magnitude;
-            Debug.Log("Final pos error = "+fdist);
+            Debug.Log("HopperGuidance: Final pos error = "+fdist);
             _traj.CorrectFinal(rf,vf);
 
             // Enable autopilot
@@ -398,7 +450,7 @@ namespace HopperGuidance
           {
             Disable();
             Events["OnToggle"].guiName = "Enable fail: Try again";
-            Debug.Log("Failure to find solution: error code "+retval);
+            Debug.Log("HopperGuidance: Failure to find solution: error code "+retval);
             string message = "Failure to find solution within constraints - try relaxing them";
             ScreenMessages.PostScreenMessage(message, 3.0f, ScreenMessageStyle.UPPER_CENTER);
           }
@@ -478,8 +530,7 @@ namespace HopperGuidance
           // Get nearest point on trajectory in position and velocity
           // use both so we can handle when the trajectory crosses itself,
           // and it works a bit better anyway if velocity and position are not in step
-          if ((vessel == null) || (vessel.state != Vessel.State.ACTIVE) ||
-              (vessel.situation == Vessel.Situations.LANDED) || (vessel.situation == Vessel.Situations.SPLASHED))
+          if ((vessel == null) || vessel.checkLanded())
           {
             Disable();
             return;
@@ -505,7 +556,7 @@ namespace HopperGuidance
           double maxAngle = maxThrustAngle + errExtraThrustAngle;
 
           // Calculate normal for plane at maxAngle (make it 2D)
-          if (F.y > 0)
+          if (true)
           {
             // TODO: Working upside down?
             // Note tan at 90 degrees goes infinite
@@ -525,7 +576,7 @@ namespace HopperGuidance
                 // need to scale back F.x and F.y to be on boundary
                 F.x = (float)((R/x)*F.x);
                 F.z = (float)((R/x)*F.z);
-                Debug.Log("Outside of thrust cone - R="+R+" F.x="+F.x+" F.z="+F.z+" scaling to "+F);
+                //Debug.Log("Outside of thrust cone - R="+R+" F.x="+F.x+" F.z="+F.z+" scaling to "+F);
               }
               // If F.y > 0 and maxAngle > 90 then by definite we are inside upwards hemisphere
             } else {
@@ -533,14 +584,14 @@ namespace HopperGuidance
               if (maxAngle < 90)
               {
                 // Project to nearest point inside thrust cone
-                Debug.Log("Zero thrust since in wrong hemisphere");
+                //Debug.Log("Zero thrust since in wrong hemisphere");
                 F.x = 0;
                 F.y = 0;
                 F.z = 0;
               }
               if ((x < R)&&(maxAngle > 90)) // Now we need to be outside of thrust cone
               {
-                Debug.Log("Inside of upside down thrust cone -> zero thrust");
+                //Debug.Log("Inside of upside down thrust cone -> zero thrust");
                 F.x = 0;
                 F.y = 0;
                 F.z = 0;
@@ -585,7 +636,6 @@ namespace HopperGuidance
           base.OnUpdate();
           if ((tgtLatitude != setTgtLatitude) || (tgtLongitude != setTgtLongitude) || (tgtAltitude != setTgtAltitude) || (tgtSize != setTgtSize))
           {
-            Debug.Log("Target moved!!!");
             LogSetUpTransform();
             DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
             setTgtSize = tgtSize;
@@ -616,7 +666,7 @@ namespace HopperGuidance
               vessel.mainBody.GetLatLonAlt(hit.point, out lat, out lon, out alt);
               tgtLatitude = (float)lat;
               tgtLongitude = (float)lon;
-              tgtAltitude = (float)alt;
+              tgtAltitude = (float)(alt+0.5);
               LogSetUpTransform();
               DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
               // TODO - Recompute trajectory is autopilot on
@@ -636,10 +686,23 @@ namespace HopperGuidance
         [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Set Target Here", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
         public void SetTargetHere()
         {
+            // Fire ray down to ground
+            //Ray ray = FlightCamera.fetch.mainCamera.ScreenPointToRay(Input.mousePosition);
+            //Vector3d g = FlightGlobals.getGeeForceAtPosition(vessel.GetWorldPos3D());
+            // Hit ground within 50 units
+            //RaycastHit hit;
+            //bool isHit = Physics.Raycast(vessel.GetWorldPos3D(), g, out hit, 50, 1 << 15);
+
             // Find vessel co-ordinates
             tgtLatitude = (float)vessel.latitude;
             tgtLongitude = (float)vessel.longitude;
-            tgtAltitude = (float)FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D());
+            // Get altitude of target position - target final position is offset above this
+            // This is dependent is what position is recorded as the centre of the craft. LocalCoM? or part
+            // We want distance from centre to bottom of lowest part
+            tgtAltitude = (float)FindAltLowestPointOnVessel(out lowestY);
+            // Altitude of lowest point on craft
+            //tgtAltitude = (float)(FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D() + bottom));
+            //Debug.Log("bottom="+bottom+" bottom alt="+tgtAltitude);
             LogSetUpTransform();
             DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
         }
