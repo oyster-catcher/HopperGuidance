@@ -16,7 +16,9 @@ namespace HopperGuidance
     // Parameters to control solution
     public double Tmin = 0;
     public double Tmax = 30;
-    public int N = 5;
+    public int Nmin = 2;
+    public int Nmax = 10;
+    public double minDurationPerThrust = 4;
     public double g = 9.8;
     public double amin = 0;
     public double amax = 30;
@@ -36,6 +38,7 @@ namespace HopperGuidance
     public Vector3d vf;
 
     // Outputs of solution (stored and returned)
+    public int N; // choosen N given duration of flight
     public double T;
     public double dt;
     public Vector3d [] thrusts;
@@ -82,7 +85,7 @@ namespace HopperGuidance
     public string DumpString()
     {
       string msg = ((retval>=1)&&(retval<=5))?"SUCCEED":"FAIL";
-      return string.Format("HopperGuidance: "+msg+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" rf="+Vec2Str(rf)+" vf="+Vec2Str(vf)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle);
+      return string.Format("HopperGuidance: "+msg+" Nmin="+Nmin+ " Nmax="+Nmax+ " minDurationPerThrust="+minDurationPerThrust+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" rf="+Vec2Str(rf)+" vf="+Vec2Str(vf)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle);
     }
  
     public static double [] BasisWeights(double t, double a_T, int N)
@@ -152,8 +155,14 @@ namespace HopperGuidance
                         out double[,] a_thrusts, out int a_retval)
     {
       double fidelity = 10; // this many steps inbetween thrust positions
-      int numchecks = N; // number of checks for descent angle
       a_thrusts = null;
+
+      N = (int)(T/minDurationPerThrust);
+      if (N < Nmin)
+        N = Nmin;
+      if (N > Nmax)
+        N = Nmax;
+      int numchecks = N; // number of checks for descent angle
 
       alglib.minqpstate state;
       alglib.minqpreport rep;
@@ -585,8 +594,12 @@ namespace HopperGuidance
         } else {
           d = Convert.ToDouble(v);
           System.Console.Error.WriteLine(k+"="+d);
-          if (k=="N")
-            solver.N = (int)d;
+          if (k=="Nmin")
+            solver.Nmin = (int)d;
+          else if (k=="Nmax")
+            solver.Nmax = (int)d;
+          else if (k=="minDurationPerThrust")
+            solver.minDurationPerThrust = d;
           else if (k=="amin")
             solver.amin = d;
           else if (k=="amax")
