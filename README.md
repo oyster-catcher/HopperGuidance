@@ -63,6 +63,8 @@ Parameters for (1) are used to compute the trajectory and can be used to control
 - Max thrust - how much of the available thrust to use. Set this slow and the descent will be slow and careful. You can use more than 100% since the calculation is done when calculating the trajectory you might have lost weight due to fuel usage and you will have spare acceleration by landing.
 - Time penalty - by default with a time penalty of zero the solution will minimize fuel usage. Setting a penalty of time will encourage a faster time to landing at the expense of extra fuel. You might want to use this on low gravity otherwise your craft may be allowed to drift upwards so a long time to make best use of gravity
 
+While can you set target latitude, longitude and altitude its far easier to click "Pick Target" then click on the main view to select the target. You will need to increase the target size to see far away targets. Note that the target is horizontal so it will get hidden on slopes.
+
 Parameters for (2) describe what to do when the craft is off the trajectory. The nearest point on the trajectory is marked by a blue line from the craft to the trajectory. This nearest point takes into account and position and velocity with a little more weight for velocity. This makes the craft behave more smoothly rather than blindy aiming for the nearest point in position. So the craft tries to match the position and velocity of the nearest point. If calculates a correct to the thrust vector to try and minimise the discrepancy. Six PID controllers are used to achieve this. 3 for the X,Y and Z positions and 3 for X, Y and Z velocities.
 
 - Idle attitude angle - If the craft is pointing more this angle away from the required direction of thrust then idle the engine at 0.1% thrust. This prevent the craft thrusting in the wrong direction and waits of it to point correctly
@@ -92,10 +94,14 @@ Dealing with Large Craft:
 You may have a problem using the autopilot with large craft. A large craft is hard to maneoveure since it has high mass and will take time to change its attitude. This leads to it pointing is the wrong direction and either thrusting in that wrong direction or waiting to change its attitude. Both these mean it cannot following the track. Another problem is that atmospheric drag is not including in when solving for the best trajectory. Doing so its possible with this technique because it would make the problem non-linear. So heres some tips for dealing with large craft
 
 - Reduce max velocity to keep atmospheric drag low
-- Keep max thrust angle This will keep the craft more upright and prevent dangerous oscillation in attitude
-- Keep final max thrust angle even lower. Making is zero will mean the craft must descend vertical for the touch down
-- Lower position gain to say 0 to 0.2. This will mean if the craft is off trajectory it will only move slowly towards the correct trajectory. If this value is too high it will overshoot
+- Keep max thrust angle low, says <15 degress as this will keep the craft more upright and prevent dangerous oscillation in attitude
+- Keep final max thrust angle even lower. Making it zero will mean the craft must descend vertically for the touch down
+- Lower position gain to say 0.1 to 0.2. This will mean if the craft is off trajectory it will only move slowly towards the correct trajectory. If this value is too higher it will overshoot
+- Raise the final descent angle above 45 degrees, may be as high as 80 degrees to give a more vertical landing
+- You can compensate for the lack of ability to steer the craft by adding more RCS thrusters or overly powerfull rotation wheels.
 - Reduce max thrust below 100%. This will mean spare thrust will be available to correct errors in sticking to the trajectory
+- Reduce Err. extra thrust angle to say 10-20 degrees which will prevent the craft leaning too much and being hard to regain the upright position
+- However note that if tie down all these parameters too much you can end up with really complex trajectories which try to fit all these constraints which can be ridiculously inefficient.
 
 Debugging
 =========
@@ -140,6 +146,7 @@ Locations
 =========
 
 You can type these values in for the landing site. Yeah, or know that is quite awkward to do right now.
+Its much easier to use "Pick target" if you can see the target.
 
 Kerbin:
 
