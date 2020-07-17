@@ -321,34 +321,18 @@ namespace HopperGuidance
         double FindAltLowestPointOnVessel(out double miny)
         {
           Vector3 CoM, up;
-          RaycastHit craft;
-          float ASL, trueAlt, surfaceAlt, bottomAlt;
 
-          //CoM = this.vessel.findCenterOfMass();  //Gets CoM - no such function in KSP 1.8.1
           CoM = vessel.localCoM;
-          //up = FlightGlobals.getUpAxis(CoM); //Gets up axis (needed for the raycast)
-          //ASL = FlightGlobals.getAltitudeAtPos(CoM);
-          //if (Physics.Raycast(CoM, -up, out craft, ASL + 10000f, 1 << 15))
-          //{
-          //  trueAlt = Mathf.Min(ASL, craft.distance); //Smallest value between ASL and distance from ground
-          //}
-
-          //else { trueAlt = ASL; }
-
           Vector3 bottom = Vector3.zero; // Offset from CoM
           up = FlightGlobals.getUpAxis(CoM); //Gets up axis
-          //Debug.Log("up="+up);
           miny = 0;
           double alt = FlightGlobals.getAltitudeAtPos(CoM);
-          //surfaceAlt = ASL - trueAlt;
-          //bottomAlt = trueAlt; //Initiation to be sure the loop doesn't return a false value
           foreach (Part p in vessel.parts)
           {
             if (p.collider != null) //Makes sure the part actually has a collider to touch ground
             {
               Vector3 pbottom = p.collider.ClosestPointOnBounds(vessel.mainBody.position); //Gets the bottom point
               double y = Vector3.Dot(up,pbottom);
-              //Debug.Log("bottom="+pbottom+" part="+p.name+" dist="+y);
               if (FlightGlobals.getAltitudeAtPos(bottom) < alt)
                 alt = FlightGlobals.getAltitudeAtPos(bottom);
               if (y < miny)
@@ -358,9 +342,7 @@ namespace HopperGuidance
               }
             }
           }
-          //Debug.Log("CoM="+CoM);
           miny = miny - Vector3.Dot(up,CoM); // Add on offset of CoM
-          //Debug.Log("miny="+miny);
           return alt;
         }
 
@@ -399,7 +381,7 @@ namespace HopperGuidance
           solver.vmax = maxV;
           solver.amax = amax*maxPercentThrust*0.01;
           solver.Nmin = 2;
-          solver.Nmax = 10;
+          solver.Nmax = 6;
           solver.minDurationPerThrust = 4;
           solver.g = g.magnitude;
           solver.minDescentAngle = minDescentAngle;
