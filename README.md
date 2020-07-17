@@ -70,6 +70,10 @@ Parameters for (2) describe what to do when the craft is off the trajectory. The
 - Velocity gain - If set of 1 then when the target velocity is out by 1m/s than accelerate at 1m/s2
 - Extra thrust angle - An extra allowance for attitude beyond used in the solution to allow some correction back on track. So the allow attitude angle from vertical in flight is max_thrust_angle+extra_thrust_angle
 
+Heres a diagram to explain some of the parameter
+
+![](docs/Diagram.png)
+
 General tips:
 
 Have sufficient RCS for your craft so it can change its attitude reasonably quickly
