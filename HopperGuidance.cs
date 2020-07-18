@@ -44,35 +44,35 @@ namespace HopperGuidance
         float tgtSize = 10;
 
         [UI_FloatRange(minValue = -90.0f, maxValue = 90.0f, stepIncrement = 0.0001f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = false)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = true)]
         float tgtLatitude = -0.0968071692165f; // H-Pad
 
         [UI_FloatRange(minValue = -180.0f, maxValue = 180.0f, stepIncrement = 0.0001f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Longitude", guiFormat = "F7", isPersistant = false)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Longitude", guiFormat = "F7", isPersistant = true)]
         float tgtLongitude = -74.6172808614f; // H-Pad
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 10000.0f, stepIncrement = 0.001f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Altitude", guiFormat = "F1", isPersistant = false, guiUnits = "m")]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Altitude", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
         float tgtAltitude = 176f; // H-Pad
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = false, guiUnits = "m")]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = true, guiUnits = "m")]
         float minDescentAngle = 20.0f;
 
         [UI_FloatRange(minValue = 1, maxValue = 1500, stepIncrement = 10f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max velocity", guiFormat = "F0", isPersistant = false)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max velocity", guiFormat = "F0", isPersistant = true)]
         float maxV = 150f; // Max. vel to add to get towards target - not too large that vessel can't turn around
 
         [UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust angle", guiFormat = "F1", isPersistant = false)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust angle", guiFormat = "F1", isPersistant = true)]
         float maxThrustAngle = 45f; // Max. thrust angle from vertical
 
         [UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max landing thrust angle", guiFormat = "F1", isPersistant = false)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max landing thrust angle", guiFormat = "F1", isPersistant = true)]
         float maxLandingThrustAngle = 5f; // Max. final thrust angle from vertical
 
         [UI_FloatRange(minValue = 0, maxValue = 300f, stepIncrement = 5f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust %", isPersistant = false, guiUnits = "%")]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust %", isPersistant = true, guiUnits = "%")]
         float maxPercentThrust = 100f;
 
         [UI_FloatRange(minValue = 0.0f, maxValue = 10.0f, stepIncrement = 0.1f)]
@@ -80,19 +80,19 @@ namespace HopperGuidance
         float timePenalty = 0.0f; // Fuel penalty to every extra second
 
         [UI_FloatRange(minValue = 0f, maxValue = 90f, stepIncrement = 5f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = false)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = true)]
         float idleAngle = 90.0f;
 
         [UI_FloatRange(minValue = 0.01f, maxValue = 1f, stepIncrement = 0.01f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Position gain", guiFormat = "F2", isPersistant = false)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Position gain", guiFormat = "F2", isPersistant = true)]
         float kP1 = 0.3f; // If 1 then at 1m error aim to close a 1m/s
 
         [UI_FloatRange(minValue = 0.0f, maxValue = 2f, stepIncrement = 0.1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Velocity gain", guiFormat = "F1", isPersistant = false)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Velocity gain", guiFormat = "F1", isPersistant = true)]
         float kP2 = 1.0f; // If 1 then at 1m/s error in velocity acceleration at an extra 1m/s/s
 
         [UI_FloatRange(minValue = 0.0f, maxValue = 90.0f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Extra thrust angle", guiFormat = "F1", isPersistant = false)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Extra thrust angle", guiFormat = "F1", isPersistant = true)]
         float errExtraThrustAngle = 10.0f; // Additional thrust angle from vertical allowed to correct for error
 
         [UI_Toggle(disabledText = "Off", enabledText = "On")]
@@ -678,13 +678,8 @@ namespace HopperGuidance
             // Find vessel co-ordinates
             tgtLatitude = (float)vessel.latitude;
             tgtLongitude = (float)vessel.longitude;
-            // Get altitude of target position - target final position is offset above this
-            // This is dependent is what position is recorded as the centre of the craft. LocalCoM? or part
-            // We want distance from centre to bottom of lowest part
-            tgtAltitude = (float)FindAltLowestPointOnVessel(out lowestY);
-            // Altitude of lowest point on craft
-            //tgtAltitude = (float)(FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D() + bottom));
-            //Debug.Log("bottom="+bottom+" bottom alt="+tgtAltitude);
+            // Note: compensate of height of vessel to get height at bottom of vessel
+            tgtAltitude = (float)(FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D() - vessel.transform.up*vessel.vesselSize.y*0.5f ));
             LogSetUpTransform();
             DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
         }
