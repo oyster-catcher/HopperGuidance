@@ -162,7 +162,7 @@ namespace HopperGuidance
         N = Nmin;
       if (N > Nmax)
         N = Nmax;
-      int numchecks = N; // number of checks for descent angle
+      int numchecks = (int)(0.5*T); // number of checks for descent angle
 
       alglib.minqpstate state;
       alglib.minqpreport rep;
