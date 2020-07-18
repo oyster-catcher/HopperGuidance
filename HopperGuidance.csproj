@@ -9,7 +9,7 @@
     <RootNamespace>HopperGuidance</RootNamespace>
     <AssemblyName>HopperGuidance</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
-    <TargetFrameworkProfile>Profile111</TargetFrameworkProfile>
+    <TargetFrameworkProfile>Profile78</TargetFrameworkProfile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -33,19 +33,19 @@
     <Compile Include="GuiUtils.cs" />
     <Compile Include="PID3d.cs" />
     <Compile Include="Trajectory.cs" />
-    <Compile Include="alglib\csharp\net-core\src\alglibinternal.cs" />
-    <Compile Include="alglib\csharp\net-core\src\diffequations.cs" />
-    <Compile Include="alglib\csharp\net-core\src\optimization.cs" />
-    <Compile Include="alglib\csharp\net-core\src\solvers.cs" />
-    <Compile Include="alglib\csharp\net-core\src\ap.cs" />
-    <Compile Include="alglib\csharp\net-core\src\dataanalysis.cs" />
-    <Compile Include="alglib\csharp\net-core\src\interpolation.cs" />
     <Compile Include="alglib\csharp\net-core\src\statistics.cs" />
-    <Compile Include="alglib\csharp\net-core\src\integration.cs" />
-    <Compile Include="alglib\csharp\net-core\src\linalg.cs" />
-    <Compile Include="alglib\csharp\net-core\src\fasttransforms.cs" />
-    <Compile Include="alglib\csharp\net-core\src\alglibmisc.cs" />
     <Compile Include="alglib\csharp\net-core\src\specialfunctions.cs" />
+    <Compile Include="alglib\csharp\net-core\src\solvers.cs" />
+    <Compile Include="alglib\csharp\net-core\src\optimization.cs" />
+    <Compile Include="alglib\csharp\net-core\src\linalg.cs" />
+    <Compile Include="alglib\csharp\net-core\src\interpolation.cs" />
+    <Compile Include="alglib\csharp\net-core\src\integration.cs" />
+    <Compile Include="alglib\csharp\net-core\src\fasttransforms.cs" />
+    <Compile Include="alglib\csharp\net-core\src\diffequations.cs" />
+    <Compile Include="alglib\csharp\net-core\src\dataanalysis.cs" />
+    <Compile Include="alglib\csharp\net-core\src\ap.cs" />
+    <Compile Include="alglib\csharp\net-core\src\alglibmisc.cs" />
+    <Compile Include="alglib\csharp\net-core\src\alglibinternal.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="KSPAssets">
@@ -72,10 +72,22 @@
     <Reference Include="UnityEngine.InputLegacyModule">
       <HintPath>..\..\..\..\Library\Application Support\Steam\steamapps\common\Kerbal Space Program\KSP.app\Contents\Resources\Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
     </Reference>
+    <Reference Include="System.Core">
+      <HintPath>..\..\..\..\Library\Application Support\Steam\steamapps\common\Kerbal Space Program\KSP.app\Contents\Resources\Data\Managed\System.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="System">
+      <HintPath>..\..\..\..\Library\Application Support\Steam\steamapps\common\Kerbal Space Program\KSP.app\Contents\Resources\Data\Managed\System.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Configuration">
+      <HintPath>..\..\..\..\Library\Application Support\Steam\steamapps\common\Kerbal Space Program\KSP.app\Contents\Resources\Data\Managed\System.Configuration.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <None Include="alglib\csharp\gpl3.txt" />
     <None Include="alglib\csharp\gpl2.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="alglib\csharp\net-core\src\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
 </Project>
