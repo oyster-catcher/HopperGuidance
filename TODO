@@ -1,8 +1,5 @@
-- Test on Realism Overhaul
-- Make videos
+- Test on Realism Overhaul: Need min throttle, avoid cutoff when Enable (vapour in lines, and lose ignitions)
 - Try with different vechicles like Falcon 9
-- Automatically relax constraints is over velocity or low descent angle? - no suggest changes
-- Better model for HopperGuidance core
-- Show path travelling to vessel
+- Show path travelled by vessel
 - Replace time penalty with UI cycle, min fuel, min time, fuel+time
 - Get a working Visual Studio Project file
