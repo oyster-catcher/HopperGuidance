@@ -609,6 +609,9 @@ namespace HopperGuidance
             throttle = 0.01f*minPercentThrust; // some throttle to steer? (if no RCS and main thruster gimbals)
           }
 
+          // This might cause problems since thrust might be in the wrong direction
+          throttle = Math.Max(throttle,0.01f*minPercentThrust);
+
           // Set throttle and direction
           if (throttle > 0)
           {
@@ -616,7 +619,7 @@ namespace HopperGuidance
             vessel.Autopilot.SAS.SetTargetOrientation(F,false);
           }
           vessel.Autopilot.SAS.lockedMode = false;
-          state.mainThrottle = Mathf.Max(throttle,0.01f*minPercentThrust);
+          state.mainThrottle = throttle;
 
         }
 

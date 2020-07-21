@@ -171,7 +171,7 @@ namespace HopperGuidance
       // Constraints
       //
       // Minimise fuel
-      // f(x) = SUM |Ti|   // all thrusts
+      // f(x) = SUM |Ti|   // all thrust magnitudes
       // Exact constraints
       //   Final position = rf
       //   Final velocity = vf
@@ -179,36 +179,33 @@ namespace HopperGuidance
       //   Start velocity = v0
       //   Gravity = g (acts downloads in Y direction)
       //   Initial mass = m
-      // Ideally minimise
-      //   SUM(|thrust|)
-      // but due to quadratic constraints
       // Minimise
-      //   SUM(thrust^2)
-      // Special constraints
-      //   Initial thrust constraints to be parallel to initial attitude
+      //   SUM(thrust)
 
       dt = T/(N*fidelity);
 
-      // Coefficients of function to minimize of squared terms (a bad approximation)
-      // we really want to minimise magnitude of the accelerations
-      double[,] a = new double[N*3,N*3];
-      for(int i=0;i<N*3;i++)
-      {
-        a[i,i]=1;
-      }
-      // Coefficent of minimise function of linear terms, zeroes
-      double[] b = new double[N*3];
+      // Coefficients of function to minimize of squared terms (none)
+      // Note that a is made of N (X,Y,Z) acceleration vectors
+      // followed by N thrust magnitudes
+      // the acceleration vectors must be < thrust magnitude is every X,Y,Z component
+      // so the constraint is to a box current. We could cut the corners off the box
+      double[,] a = new double[N*4,N*4];
+
+      // Coefficent of minimise function of linear terms
+      // this is the sum of all the thrust magnitudes
+      double[] b = new double[N*4];
+      for(int i=0;i<N;i++) // thrust magnitudes
+        b[N*3+i]=1;
 
       // Accelation for (ax0,ay0,ax1,ay1...)
-      double[] x; // dimensionality of N*2
+      double[] x; // dimensionality of N*4. Each thrust vector as x,y,z and magnitude
 
-      alglib.minqpcreate(N*3, out state);
-      // Minimise thrust^2
+      alglib.minqpcreate(N*4, out state);
       alglib.minqpsetquadraticterm(state, a);
       alglib.minqpsetlinearterm(state, b);
 
-      double[] bndl = new double[N*3];
-      double[] bndu = new double[N*3];
+      double[] bndl = new double[N*4];
+      double[] bndu = new double[N*4];
       for(int i=0;i<N;i++)
       {
         bndl[i*3]   = -amax;
@@ -217,6 +214,9 @@ namespace HopperGuidance
         bndu[i*3]   = amax;
         bndu[i*3+1] = amax;
         bndu[i*3+2] = amax;
+        // thrust magnitudes
+        bndl[N*3+i] = 0;
+        bndu[N*3+i] = amax;
       }
 
       alglib.minqpsetbc(state, bndl, bndu);
@@ -227,7 +227,7 @@ namespace HopperGuidance
       // 1 constraint on final Y vel.
       // 1 constraint for each Ty[i]>0
 
-      int constraints = 3+3; // rf, vf
+      int constraints = 3 + 3 + 6*N;
 
       // for minDescentAngle, N points for 4 planes to make square 'cones'
 #if (MINDESCENTANGLE)
@@ -252,8 +252,40 @@ namespace HopperGuidance
 #endif
       int k=0;
 
-      double [,] c = new double[constraints,N*3+1]; // zeroed?
+      int rhs = N*4;
+      double [,] c = new double[constraints,rhs+1]; // zeroed?
       int [] ct = new int[constraints]; // type of constraint, =, > or <  (default to 0 -> =)
+
+      // Constrain thrust vectors to be below thrust magnitudes
+      for( int i = 0 ; i < N ; i++ )
+      {
+        c[k,i*3+0] = 1.0;
+        c[k,N*3+i] = -1.0;
+        ct[k] = -1; // LHS < 0. Mean thrust vector X axis less than thrust magnitude
+        k++;
+        c[k,i*3+0] = 1.0;
+        c[k,N*3+i] = 1.0;
+        ct[k] = 1; // LHS > 0. Mean thrust vector X axis greater than -thrust magnitude
+        k++;
+
+        c[k,i*3+1] = 1.0;
+        c[k,N*3+i] = -1.0;
+        ct[k] = -1; // LHS < 0. Mean thrust vector Y axis less than thrust magnitude
+        k++;
+        c[k,i*3+1] = 1.0;
+        c[k,N*3+i] = 1.0;
+        ct[k] = 1; // LHS > 0. Mean thrust vector Y axis greater than -thrust magnitude
+        k++;
+
+        c[k,i*3+2] = 1.0;
+        c[k,N*3+i] = -1.0;
+        ct[k] = -1; // LHS < 0. Mean thrust vector Z axis less than thrust magnitude
+        k++;
+        c[k,i*3+2] = 1.0;
+        c[k,N*3+i] = 1.0;
+        ct[k] = 1; // LHS > 0. Mean thrust vector Z axis greater than -thrust magnitude
+        k++;
+      }
 
       for(double t = 0; t < T; t += dt)
       {
@@ -274,13 +306,13 @@ namespace HopperGuidance
       for( int i = 0 ; i < N ; i++ )
       {
         // final r function sums to this
-        c[k+0,N*3] = rf[0] - (r0[0] + v0[0]*T); // X constant
-        c[k+1,N*3] = rf[1] - (r0[1] + v0[1]*T - 0.5*T*T*g); // Y constant
-        c[k+2,N*3] = rf[2] - (r0[2] + v0[2]*T); // Z constant
+        c[k+0,rhs] = rf[0] - (r0[0] + v0[0]*T); // X constant
+        c[k+1,rhs] = rf[1] - (r0[1] + v0[1]*T - 0.5*T*T*g); // Y constant
+        c[k+2,rhs] = rf[2] - (r0[2] + v0[2]*T); // Z constant
         // final v function sums to this
-        c[k+3,N*3] = vf[0] - v0[0];
-        c[k+4,N*3] = vf[1] - (v0[1] - T*g);
-        c[k+5,N*3] = vf[2] - v0[2];
+        c[k+3,rhs] = vf[0] - v0[0];
+        c[k+4,rhs] = vf[1] - (v0[1] - T*g);
+        c[k+5,rhs] = vf[2] - v0[2];
       }
       k+=6;
 
@@ -325,19 +357,19 @@ namespace HopperGuidance
         }
         // LHS factors to tX[i] and tY[i]
         // Final X + Y + Z
-        c[k+0,N*3] = V1[0] * (rf[0] - (r0[0] + v0[0]*tX))
+        c[k+0,rhs] = V1[0] * (rf[0] - (r0[0] + v0[0]*tX))
                    + V1[1] * (rf[1] - (r0[1] + v0[1]*tX - 0.5*tX*tX*g))
                    + V1[2] * (rf[2] - (r0[2] + v0[2]*tX)); // RHS
         ct[k+0] = 1; // LHS > RHS
-        c[k+1,N*3] = V2[0] * (rf[0] - (r0[0] + v0[0]*tX))
+        c[k+1,rhs] = V2[0] * (rf[0] - (r0[0] + v0[0]*tX))
                    + V2[1] * (rf[1] - (r0[1] + v0[1]*tX - 0.5*tX*tX*g))
                    + V2[2] * (rf[2] - (r0[2] + v0[2]*tX)); // RHS
         ct[k+1] = 1; // LHS > RHS
-        c[k+2,N*3] = V3[0] * (rf[0] - (r0[0] + v0[0]*tX))
+        c[k+2,rhs] = V3[0] * (rf[0] - (r0[0] + v0[0]*tX))
                    + V3[1] * (rf[1] - (r0[1] + v0[1]*tX - 0.5*tX*tX*g))
                    + V3[2] * (rf[2] - (r0[2] + v0[2]*tX)); // RHS
         ct[k+2] = 1; // LHS > RHS
-        c[k+3,N*3] = V4[0] * (rf[0] - (r0[0] + v0[0]*tX))
+        c[k+3,rhs] = V4[0] * (rf[0] - (r0[0] + v0[0]*tX))
                    + V4[1] * (rf[1] - (r0[1] + v0[1]*tX - 0.5*tX*tX*g))
                    + V4[2] * (rf[2] - (r0[2] + v0[2]*tX)); // RHS
         ct[k+3] = 1; // LHS > RHS
@@ -363,17 +395,17 @@ namespace HopperGuidance
           c[k+4,i*3+2] = wv[i]; // vz increase by tX
           c[k+5,i*3+2] = wv[i]; // vy increase by tX
         }
-        c[k+0,N*3] = - v0[0] - vmax;
+        c[k+0,rhs] = - v0[0] - vmax;
         ct[k+0] = 1; // incV@tx + v0 - g*tX > -vmax
-        c[k+1,N*3] = - v0[0] + vmax;
+        c[k+1,rhs] = - v0[0] + vmax;
         ct[k+1] = -1; // incV@tx + v0 - g*tX < -vmax
-        c[k+2,N*3] = - v0[1] + g*tX - vmax;
+        c[k+2,rhs] = - v0[1] + g*tX - vmax;
         ct[k+2] = 1; // incV@tx + v0 - g*tX > -vmax
-        c[k+3,N*3] = - v0[1] + g*tX + vmax;
+        c[k+3,rhs] = - v0[1] + g*tX + vmax;
         ct[k+3] = -1; // incV@tx + v0 -g*tX < +vmax
-        c[k+4,N*3] = - v0[2] - vmax;
+        c[k+4,rhs] = - v0[2] - vmax;
         ct[k+4] = 1; // incV@tx + v0 -g*tX > -vmax
-        c[k+5,N*3] = - v0[2] + vmax;
+        c[k+5,rhs] = - v0[2] + vmax;
         ct[k+5] = -1; // incV@tx + v0 -g*tX < +vmax
         k+=6;
       }
@@ -426,8 +458,8 @@ namespace HopperGuidance
       //  but its the best that can be done with the constraints)
       for( int i=0; i<N; i++ )
       {
-          c[k,i*3+1] = 1.0; // Y weight
-          c[k,N*3] = amin;
+          c[k,N*3+i] = 1.0; // thrust weight
+          c[k,rhs] = amin;
           ct[k] = 1; // LHS > RHS
           k++;
       }
@@ -436,8 +468,8 @@ namespace HopperGuidance
       // zeroes for equality constraints
       alglib.minqpsetlc(state, c, ct);
 
-      double[] s = new double[N*3];
-      for(int i=0;i<N*3;i++)
+      double[] s = new double[N*4];
+      for(int i=0;i<N*4;i++)
       {
         s[i] = 1;
       }
