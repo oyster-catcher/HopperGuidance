@@ -453,9 +453,7 @@ namespace HopperGuidance
 #endif
 
 #if (MINTHRUST)
-      // Constrain thrust to be at least amin upwards
-      // (this is an approximation as it prevent down to amin sideways
-      //  but its the best that can be done with the constraints)
+      // Constrain thrust to be at least amin in any direction
       for( int i=0; i<N; i++ )
       {
           c[k,N*3+i] = 1.0; // thrust weight
