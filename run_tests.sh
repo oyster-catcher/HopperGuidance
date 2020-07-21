@@ -28,3 +28,10 @@ for ang in 10 20 60 120;
   do mono ./Solve.exe r0=[400,400,0] v0=[40,10,0] Tmin=1 Tmax=300 N=5 g=9.8 amax=15 maxThrustAngle=$ang maxLandingThrustAngle=30 > test4.maxThrustAngle=$ang.dat
 done
 ./plotXYZ.py $scales test4.*.dat
+
+# Test min thrust
+scales="--xmax 1200 --ymax 900 --numchecks 5"
+for amin in 0 1 2 3 4 5;
+  do mono ./Solve.exe r0=[400,400,0] v0=[40,10,0] Tmin=1 Tmax=300 N=5 g=9.8 amin=$amin amax=15 maxLandingThrustAngle=30 > test5.amin=$amin.dat
+done
+./plotXYZ.py $scales test5.*.dat

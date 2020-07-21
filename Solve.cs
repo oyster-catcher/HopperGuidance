@@ -2,6 +2,7 @@
 #define MAXTHRUSTANGLE
 #define FINALTHRUSTDIR
 #define MAXVELOCITY
+#define MINTHRUST
 //#define DUMP
 
 using System;
@@ -245,6 +246,10 @@ namespace HopperGuidance
       if (maxLandingThrustAngle<90)
         constraints += 4;
 #endif
+
+#if (MINTHRUST)
+      constraints += N;
+#endif
       int k=0;
 
       double [,] c = new double[constraints,N*3+1]; // zeroed?
@@ -412,6 +417,19 @@ namespace HopperGuidance
           ct[k+3] = 1; // LHS > RHS
           k += 4;
         }
+      }
+#endif
+
+#if (MINTHRUST)
+      // Constrain thrust to be at least amin upwards
+      // (this is an approximation as it prevent down to amin sideways
+      //  but its the best that can be done with the constraints)
+      for( int i=0; i<N; i++ )
+      {
+          c[k,i*3+1] = 1.0; // Y weight
+          c[k,N*3] = amin;
+          ct[k] = 1; // LHS > RHS
+          k++;
       }
 #endif
 
