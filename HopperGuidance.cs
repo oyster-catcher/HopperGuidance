@@ -71,6 +71,10 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max landing thrust angle", guiFormat = "F1", isPersistant = true)]
         float maxLandingThrustAngle = 5f; // Max. final thrust angle from vertical
 
+        [UI_FloatRange(minValue = 0, maxValue = 100, stepIncrement = 1)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min thrust %", guiFormat = "F0", isPersistant = true)]
+        float minPercentThrust = 10;
+
         [UI_FloatRange(minValue = 0, maxValue = 300f, stepIncrement = 5f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust %", isPersistant = true, guiUnits = "%")]
         float maxPercentThrust = 100f;
@@ -82,6 +86,7 @@ namespace HopperGuidance
         [UI_FloatRange(minValue = 0f, maxValue = 90f, stepIncrement = 5f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = true)]
         float idleAngle = 90.0f;
+
 
         [UI_FloatRange(minValue = 0.01f, maxValue = 1f, stepIncrement = 0.01f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Position gain", guiFormat = "F2", isPersistant = true)]
@@ -380,6 +385,7 @@ namespace HopperGuidance
           solver.tol = 0.1;
           solver.vmax = maxV;
           solver.amax = amax*maxPercentThrust*0.01;
+          solver.amin = amax*minPercentThrust*0.01;
           solver.Nmin = 2;
           solver.Nmax = 6;
           solver.minDurationPerThrust = 4;
@@ -397,7 +403,8 @@ namespace HopperGuidance
           // Shut-off throttle
           FlightCtrlState ctrl = new FlightCtrlState();
           vessel.GetControlState(ctrl);
-          ctrl.mainThrottle = 0;
+          ctrl.mainThrottle = 0.01f*minPercentThrust;
+          vessel.Autopilot.SAS.SetTargetOrientation(-g,false);
 
           // Compute trajectory to landing spot
           double fuel;
@@ -599,7 +606,7 @@ namespace HopperGuidance
           float ddot = (float)Vector3d.Dot(Vector3d.Normalize(att),Vector3d.Normalize(F));
           if ((ddot < Mathf.Cos((float)idleAngle*(Mathf.PI/180.0f))) && (F.magnitude>0.01))
           {
-            throttle = 0.01f; // some throttle to steer? (if no RCS and main thruster gimbals)
+            throttle = 0.01f*minPercentThrust; // some throttle to steer? (if no RCS and main thruster gimbals)
           }
 
           // Set throttle and direction
@@ -609,7 +616,7 @@ namespace HopperGuidance
             vessel.Autopilot.SAS.SetTargetOrientation(F,false);
           }
           vessel.Autopilot.SAS.lockedMode = false;
-          state.mainThrottle = throttle;
+          state.mainThrottle = Mathf.Max(throttle,0.01f*minPercentThrust);
 
         }
 
