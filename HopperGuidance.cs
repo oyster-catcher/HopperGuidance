@@ -15,7 +15,9 @@ namespace HopperGuidance
         GameObject _tgt_obj = null; // new GameObject("Target");
         GameObject _track_obj = null; // new GameObject("Track");
         GameObject _align_obj = null; // new GameObject("Track");
+        GameObject _steer_obj = null;
         LineRenderer _align_line = null;
+        LineRenderer _steer_line = null;
         LinkedList<GameObject> thrusts = new LinkedList<GameObject>();
         PID3d _pid3d = new PID3d();
         bool _enabled = false;
@@ -38,7 +40,6 @@ namespace HopperGuidance
         bool setShowTrack = true;
         float lastTgtLatitude, lastTgtLongitude, lastTgtAltitude;
         bool pickingPositionTarget = false;
-        double lowestY; // lowest Y part of vessel (recalculated at SetTargetHere(), PickTarget() and Enable())
 
         [UI_FloatRange(minValue = 5, maxValue = 500, stepIncrement = 5)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target size", guiFormat = "F0", isPersistant = false)]
@@ -74,11 +75,11 @@ namespace HopperGuidance
 
         [UI_FloatRange(minValue = 0, maxValue = 100, stepIncrement = 1)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min thrust %", guiFormat = "F0", isPersistant = true)]
-        float minPercentThrust = 10;
+        float minPercentThrust = 1; // raise for Realism Overhaul to engine doesn't cut out
 
         [UI_FloatRange(minValue = 0, maxValue = 300f, stepIncrement = 5f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust %", isPersistant = true, guiUnits = "%")]
-        float maxPercentThrust = 100f;
+        float maxPercentThrust = 90f;
 
         [UI_FloatRange(minValue = 0.0f, maxValue = 10.0f, stepIncrement = 0.1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Time penalty", guiFormat = "F1", isPersistant = false)]
@@ -95,7 +96,7 @@ namespace HopperGuidance
 
         [UI_FloatRange(minValue = 0.0f, maxValue = 2f, stepIncrement = 0.1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Velocity gain", guiFormat = "F1", isPersistant = true)]
-        float kP2 = 1.0f; // If 1 then at 1m/s error in velocity acceleration at an extra 1m/s/s
+        float kP2 = 2.0f; // If 1 then at 1m/s error in velocity acceleration at an extra 1m/s/s
 
         [UI_Toggle(disabledText = "Off", enabledText = "On")]
         [KSPField(guiActive = true, guiActiveEditor = false, guiName = "Show track", isPersistant = false)]
@@ -243,13 +244,15 @@ namespace HopperGuidance
 
         public void DrawAlign(Vector3 r_from,Vector3 r_to, Transform transform, Color color)
         {
+            if (!showTrack)
+              return;
             if (_align_line == null)
             {
               _align_obj = new GameObject("Align");
               _align_line= _align_obj.AddComponent<LineRenderer>();
             }
             _align_line.transform.parent = transform;
-            _align_line.useWorldSpace = false;
+            _align_line.useWorldSpace = true;
             _align_line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
             _align_line.material.color = color;
             _align_line.startWidth = 0.3f;
@@ -257,6 +260,27 @@ namespace HopperGuidance
             _align_line.positionCount = 2;
             _align_line.SetPosition(0,transform.TransformPoint(r_from));
             _align_line.SetPosition(1,transform.TransformPoint(r_to));
+        }
+
+        public void DrawSteer(Vector3 r_from,Vector3 r_to, Transform transform, Color color)
+        {
+            if (!showTrack)
+              return;
+
+            if (_steer_line == null)
+            {
+              _steer_obj = new GameObject("Steer");
+              _steer_line= _steer_obj.AddComponent<LineRenderer>();
+            }
+            _steer_line.transform.parent = transform;
+            _steer_line.useWorldSpace = true;
+            _steer_line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
+            _steer_line.material.color = color;
+            _steer_line.startWidth = 0.8f;
+            _steer_line.endWidth = 0.8f;
+            _steer_line.positionCount = 2;
+            _steer_line.SetPosition(0,transform.TransformPoint(r_from));
+            _steer_line.SetPosition(1,transform.TransformPoint(r_to));
         }
 
         public void OnDestroy()
@@ -450,6 +474,7 @@ namespace HopperGuidance
           if (_track_obj != null) {Destroy(_track_obj); _track_obj=null;}
           if (_tgt_obj != null) {Destroy(_tgt_obj); _tgt_obj=null;}
           if (_align_obj != null) {Destroy(_align_obj); _align_obj=null;}
+          if (_steer_obj != null) {Destroy(_steer_obj); _steer_obj=null;}
           LinkedListNode<GameObject> node = thrusts.First;
           while(node != null)
           {
@@ -498,6 +523,10 @@ namespace HopperGuidance
           if ((vessel == null) || vessel.checkLanded())
           {
             Disable();
+            // Shut-off throttle
+            FlightCtrlState ctrl = new FlightCtrlState();
+            vessel.GetControlState(ctrl);
+            ctrl.mainThrottle = 0;
             return;
           }
 
@@ -518,52 +547,17 @@ namespace HopperGuidance
 
 #if (LIMIT_ATTITUDE)
           // Restrict angle from vertical to thrust angle + allowed error
-          double maxAngle = maxThrustAngle + maxThrustAngle*errProp;
+          double maxAngle = maxThrustAngle*(1+errProp);
+          float amax = (float)(_maxThrust/vessel.totalMass); // F = m*a. We want, unit of throttle for each 1m/s/s
+          float amin = (float)(_maxThrust/vessel.totalMass*0.01f*minPercentThrust);
 
-          // Calculate normal for plane at maxAngle (make it 2D)
-          if (true)
-          {
-            // TODO: Working upside down?
-            // Note tan at 90 degrees goes infinite
-            double R = Math.Abs(F.y)*Math.Tan(maxAngle*Math.PI/180); // cone radius at this point
-            double x = Math.Sqrt(F.x*F.x + F.z*F.z);
-            if (F.y > 0)
-            {
-              if ((x > R)&&(maxAngle < 90)) // upright and thrust cone upwards
-              {
-                // Need to reduce fx (horizontal component of thrust until within cone)
-                // 0 = nx*fhor2 + ny*F.y;
-                // fhor2 = p*Math.Sqrt(F.x*F.x+F.z*F.z)
-                // fhor2 = Math.Sqrt(p1*F.x*F.x+p1*F.z*F.z)
-                // fhor2*fhor2 = p1*F.x*F.x + p1*F.z*F.z
-                // fhor2*Fhor2 = p1*(F.x*F.x + F.z*F.z)
-                // p1 = (fhor2*fhor2)/(F.x*F.x + F.z*F.z)
-                // need to scale back F.x and F.y to be on boundary
-                F.x = (float)((R/x)*F.x);
-                F.z = (float)((R/x)*F.z);
-                //Debug.Log("Outside of thrust cone - R="+R+" F.x="+F.x+" F.z="+F.z+" scaling to "+F);
-              }
-              // If F.y > 0 and maxAngle > 90 then by definite we are inside upwards hemisphere
-            } else {
-              // If F.y < 0 and maxAngle < 90 we are definite outside thrust cone
-              if (maxAngle < 90)
-              {
-                // Project to nearest point inside thrust cone
-                //Debug.Log("Zero thrust since in wrong hemisphere");
-                F.x = 0;
-                F.y = 0;
-                F.z = 0;
-              }
-              if ((x < R)&&(maxAngle > 90)) // Now we need to be outside of thrust cone
-              {
-                //Debug.Log("Inside of upside down thrust cone -> zero thrust");
-                F.x = 0;
-                F.y = 0;
-                F.z = 0;
-              }
-            }
-          }
-
+          // Return the closest possible thrust vector to the desired one but that
+          // is inside the thrust cone constrainted by maxAngle from vertical
+          // and the minimum acceleration amin and max acceleration amax
+          // Note that currently of maxAngle > 90 this function has no effect
+          Vector3d limitF = ConeUtils.ClosestThrustInsideCone((float)maxAngle,(float)amin,(float)amax,F);
+          Debug.Log("F="+F+" limitF="+limitF);
+          F = limitF;
 #endif
           // Logging
           double t = Time.time - _startTime;
@@ -572,9 +566,9 @@ namespace HopperGuidance
             LogData(_vesselWriter,t,tr,tv,F); // Updates last_t
           }
 
+          DrawSteer(tr, tr+20*Vector3d.Normalize(F), _logTransform, thrustcol);
           F = _logTransform.TransformVector(F);
 
-          float amax = (float)(_maxThrust/vessel.totalMass); // F = m*a. We want, unit of throttle for each 1m/s/s
           throttle = (float)F.magnitude/(amax+0.001f); // protect against divide by zero
 
           // Shutoff throttle if pointing in wrong direction
@@ -589,6 +583,9 @@ namespace HopperGuidance
           throttle = Math.Max(throttle,0.01f*minPercentThrust);
 
           // Set throttle and direction
+          //if (F.magnitude < 0.01)
+          //  F = _logTransform.TransformVector(new Vector3d(0,1,0)); // up
+
           if (throttle > 0)
           {
             // Only steer for significant direction
@@ -596,7 +593,6 @@ namespace HopperGuidance
           }
           vessel.Autopilot.SAS.lockedMode = false;
           state.mainThrottle = throttle;
-
         }
 
         public override void OnUpdate()

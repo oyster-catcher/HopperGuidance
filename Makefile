@@ -15,12 +15,16 @@ all: install Solve.exe
 
 install: GameData/HopperGuidance/Plugins/HopperGuidance.dll
 	cp -r GameData ${KSP}
+	cp -r GameData ~/KSP
 
 clean:
 	rm -f HopperGuidance.dll *.exe
 
-GameData/HopperGuidance/Plugins/HopperGuidance.dll: HopperGuidance.cs Solve.cs Trajectory.cs PID3d.cs GuiUtils.cs
+GameData/HopperGuidance/Plugins/HopperGuidance.dll: HopperGuidance.cs Solve.cs Trajectory.cs PID3d.cs GuiUtils.cs ConeUtils.cs
 	mcs -define:UNITY ${ASSEMBLYOPTS} ${SDKOPTS} -target:library $^ ${ALGLIB_SRCS} -out:$@
 
 Solve.exe : Solve.cs Trajectory.cs
 	mcs ${ASSEMBLYOPTS} ${SDKOPTS} ${ALGLIB_SRCS} $^ -out:$@
+
+ConeUtils.exe : ConeUtils.cs
+	mcs ${ASSEMBLYOPTS} ${SDKOPTS} $^ -out:$@
