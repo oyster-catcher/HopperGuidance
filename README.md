@@ -56,10 +56,11 @@ Parameters for (1) are used to compute the trajectory and can be used to control
 - Target latitude
 - Target longitude
 - Target altitude
-- Min. descent angle - imagine an upside down cone with the apex at the landing point. The cone describes to safe area of descent. A high angle to the ground means the craft must descent steeply, only getting near the ground at the landing point.
+- Min. descent angle - imagine an upside down cone with the apex at the landing point. The cone describes the safe area of descent. A high angle to the ground means the craft must descent steeply, only getting near the ground at the landing point.
 - Max velocity - Keep velocity below this limit
 - Max thrust angle - the maximum allow angle the craft will tilt. If 90 degrees then the craft can tip from vertical to the horizontal position but no more
 - Max final thrust angle - the thrust angle for the touch down. This keeps the final descent more vertical if kept lower than max thrust angle
+- Min thrust - only throttle down to this amount. This is mainly for realism overhaul where throttling of engines is more realistic. If the engine cuts out you will only have limited ignitions and it takes quite a while to restart the engine. You just can't let it happen!
 - Max thrust - how much of the available thrust to use. Set this slow and the descent will be slow and careful. You can use more than 100% since the calculation is done when calculating the trajectory you might have lost weight due to fuel usage and you will have spare acceleration by landing.
 - Time penalty - by default with a time penalty of zero the solution will minimize fuel usage. Setting a penalty of time will encourage a faster time to landing at the expense of extra fuel. You might want to use this on low gravity otherwise your craft may be allowed to drift upwards so a long time to make best use of gravity
 
@@ -70,9 +71,8 @@ Parameters for (2) describe what to do when the craft is off the trajectory. The
 - Idle attitude angle - If the craft is pointing more this angle away from the required direction of thrust then idle the engine at 0.1% thrust. This prevent the craft thrusting in the wrong direction and waits of it to point correctly
 - Err. Position gain - Sets the velocity to aim to close the position error. If set of 1 then when 1m aware aim for a velocity of 1m/s towards the target. 0.2 to 0.4 are good values.
 - Velocity gain - If set of 1 then when the target velocity is out by 1m/s than accelerate at 1m/s2
-- Extra thrust angle - An extra allowance for attitude beyond used in the solution to allow some correction back on track. So the allow attitude angle from vertical in flight is max_thrust_angle+extra_thrust_angle
 
-Heres a diagram to explain some of the parameter
+Heres a diagram to explain some of the parameters
 
 ![](docs/Diagram.png)
 
