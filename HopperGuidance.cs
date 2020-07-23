@@ -23,6 +23,7 @@ namespace HopperGuidance
         bool _enabled = false;
         double errProp = 0.1f; // extra tolerance for errors as a proportion
         double predictTime = 0.2f;
+        double lowestY = 0; // Y position of bottom of craft relative to centre
         float _maxThrust;
         Color trackcol = new Color(0,1,0,0.3f); // transparent green
         Color targetcol = new Color(1,1,0,0.5f); // solid yellow
@@ -322,9 +323,9 @@ namespace HopperGuidance
 
         public void LogStop()
         {
-          System.IO.StreamWriter f = _vesselWriter;
-          _vesselWriter = null; // Set to null fast to try and avoid race hazards
-          f.Close();
+          if (_vesselWriter != null)
+            _vesselWriter.Close();
+          _vesselWriter = null;
           last_t = -1;
         }
 
@@ -340,23 +341,22 @@ namespace HopperGuidance
         }
 
         // Find Y offset to lowest part from origin of the vessel
-        double FindAltLowestPointOnVessel(out double miny)
+        double FindLowestPointOnVessel()
         {
           Vector3 CoM, up;
 
           CoM = vessel.localCoM;
           Vector3 bottom = Vector3.zero; // Offset from CoM
           up = FlightGlobals.getUpAxis(CoM); //Gets up axis
-          miny = 0;
-          double alt = FlightGlobals.getAltitudeAtPos(CoM);
+          Vector3 pos = vessel.GetWorldPos3D();
+          Vector3 distant = pos - 1000*up; // distant below craft
+          double miny = 0;
           foreach (Part p in vessel.parts)
           {
             if (p.collider != null) //Makes sure the part actually has a collider to touch ground
             {
-              Vector3 pbottom = p.collider.ClosestPointOnBounds(vessel.mainBody.position); //Gets the bottom point
-              double y = Vector3.Dot(up,pbottom);
-              if (FlightGlobals.getAltitudeAtPos(bottom) < alt)
-                alt = FlightGlobals.getAltitudeAtPos(bottom);
+              Vector3 pbottom = p.collider.ClosestPointOnBounds(distant); //Gets the bottom point
+              double y = Vector3.Dot(up,pbottom-pos); // relative to centre of vessel
               if (y < miny)
               {
                 bottom = pbottom;
@@ -364,8 +364,7 @@ namespace HopperGuidance
               }
             }
           }
-          miny = miny - Vector3.Dot(up,CoM); // Add on offset of CoM
-          return alt;
+          return miny;
         }
 
         public float ComputeMaxThrust()
@@ -384,11 +383,12 @@ namespace HopperGuidance
 
         public void Enable()
         {
+          lowestY = FindLowestPointOnVessel();
           Vector3d[] thrusts;
           Vector3d r0 = vessel.GetWorldPos3D();
           Vector3d v0 = vessel.GetSrfVelocity();
           Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
-          Vector3d rf = new Vector3d(0,vessel.vesselSize.y*0.5,0); // a little above the surface
+          Vector3d rf = new Vector3d(0,-lowestY,0);
           Vector3d vf = new Vector3d(0,-0.1,0);
           _maxThrust = ComputeMaxThrust();
           _startTime = Time.time;
@@ -649,9 +649,10 @@ namespace HopperGuidance
             // Find vessel co-ordinates
             tgtLatitude = (float)vessel.latitude;
             tgtLongitude = (float)vessel.longitude;
-            // Note: compensate of height of vessel to get height at bottom of vessel
-            Debug.Log("size = "+vessel.vesselSize);
-            tgtAltitude = (float)(FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D() - vessel.transform.up*vessel.vesselSize.y*0.5f ));
+            // Note: compensate for height of vessel by getting bottom Y of vessel
+            lowestY = FindLowestPointOnVessel();
+            Vector3 up = FlightGlobals.getUpAxis(vessel.GetWorldPos3D());
+            tgtAltitude = (float)(FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D() + up*(float)lowestY));
             SetUpTransform();
             DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
         }
