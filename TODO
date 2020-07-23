@@ -1,5 +1,4 @@
-- Test on Realism Overhaul: Need min throttle, avoid cutoff when Enable (vapour in lines, and lose ignitions)
 - Try with different vechicles like Falcon 9
 - Show path travelled by vessel
-- Replace time penalty with UI cycle, min fuel, min time, fuel+time
 - Get a working Visual Studio Project file
+- Make show track toggle work properly with steer and align vectors
