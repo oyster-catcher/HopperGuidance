@@ -282,8 +282,8 @@ namespace HopperGuidance
             _steer_line.useWorldSpace = true;
             _steer_line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
             _steer_line.material.color = color;
-            _steer_line.startWidth = 0.8f;
-            _steer_line.endWidth = 0.8f;
+            _steer_line.startWidth = 0.3f;
+            _steer_line.endWidth = 0.3f;
             _steer_line.positionCount = 2;
             _steer_line.SetPosition(0,transform.TransformPoint(r_from));
             _steer_line.SetPosition(1,transform.TransformPoint(r_to));
@@ -558,7 +558,7 @@ namespace HopperGuidance
             LogData(t,tr,tv,F); // Updates last_t
           }
 
-          DrawSteer(tr, tr+20*Vector3d.Normalize(F), _transform, thrustcol);
+          DrawSteer(tr, tr+10*Vector3d.Normalize(F), _transform, thrustcol);
           F = _transform.TransformVector(F);
 
           throttle = (float)F.magnitude/(amax+0.001f); // protect against divide by zero
