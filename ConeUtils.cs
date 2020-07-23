@@ -131,10 +131,23 @@ namespace HopperGuidance
       // Find closest point on boundary with at amin
       if (inside_min)
       {
-        Vector2 [] bound = {new Vector2(Mathf.Sin(-maxAngle)*amin,Mathf.Cos(-maxAngle)*amin),
-                            new Vector2(0,amin),
-                            new Vector2(Mathf.Sin(maxAngle*0.5f)*amin,Mathf.Cos(maxAngle*0.5f)*amin)};
-        pmin = FindClosestPointOnLines(F2, bound);
+        // The central point is lower than it should be. This is a hack to that when
+        // the desired thrust in strongly downwards we don't use a nearest point on the
+        // edge of the min thrust cone which is lower in Y but highly positive in X
+        //Vector2 [] bound = {new Vector2(Mathf.Sin(-maxAngle)*amin,Mathf.Cos(-maxAngle)*amin),
+        //                    new Vector2(0,amin*0.7f),
+        //                    new Vector2(Mathf.Sin(maxAngle*0.5f)*amin,Mathf.Cos(maxAngle*0.5f)*amin)};
+        //pmin = FindClosestPointOnLines(F2, bound);
+        // Actually it seems to work better just to use a vector is the same direction
+        // but with greater magnitude
+        Console.WriteLine("mag="+pmin.magnitude);
+        if (pmin.magnitude > 0)
+          pmin = amin*(pmin/pmin.magnitude);
+        else
+        {
+          pmin.x = 0;
+          pmin.y = amin;
+        }
       }
 
       //Console.WriteLine("pmin="+pmin);
