@@ -22,7 +22,7 @@ namespace HopperGuidance
         PID3d _pid3d = new PID3d();
         bool _enabled = false;
         double errProp = 0.1f; // extra tolerance for errors as a proportion
-        double predictTime = 0.1f;
+        double predictTime = 0.2f;
         float _maxThrust;
         Color trackcol = new Color(0,1,0,0.3f); // transparent green
         Color targetcol = new Color(1,1,0,0.5f); // solid yellow
@@ -31,15 +31,16 @@ namespace HopperGuidance
         Solve solver; // Stores solution inputs, output and trajectory
         Trajectory _traj; // trajectory of solution in world space?
         double _startTime = 0; // Start solution starts to normalize vessel times to start at 0
-        Transform _logTransform = null;
+        Transform _transform = null;
         double last_t = -1; // last time data was logged
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
-        bool _logging = true;
         double extendTime = 2.0f; // extend trajectory to slowly descent to touch down
         double setTgtLatitude, setTgtLongitude, setTgtAltitude, setTgtSize;
         bool setShowTrack = true;
         float lastTgtLatitude, lastTgtLongitude, lastTgtAltitude;
         bool pickingPositionTarget = false;
+        string _vesselLogFilename = "vessel.dat";
+        string _solutionLogFilename = "solution.dat";
 
         [UI_FloatRange(minValue = 5, maxValue = 500, stepIncrement = 5)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target size", guiFormat = "F0", isPersistant = false)]
@@ -101,6 +102,10 @@ namespace HopperGuidance
         [UI_Toggle(disabledText = "Off", enabledText = "On")]
         [KSPField(guiActive = true, guiActiveEditor = false, guiName = "Show track", isPersistant = false)]
         bool showTrack = true;
+
+        [UI_Toggle(disabledText = "Off", enabledText = "On")]
+        [KSPField(guiActive = true, guiActiveEditor = false, guiName = "Enable logging", isPersistant = false)]
+        bool _logging = false;
 
         // Quad should be described a,b,c,d in anti-clockwise order when looking at it
         public void AddQuad(Vector3[] vertices, int vi, int[] triangles, int ti,
@@ -289,7 +294,7 @@ namespace HopperGuidance
             Disable();
         }
 
-        public void LogSetUpTransform()
+        public void SetUpTransform()
         {
           // Keep track so we can discover if sliders are moved
           setTgtLatitude = tgtLatitude;
@@ -310,37 +315,28 @@ namespace HopperGuidance
           // Need to rotation that converts (0,1,0) to vUp in the body transform
           Quaternion quat = Quaternion.FromToRotation(new Vector3(0,1,0),vUp);
 
-          _logTransform = go.transform;
-          _logTransform.SetPositionAndRotation(origin,quat);
-          _logTransform.SetParent(body.transform,false);
-        }
-
-        public void LogStart(string filename)
-        {
-          if (_vesselWriter == null)
-          {
-            _vesselWriter = new System.IO.StreamWriter(filename);
-          }
-          _vesselWriter.WriteLine("time x y z vx vy vz ax ay az");
+          _transform = go.transform;
+          _transform.SetPositionAndRotation(origin,quat);
+          _transform.SetParent(body.transform,false);
         }
 
         public void LogStop()
         {
-          if (_vesselWriter != null)
-          {
-            _vesselWriter.Close();
-          }
-          _vesselWriter = null;
+          System.IO.StreamWriter f = _vesselWriter;
+          _vesselWriter = null; // Set to null fast to try and avoid race hazards
+          f.Close();
           last_t = -1;
         }
 
-        void LogData(System.IO.StreamWriter f, double t, Vector3 r, Vector3 v, Vector3 a)
+        void LogData(double t, Vector3 r, Vector3 v, Vector3 a)
         {
-          if (f != null)
+          if (_vesselWriter == null)
           {
-            f.WriteLine(string.Format("{0} {1:F5} {2:F5} {3:F5} {4:F5} {5:F5} {6:F5} {7:F1} {8:F1} {9:F1}",t,r.x,r.y,r.z,v.x,v.y,v.z,a.x,a.y,a.z));
-            last_t = t;
+            _vesselWriter = new System.IO.StreamWriter(_vesselLogFilename);
+            _vesselWriter.WriteLine("time x y z vx vy vz ax ay az");
           }
+          _vesselWriter.WriteLine(string.Format("{0} {1:F5} {2:F5} {3:F5} {4:F5} {5:F5} {6:F5} {7:F1} {8:F1} {9:F1}",t,r.x,r.y,r.z,v.x,v.y,v.z,a.x,a.y,a.z));
+          last_t = t;
         }
 
         // Find Y offset to lowest part from origin of the vessel
@@ -388,8 +384,6 @@ namespace HopperGuidance
 
         public void Enable()
         {
-          //lowestY = -vessel.vesselSize.y*0.4; // approximate if CoG at centre of vessel
-          //Debug.Log("lowestY="+lowestY);
           Vector3d[] thrusts;
           Vector3d r0 = vessel.GetWorldPos3D();
           Vector3d v0 = vessel.GetSrfVelocity();
@@ -428,8 +422,8 @@ namespace HopperGuidance
 
           // Compute trajectory to landing spot
           double fuel;
-          Vector3d tr0 = _logTransform.InverseTransformPoint(r0);
-          Vector3d tv0 = _logTransform.InverseTransformVector(v0);
+          Vector3d tr0 = _transform.InverseTransformPoint(r0);
+          Vector3d tv0 = _transform.InverseTransformVector(v0);
           double t1 = Time.time;
           double bestT = solver.GoldenSearchGFold(tr0, tv0, rf, vf, out thrusts, out fuel, out retval);
           double t2 = Time.time;
@@ -448,13 +442,12 @@ namespace HopperGuidance
             // Enable autopilot
             _pid3d.Init(kP1,0,0,kP2,0,0,maxV,(float)(0.01f*maxPercentThrust*amax),2.0f);
             // TODO - Testing out using in solution co-ordinates
-            DrawTrack(_traj, _logTransform, trackcol);
-            DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
+            DrawTrack(_traj, _transform, trackcol);
+            DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
             vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
             vessel.OnFlyByWire += new FlightInputCallback(Fly);
-            if (_logging) {LogStart("vessel.dat");}
             // Write solution
-            if (_logging) {_traj.Write("solution.dat");}
+            if (_logging) {_traj.Write(_solutionLogFilename);}
             _enabled = true;
             Events["OnToggle"].guiName = "Disable autopilot";
           }
@@ -516,7 +509,6 @@ namespace HopperGuidance
 
         public void Fly(FlightCtrlState state)
         {
-          //LogSetUpTransform();
           // Get nearest point on trajectory in position and velocity
           // use both so we can handle when the trajectory crosses itself,
           // and it works a bit better anyway if velocity and position are not in step
@@ -534,11 +526,11 @@ namespace HopperGuidance
           Vector3 v = vessel.GetSrfVelocity();
           Vector3d dr,dv,da;
           double desired_t; // closest time in trajectory (desired)
-          // TODO - Transform with _logTransform
-          Vector3d tr = _logTransform.InverseTransformPoint(r);
-          Vector3d tv = _logTransform.InverseTransformVector(v);
+          // TODO - Transform with _transform
+          Vector3d tr = _transform.InverseTransformPoint(r);
+          Vector3d tv = _transform.InverseTransformVector(v);
           _traj.FindClosest(tr, tv, out dr, out dv, out da, out desired_t);
-          DrawAlign(tr,dr,_logTransform,aligncol);
+          DrawAlign(tr,dr,_transform,aligncol);
           float throttle=0;
           
           // Adjust thrust direction when off trajectory
@@ -556,18 +548,18 @@ namespace HopperGuidance
           // and the minimum acceleration amin and max acceleration amax
           // Note that currently of maxAngle > 90 this function has no effect
           Vector3d limitF = ConeUtils.ClosestThrustInsideCone((float)maxAngle,(float)amin,(float)amax,F);
-          Debug.Log("F="+F+" limitF="+limitF);
+          //Debug.Log("F="+F+" limitF="+limitF);
           F = limitF;
 #endif
           // Logging
           double t = Time.time - _startTime;
           if ((_logging)&&(t+solver.dt >= last_t))
           {
-            LogData(_vesselWriter,t,tr,tv,F); // Updates last_t
+            LogData(t,tr,tv,F); // Updates last_t
           }
 
-          DrawSteer(tr, tr+20*Vector3d.Normalize(F), _logTransform, thrustcol);
-          F = _logTransform.TransformVector(F);
+          DrawSteer(tr, tr+20*Vector3d.Normalize(F), _transform, thrustcol);
+          F = _transform.TransformVector(F);
 
           throttle = (float)F.magnitude/(amax+0.001f); // protect against divide by zero
 
@@ -584,7 +576,7 @@ namespace HopperGuidance
 
           // Set throttle and direction
           //if (F.magnitude < 0.01)
-          //  F = _logTransform.TransformVector(new Vector3d(0,1,0)); // up
+          //  F = _transform.TransformVector(new Vector3d(0,1,0)); // up
 
           if (throttle > 0)
           {
@@ -600,13 +592,13 @@ namespace HopperGuidance
           base.OnUpdate();
           if ((tgtLatitude != setTgtLatitude) || (tgtLongitude != setTgtLongitude) || (tgtAltitude != setTgtAltitude) || (tgtSize != setTgtSize))
           {
-            LogSetUpTransform();
-            DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
+            SetUpTransform();
+            DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
             setTgtSize = tgtSize;
           }
           if (showTrack != setShowTrack)
           {
-            DrawTrack(_traj, _logTransform, trackcol);
+            DrawTrack(_traj, _transform, trackcol);
             setShowTrack = showTrack;
           }
           if (pickingPositionTarget)
@@ -617,8 +609,8 @@ namespace HopperGuidance
               tgtLatitude = lastTgtLatitude;
               tgtLongitude = lastTgtLongitude;
               tgtAltitude = lastTgtAltitude;
-              LogSetUpTransform();
-              DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
+              SetUpTransform();
+              DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
               pickingPositionTarget = false;
               return;
             }
@@ -631,8 +623,8 @@ namespace HopperGuidance
               tgtLatitude = (float)lat;
               tgtLongitude = (float)lon;
               tgtAltitude = (float)(alt+0.5);
-              LogSetUpTransform();
-              DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
+              SetUpTransform();
+              DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
               // TODO - Recompute trajectory is autopilot on
 
               // If clicked stop picking
@@ -645,6 +637,10 @@ namespace HopperGuidance
               }
             }
           }
+          if ((!_logging) && (_vesselWriter != null))
+          {
+            LogStop();
+          }
         }
 
         [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Set Target Here", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
@@ -656,8 +652,8 @@ namespace HopperGuidance
             // Note: compensate of height of vessel to get height at bottom of vessel
             Debug.Log("size = "+vessel.vesselSize);
             tgtAltitude = (float)(FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D() - vessel.transform.up*vessel.vesselSize.y*0.5f ));
-            LogSetUpTransform();
-            DrawTarget(Vector3d.zero,_logTransform,targetcol,tgtSize);
+            SetUpTransform();
+            DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
         }
     }
 }
