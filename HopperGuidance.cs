@@ -75,15 +75,15 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max landing thrust angle", guiFormat = "F1", isPersistant = true)]
         float maxLandingThrustAngle = 5f; // Max. final thrust angle from vertical
 
-        [UI_FloatRange(minValue = 0, maxValue = 100, stepIncrement = 1)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min thrust %", guiFormat = "F0", isPersistant = true)]
-        float minPercentThrust = 1; // raise for Realism Overhaul to engine doesn't cut out
+        [UI_FloatRange(minValue = 0, maxValue = 100, stepIncrement = 0.1f)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min thrust %", guiFormat = "F1", isPersistant = true)]
+        float minPercentThrust = 0.1f; // raise for Realism Overhaul to engine doesn't cut out and can steer
 
         [UI_FloatRange(minValue = 0, maxValue = 300f, stepIncrement = 5f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust %", isPersistant = true, guiUnits = "%")]
         float maxPercentThrust = 90f;
 
-        [UI_FloatRange(minValue = 0.0f, maxValue = 10.0f, stepIncrement = 0.1f)]
+        [UI_FloatRange(minValue = 0.0f, maxValue = 5.0f, stepIncrement = 0.1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Time penalty", guiFormat = "F1", isPersistant = false)]
         float timePenalty = 0.0f; // Fuel penalty to every extra second
 
@@ -251,7 +251,15 @@ namespace HopperGuidance
         public void DrawAlign(Vector3 r_from,Vector3 r_to, Transform transform, Color color)
         {
             if (!showTrack)
+            {
+              if (_align_obj != null)
+              {
+                Destroy(_align_obj);
+                _align_obj = null;
+                _align_line = null;
+              }
               return;
+            }
             if (_align_line == null)
             {
               _align_obj = new GameObject("Align");
@@ -271,7 +279,15 @@ namespace HopperGuidance
         public void DrawSteer(Vector3 r_from,Vector3 r_to, Transform transform, Color color)
         {
             if (!showTrack)
+            {
+              if (_steer_obj != null)
+              {
+                Destroy(_steer_obj);
+                _steer_obj = null;
+                _steer_line = null;
+              }
               return;
+            }
 
             if (_steer_line == null)
             {
@@ -537,7 +553,6 @@ namespace HopperGuidance
           Vector3d F2 = _pid3d.Update(tr,tv,dr,dv,Time.deltaTime);
           Vector3d F = da + F2;
 
-#if (LIMIT_ATTITUDE)
           // Restrict angle from vertical to thrust angle + allowed error
           double maxAngle = maxThrustAngle*(1+errProp);
           float amax = (float)(_maxThrust/vessel.totalMass); // F = m*a. We want, unit of throttle for each 1m/s/s
@@ -547,16 +562,12 @@ namespace HopperGuidance
           // is inside the thrust cone constrainted by maxAngle from vertical
           // and the minimum acceleration amin and max acceleration amax
           // Note that currently of maxAngle > 90 this function has no effect
-          Vector3d limitF = ConeUtils.ClosestThrustInsideCone((float)maxAngle,(float)amin,(float)amax,F);
-          //Debug.Log("F="+F+" limitF="+limitF);
-          F = limitF;
-#endif
+          F = ConeUtils.ClosestThrustInsideCone((float)maxAngle,(float)amin,(float)amax,F);
+
           // Logging
           double t = Time.time - _startTime;
           if ((_logging)&&(t+solver.dt >= last_t))
-          {
             LogData(t,tr,tv,F); // Updates last_t
-          }
 
           DrawSteer(tr, tr+10*Vector3d.Normalize(F), _transform, thrustcol);
           F = _transform.TransformVector(F);
