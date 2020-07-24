@@ -58,7 +58,7 @@ Parameters for (1) are used to compute the trajectory and can be used to control
 - Target altitude
 - Min. descent angle - imagine an upside down cone with the apex at the landing point. The cone describes the safe area of descent. A high angle to the ground means the craft must descent steeply, only getting near the ground at the landing point.
 - Max velocity - Keep velocity below this limit
-- Max thrust angle - the maximum allow angle the craft will tilt. If 90 degrees then the craft can tip from vertical to the horizontal position but no more
+- Max thrust angle - the maximum allow angle the craft will tilt. If 90 degrees then the craft can tip from vertical to the horizontal position but no more. If beyond >90 this value is ignored currently due to convex limitations.
 - Max final thrust angle - the thrust angle for the touch down. This keeps the final descent more vertical if kept lower than max thrust angle
 - Min thrust - only throttle down to this amount. This is mainly for realism overhaul where throttling of engines is more realistic. If the engine cuts out you will only have limited ignitions and it takes quite a while to restart the engine. You just can't let it happen!
 - Max thrust - how much of the available thrust to use. Set this slow and the descent will be slow and careful. You can use more than 100% since the calculation is done when calculating the trajectory you might have lost weight due to fuel usage and you will have spare acceleration by landing.
@@ -72,16 +72,22 @@ Parameters for (2) describe what to do when the craft is off the trajectory. The
 - Err. Position gain - Sets the velocity to aim to close the position error. If set of 1 then when 1m aware aim for a velocity of 1m/s towards the target. 0.2 to 0.4 are good values.
 - Velocity gain - If set of 1 then when the target velocity is out by 1m/s than accelerate at 1m/s2
 
+- Show track - Display track, align and steer vectors
+- Logging - If enabled the files vessel.dat and solution.dat are logged to the same directory as KSP.log
+
 Heres a diagram to explain some of the parameters
 
 ![](docs/Diagram.png)
 
 General tips:
 
-Have sufficient RCS for your craft so it can change its attitude reasonably quickly
-Enable RCS
-If you get a failure to compute a solution when clicking "Enable autopilot" check if you are below to min descent angle and if you are above the max velocity. If you are then a solution may be impossible.
-If your craft comes in too low to land either reduce max final thrust angle to land more vertically or increase min descent angle
+- Have sufficient RCS or reaction wheel for your craft so it can change its attitude quickly enough (look at whether the steer vector is often misaligned with the crafts attitude)
+- Enable RCS
+- If you get a failure to compute a solution when clicking "Enable autopilot" check if you are below to min descent angle and if you are above the max velocity. If you are then a solution may be impossible
+- It can take longer to compute highly constrained trajectories for heavy craft or not find a solution at all. Retry, fly somewhere easier or reduce the constraints
+- If your craft comes in too low to land either reduce max final thrust angle to land more vertically or increase min descent angle
+- If your craft is way off the trajectory its best to disable and enable autopilot to compute a new trajectory
+- If your craft is way off, pointing the wrong direction and not steering you probably have min thrust=0 and RCS isn't strong enough to turn the vessel. You want a gimballing engine with some thrust to be able to turn the craft
 
 
 Dealing with Small Craft:
@@ -91,17 +97,15 @@ You can try and push of max velocity, max thrust angle, max final thrust angle, 
 
 Dealing with Large Craft:
 
-You may have a problem using the autopilot with large craft. A large craft is hard to maneoveure since it has high mass and will take time to change its attitude. This leads to it pointing is the wrong direction and either thrusting in that wrong direction or waiting to change its attitude. Both these mean it cannot following the track. Another problem is that atmospheric drag is not including in when solving for the best trajectory. Doing so its possible with this technique because it would make the problem non-linear. So heres some tips for dealing with large craft
+You may have a problem using the autopilot with large craft. A large craft is hard to maneoveure since it has high mass and will take time to change its attitude. This leads to it pointing is the wrong direction and either thrusting in that wrong direction or waiting to change its attitude. Both these mean it cannot following the track. Another problem is that atmospheric drag is not includiedin when solving for the best trajectory. Doing so its possible with this technique because it would make the problem non-linear. So heres some tips for dealing with large craft
 
 - Reduce max velocity to keep atmospheric drag low
 - Keep max thrust angle low, says <15 degress as this will keep the craft more upright and prevent dangerous oscillation in attitude
-- Keep final max thrust angle even lower. Making it zero will mean the craft must descend vertically for the touch down
-- Lower position gain to say 0.1 to 0.2. This will mean if the craft is off trajectory it will only move slowly towards the correct trajectory. If this value is too higher it will overshoot
+- Keep final max thrust angle even lower, probably zero to mean the craft must descend vertically for the touch down
+- Lower position gain to down as low as 0.05. This will mean if the craft is off trajectory it will only move slowly towards the correct trajectory. If this value is too high it will overshoot. Observe whether the red steer attitude is far from the actual crafts attitude
 - Raise the final descent angle above 45 degrees, may be as high as 80 degrees to give a more vertical landing
-- You can compensate for the lack of ability to steer the craft by adding more RCS thrusters or overly powerfull rotation wheels.
+- You can compensate for the lack of ability to steer the craft by adding more RCS thrusters or overly powerfull reaction wheels
 - Reduce max thrust below 100%. This will mean spare thrust will be available to correct errors in sticking to the trajectory
-- Reduce Err. extra thrust angle to say 10-20 degrees which will prevent the craft leaning too much and being hard to regain the upright position
-- However note that if tie down all these parameters too much you can end up with really complex trajectories which try to fit all these constraints which can be ridiculously inefficient.
 
 Debugging
 =========
@@ -109,7 +113,6 @@ Debugging
 If you have a problem look in the KSP directory for KSP.log
 Lines are proceeded by HopperGuidance:. 
 You will be able to find all the parameters when either a solution was requested and found or it failed. You can rerun by taking the parameters from the log line and using them directly on the command line of Solve.exe outside of KSP. See below.
-
 
 Testing
 =======
