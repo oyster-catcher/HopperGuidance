@@ -48,11 +48,11 @@ namespace HopperGuidance
         float tgtSize = 10;
 
         [UI_FloatRange(minValue = -90.0f, maxValue = 90.0f, stepIncrement = 0.0001f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = true, guiUnits="°")]
         float tgtLatitude = -0.0968071692165f; // H-Pad
 
         [UI_FloatRange(minValue = -180.0f, maxValue = 180.0f, stepIncrement = 0.0001f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Longitude", guiFormat = "F7", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Longitude", guiFormat = "F7", isPersistant = true, guiUnits = "°")]
         float tgtLongitude = -74.6172808614f; // H-Pad
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 10000.0f, stepIncrement = 0.001f)]
@@ -60,23 +60,23 @@ namespace HopperGuidance
         float tgtAltitude = 176f; // H-Pad
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = true, guiUnits = "m")]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = true, guiUnits = "°")]
         float minDescentAngle = 20.0f;
 
         [UI_FloatRange(minValue = 1, maxValue = 1500, stepIncrement = 10f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max velocity", guiFormat = "F0", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max velocity", guiFormat = "F0", isPersistant = true, guiUnits = "m/s")]
         float maxV = 150f; // Max. vel to add to get towards target - not too large that vessel can't turn around
 
         [UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust angle", guiFormat = "F1", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust angle", guiFormat = "F1", isPersistant = true, guiUnits="°")]
         float maxThrustAngle = 45f; // Max. thrust angle from vertical
 
         [UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max landing thrust angle", guiFormat = "F1", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max landing thrust angle", guiFormat = "F1", isPersistant = true, guiUnits="°")]
         float maxLandingThrustAngle = 5f; // Max. final thrust angle from vertical
 
         [UI_FloatRange(minValue = 0, maxValue = 100, stepIncrement = 0.1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min thrust %", guiFormat = "F1", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min thrust %", guiFormat = "F1", isPersistant = true, guiUnits="%")]
         float minPercentThrust = 0.1f; // raise for Realism Overhaul to engine doesn't cut out and can steer
 
         [UI_FloatRange(minValue = 0, maxValue = 300f, stepIncrement = 5f)]
@@ -88,7 +88,7 @@ namespace HopperGuidance
         float timePenalty = 0.0f; // Fuel penalty to every extra second
 
         [UI_FloatRange(minValue = 0f, maxValue = 90f, stepIncrement = 5f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = true, guiUnits = "°")]
         float idleAngle = 90.0f;
 
 
