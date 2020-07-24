@@ -15,6 +15,8 @@ atmospheric drag. It may waste quick a bit of fuel trying to keep to the pre-cal
 The algorithm used is aimed to be an implementation of the G-FOLD algorithm for fuel optimal diverts
 reputably used by Lars Blackmore for landing the SpaceX Falcon-9 rocket. However my algorithm is simplified version. See later.
 
+Please see the video https://www.youtube.com/watch?v=Ekywp-P6EBQ&t=301
+
 References
 
 -  "G-FOLD: A Real-Time Implementable Fuel Optimal Large Divert Guidance Algorithm for Planetary Pinpoint Landing" https://www.researchgate.net/publication/258676350_G-FOLD_A_Real-Time_Implementable_Fuel_Optimal_Large_Divert_Guidance_Algorithm_for_Planetary_Pinpoint_Landing.
