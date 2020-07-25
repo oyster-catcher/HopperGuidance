@@ -201,7 +201,7 @@ namespace HopperGuidance
           meshf.mesh = mesh;
         }
 
-        public void DrawTrack(Trajectory traj, Transform transform, Color color, float amult=1)
+        public void DrawTrack(Trajectory traj, Transform transform, Color color, bool pretransform=true, float amult=1)
         {
             if (_track_obj != null)
             {
@@ -230,7 +230,10 @@ namespace HopperGuidance
             int j = 0;
             for (int i = 0; i < traj.Length(); i++)
             {
-              line.SetPosition(j++,transform.TransformPoint(traj.r[i]));
+              if (pretransform)
+                line.SetPosition(j++,transform.TransformPoint(traj.r[i]));
+              else
+                line.SetPosition(j++,traj.r[i]);
               // Draw accelerations
               GameObject obj = new GameObject("Accel");
               // TODO - Work out why only one LineRender per GameObject - it seems wrong!
@@ -243,8 +246,16 @@ namespace HopperGuidance
               line2.startWidth = 0.4f;
               line2.endWidth = 0.4f;
               line2.positionCount = 2;
-              line2.SetPosition(0,transform.TransformPoint(traj.r[i]));
-              line2.SetPosition(1,transform.TransformPoint(traj.r[i] + traj.a[i]*amult));
+              if (pretransform)
+              {
+                line2.SetPosition(0,transform.TransformPoint(traj.r[i]));
+                line2.SetPosition(1,transform.TransformPoint(traj.r[i] + traj.a[i]*amult));
+              }
+              else
+              {
+                line2.SetPosition(0,traj.r[i]);
+                line2.SetPosition(1,traj.r[i] + traj.a[i]*amult);
+              }
             }
         }
 
@@ -451,6 +462,17 @@ namespace HopperGuidance
             _traj = new Trajectory(); // Transformed into world space
             // Use g vector from solution calculation
             _traj.Simulate(bestT, thrusts, tr0, tv0, new Vector3d(0,-g.magnitude,0), dt, extendTime);
+
+            // Simulate in world space - to try and get better precision
+            Trajectory traj2 = new Trajectory();
+            Vector3d [] thrusts2 = new Vector3d[thrusts.Length];
+            for(int i=0;i<thrusts.Length;i++)
+              thrusts2[i] = _transform.TransformVector(thrusts[i]);
+            traj2.Simulate(bestT, thrusts2, r0, v0, g, dt, extendTime);
+            DrawTrack(traj2, _transform, trackcol, false);
+
+
+
             double fdist = (_traj.r[_traj.r.Length-1] - rf).magnitude;
             Debug.Log("HopperGuidance: Final pos error = "+fdist);
             _traj.CorrectFinal(rf,vf);
@@ -458,7 +480,6 @@ namespace HopperGuidance
             // Enable autopilot
             _pid3d.Init(kP1,0,0,kP2,0,0,maxV,(float)(0.01f*maxPercentThrust*amax),2.0f);
             // TODO - Testing out using in solution co-ordinates
-            DrawTrack(_traj, _transform, trackcol);
             DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
             vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
             vessel.OnFlyByWire += new FlightInputCallback(Fly);
