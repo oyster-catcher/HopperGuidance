@@ -463,15 +463,14 @@ namespace HopperGuidance
             // Use g vector from solution calculation
             _traj.Simulate(bestT, thrusts, tr0, tv0, new Vector3d(0,-g.magnitude,0), dt, extendTime);
 
-            // Simulate in world space - to try and get better precision
+            // Simulate in world space - to get better precision
             Trajectory traj2 = new Trajectory();
             Vector3d [] thrusts2 = new Vector3d[thrusts.Length];
             for(int i=0;i<thrusts.Length;i++)
               thrusts2[i] = _transform.TransformVector(thrusts[i]);
             traj2.Simulate(bestT, thrusts2, r0, v0, g, dt, extendTime);
+            traj2.CorrectFinal(transform.TransformPoint(rf),transform.TransformVector(vf));
             DrawTrack(traj2, _transform, trackcol, false);
-
-
 
             double fdist = (_traj.r[_traj.r.Length-1] - rf).magnitude;
             Debug.Log("HopperGuidance: Final pos error = "+fdist);
