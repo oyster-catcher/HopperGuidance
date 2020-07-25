@@ -1,7 +1,7 @@
 HopperGuidance
 ==============
 
-A KSP mod which enables the calculation of a fuel efficient trajectory in-flight to make a soft landing at a designated location respecting the capabilities of the craft. The craft will then be steered automonously to follow this trajectory. You can choose many parameters of the trajectory to make it safe or more exciting.
+A KSP mod which enables the calculation of a fuel efficient trajectory in-flight to make a soft landing at a designated location respecting the capabilities of the craft. The craft will be steered automonously to follow this trajectory. You can choose many parameters of the trajectory to make it safe or more exciting.
 
 Features
 - Choose a landing latitude, longitude and altitude
@@ -9,8 +9,8 @@ Features
 - Lets you tune the parameters to the craft
 
 You can choose a particular latitude and longitude and altitude to land at, although currently this works best close to the landing site such as within 10km. It certainly handle descent from orbit very well
-as it suffers from Flat Earthism and treats the planet surface as flat and doesn't understand orbits or
-atmospheric drag. It may waste quick a bit of fuel trying to keep to the pre-calculated trajectory too. You can give it a try though, its all good run.
+as it suffers from Flat Earthism and treats the planet surface as flat, doesn't handle orbits or
+atmospheric drag. It may waste quite a bit of fuel trying to keep to the pre-calculated trajectory too. You can give it a try though, its all good fun.
 
 The algorithm used is aimed to be an implementation of the G-FOLD algorithm for fuel optimal diverts
 reputably used by Lars Blackmore for landing the SpaceX Falcon-9 rocket. However my algorithm is simplified version. See later.
@@ -28,21 +28,21 @@ References
 Prerequistes
 ============
 
-Tested with KSP version 1.8.1. May work with later versions.
+Works  with KSP versions 1.8.1 to 1.10 and possibly beyond.
 If you want to run the solver outside of KSP you need python and matplotlib to show the trajectories.
 
 Installing
 ==========
 
-Copy GameData to your KSP installation
+Copy GameData on top of the existing GameData folder in your KSP installation.
 
 Using HopperGuidance
 ====================
 
-Creates a new part, HopperGuidanceCore. Right-click to get its UI up.
+The mod includes shiny cuboid HopperGuidanceCore part in the Command & Control category and two test craft, Test Craft and Test Craft Heavy. Right click to the part to show its UI.
 
-Setting the target position. Click "Set Target Position" to set and landing target to where you are now.
-A flickery red cross will be shown at that position.
+Setting the target position. Click "Set Target here" to set and landing target to where you are now.
+A yellow target, inspired a little by the spaceX drone ship markings will be shown.
 
 Once in flight click "Enable autopilot" to automatically calculate a trajectory to safely land at the target point. Its not recommended that you do this more than 5km from the target currently. A trajectory will be shown in green with the calculated thrust direction and magnitude in red. The craft will be steered to attempt to follow this trajectory. You may get the message "Failed: try again" in which case the craft is likely to be either: too far away, beyond max velocity or below the minimum descent angle. Try to resolve these and try again.
 
