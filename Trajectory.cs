@@ -137,7 +137,7 @@ namespace HopperGuidance
 
     public double FindClosest(Vector3d a_r, Vector3d a_v,
                             out Vector3d closest_r, out Vector3d closest_v, out Vector3d closest_a, out double closest_t,
-                            double rWeight = 0.4, double vWeight = 0.6)
+                            double rWeight = 1.0, double vWeight = 1.0)
     {
       // Find closest point in speed and position and returns the index
       int ci = -1;
