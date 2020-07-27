@@ -8,12 +8,10 @@ Features
 - Shows the trajectory to landing and require thrust vectors
 - Lets you tune the parameters to the craft
 
-You can choose a particular latitude and longitude and altitude to land at, although currently this works best close to the landing site such as within 10km. It certainly handle descent from orbit very well
-as it suffers from Flat Earthism and treats the planet surface as flat, doesn't handle orbits or
-atmospheric drag. It may waste quite a bit of fuel trying to keep to the pre-calculated trajectory too. You can give it a try though, its all good fun.
+You can choose a particular latitude and longitude and altitude to land at, although currently this works best close to the landing site such as within 10km. It must take less than 5 minutes to land. It certainly can't handle descent from orbit and it treats the planet surface as flat and doesn't take into account atmospheric drag, though can correct for it while flying. It may waste quite a bit of fuel trying to keep to the pre-calculated trajectory too. You can give it a try though, its all good fun.
 
 The algorithm used is aimed to be an implementation of the G-FOLD algorithm for fuel optimal diverts
-reputably used by Lars Blackmore for landing the SpaceX Falcon-9 rocket. However my algorithm is a simplified version. See later.
+reputably used by Lars Blackmore for landing the SpaceX Falcon-9 rocket. However my algorithm is a simplified version of it and I've added some of my own constraints. See later.
 
 Please see the video https://www.youtube.com/watch?v=Ekywp-P6EBQ&t=301
 
@@ -28,7 +26,7 @@ References
 Prerequistes
 ============
 
-Works  with KSP versions 1.8.1 to 1.10 and possibly beyond.
+Works with KSP versions 1.8.1 to 1.10 and possibly beyond.
 If you want to run the solver outside of KSP you need python and matplotlib to show the trajectories.
 
 Installing
@@ -62,7 +60,6 @@ Parameters for (1) are used to compute the trajectory and can be used to control
 - Max velocity - Keep velocity below this limit
 - Max thrust angle - the maximum allow angle the craft will tilt. If 90 degrees then the craft can tip from vertical to the horizontal position but no more. If beyond >90 this value is ignored currently due to convex limitations.
 - Max final thrust angle - the thrust angle for the touch down. This keeps the final descent more vertical if kept lower than max thrust angle
-- Min thrust - only throttle down to this amount. This is mainly for realism overhaul where throttling of engines is more realistic. If the engine cuts out you will only have limited ignitions and it takes quite a while to restart the engine. You just can't let it happen!
 - Max thrust - how much of the available thrust to use. Set this slow and the descent will be slow and careful. You can use more than 100% since the calculation is done when calculating the trajectory you might have lost weight due to fuel usage and you will have spare acceleration by landing.
 - Time penalty - by default with a time penalty of zero the solution will minimize fuel usage. Setting a penalty of time will encourage a faster time to landing at the expense of extra fuel. You might want to use this on low gravity otherwise your craft may be allowed to drift upwards so a long time to make best use of gravity
 
@@ -70,10 +67,10 @@ While can you set target latitude, longitude and altitude its far easier to clic
 
 Parameters for (2) describe what to do when the craft is off the trajectory. The nearest point on the trajectory is marked by a blue line from the craft to the trajectory. This nearest point takes into account and position and velocity with a little more weight for velocity. This makes the craft behave more smoothly rather than blindy aiming for the nearest point in position. So the craft tries to match the position and velocity of the nearest point. If calculates a correct to the thrust vector to try and minimise the discrepancy. Six PID controllers are used to achieve this. 3 for the X,Y and Z positions and 3 for X, Y and Z velocities.
 
-- Idle attitude angle - If the craft is pointing more this angle away from the required direction of thrust then idle the engine at 0.1% thrust. This prevent the craft thrusting in the wrong direction and waits of it to point correctly
-- Err. Position gain - Sets the velocity to aim to close the position error. If set of 1 then when 1m aware aim for a velocity of 1m/s towards the target. 0.2 to 0.4 are good values.
-- Velocity gain - If set of 1 then when the target velocity is out by 1m/s than accelerate at 1m/s2
+- Idle attitude angle - If the craft is pointing more this angle away from the required direction of thrust then idle the engine at 1% thrust. This prevent the craft thrusting in the wrong direction and waits of it to point correctly
+- Correction factor - Sets the velocity to aim for to close the position error. If set of 1 then when 1m aware aim for a velocity of 1m/s towards the target. 0.1 to 0.4 are good values. Using 0.1 for large vessels that take longer to change their attitude.
 
+- Keep ignited - Purely for Realism Overhaul where there are limited ignitions. The engine will stay ignited and can only throttle back to that allowed by the engine which might be severely limited. The Merlin can throttle back to 40% and the BE-3 to 18%. If this is set the engine will be shutdown fully on touchdown and will need to be re-activated (its the only way I could reduce thrust to zero via the API!)
 - Show track - Display track, align and steer vectors
 - Logging - If enabled the files vessel.dat and solution.dat are logged to the same directory as KSP.log
 
@@ -91,6 +88,18 @@ General tips:
 - If your craft is way off the trajectory its best to disable and enable autopilot to compute a new trajectory
 - If your craft is way off, pointing the wrong direction and not steering you probably have min thrust=0 and RCS isn't strong enough to turn the vessel. You want a gimballing engine with some thrust to be able to turn the craft
 
+Failure to find solution:
+
+Usually caused by one of the following
+
+- You didn't set a target at all
+- You are outside of the minimum velocity
+- You below the minimum descent angle
+- You have run out of fuel
+- Its impossible not to hit the ground
+- The target is too far away (must take under 5 minutes to get there)
+- You have run out of ignitions (Realism Overhaul)
+- Other. Sometimes the solver just fails. Its worth trying again as that sometimes works
 
 Dealing with Small Craft:
 
@@ -104,10 +113,18 @@ You may have a problem using the autopilot with large craft. A large craft is ha
 - Reduce max velocity to keep atmospheric drag low
 - Keep max thrust angle low, says <15 degress as this will keep the craft more upright and prevent dangerous oscillation in attitude
 - Keep final max thrust angle even lower, probably zero to mean the craft must descend vertically for the touch down
-- Lower position gain to down as low as 0.05. This will mean if the craft is off trajectory it will only move slowly towards the correct trajectory. If this value is too high it will overshoot. Observe whether the red steer attitude is far from the actual crafts attitude
+- Lower correctiion factor down to as low as 0.05. This will mean if the craft is off trajectory it will only move slowly towards the correct trajectory. If this value is too high it will overshoot. Observe whether the red steer attitude is far from the actual crafts attitude
 - Raise the final descent angle above 45 degrees, may be as high as 80 degrees to give a more vertical landing
 - You can compensate for the lack of ability to steer the craft by adding more RCS thrusters or overly powerfull reaction wheels
 - Reduce max thrust below 100%. This will mean spare thrust will be available to correct errors in sticking to the trajectory
+
+Dealing with Realism Overhaul:
+
+- Choose an engine that is throttleable
+- Use keepIgnited=true otherwise you may use up all your ignitions quite quickly
+- Note that the engine has a minimum thrust and if this results in craft rising then you have too much thrust to land
+- The solver constraints the Y component of thrust to always be above the minimum thrust. If you need to land a low gravity you'll need a very low thrust engine
+- Reaction wheels don't work too well and RCS might be limited. Thrust vectoring of the main engine will be needed to steer the craft
 
 Debugging
 =========
