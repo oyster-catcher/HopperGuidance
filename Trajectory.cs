@@ -49,7 +49,8 @@ namespace HopperGuidance
       {
         r[j] = cr;
         v[j] = cv;
-        a[j] = -g*dt;
+        a[j] = -g;
+        cr += cv*dt;
         t += dt;
         j++;
       }
