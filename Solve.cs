@@ -86,7 +86,7 @@ namespace HopperGuidance
     public string DumpString()
     {
       string msg = ((retval>=1)&&(retval<=5))?"SUCCEED":"FAIL";
-      return string.Format("HopperGuidance: "+msg+" Nmin="+Nmin+ " Nmax="+Nmax+ " minDurationPerThrust="+minDurationPerThrust+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" rf="+Vec2Str(rf)+" vf="+Vec2Str(vf)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle);
+      return string.Format("HopperGuidance: "+msg+" Nmin="+Nmin+ " Nmax="+Nmax+ " minDurationPerThrust="+minDurationPerThrust+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" rf="+Vec2Str(rf)+" vf="+Vec2Str(vf)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle);
     }
  
     public static double [] BasisWeights(double t, double a_T, int N)
@@ -100,7 +100,7 @@ namespace HopperGuidance
       {
         double d = j - (t/dt);
         double b = 0; // when outside local range
-        if ((d>-1) && (d<1))
+        if ((d>=-1) && (d<=1))
           b = Math.Cos(d*0.5*Math.PI);
         w[j] = b*b;
       }
@@ -163,7 +163,7 @@ namespace HopperGuidance
         N = Nmin;
       if (N > Nmax)
         N = Nmax;
-      int numchecks = (int)(0.5*T); // number of checks for descent angle
+      int numchecks = N*3; // number of checks for descent angle
 
       alglib.minqpstate state;
       alglib.minqpreport rep;
@@ -215,7 +215,7 @@ namespace HopperGuidance
         bndu[i*3+1] = amax;
         bndu[i*3+2] = amax;
         // thrust magnitudes
-        bndl[N*3+i] = 0;
+        bndl[N*3+i] = amin;
         bndu[N*3+i] = amax;
       }
 
@@ -261,29 +261,29 @@ namespace HopperGuidance
       {
         c[k,i*3+0] = 1.0;
         c[k,N*3+i] = -1.0;
-        ct[k] = -1; // LHS < 0. Mean thrust vector X axis less than thrust magnitude
+        ct[k] = -1; // LHS < 0. Means thrust vector X axis less than thrust magnitude
         k++;
         c[k,i*3+0] = 1.0;
         c[k,N*3+i] = 1.0;
-        ct[k] = 1; // LHS > 0. Mean thrust vector X axis greater than -thrust magnitude
+        ct[k] = 1; // LHS > 0. Means thrust vector X axis greater than -thrust magnitude
         k++;
 
         c[k,i*3+1] = 1.0;
         c[k,N*3+i] = -1.0;
-        ct[k] = -1; // LHS < 0. Mean thrust vector Y axis less than thrust magnitude
+        ct[k] = -1; // LHS < 0. Means thrust vector Y axis less than thrust magnitude
         k++;
         c[k,i*3+1] = 1.0;
         c[k,N*3+i] = 1.0;
-        ct[k] = 1; // LHS > 0. Mean thrust vector Y axis greater than -thrust magnitude
+        ct[k] = 1; // LHS > 0. Means thrust vector Y axis greater than -thrust magnitude
         k++;
 
         c[k,i*3+2] = 1.0;
         c[k,N*3+i] = -1.0;
-        ct[k] = -1; // LHS < 0. Mean thrust vector Z axis less than thrust magnitude
+        ct[k] = -1; // LHS < 0. Means thrust vector Z axis less than thrust magnitude
         k++;
         c[k,i*3+2] = 1.0;
         c[k,N*3+i] = 1.0;
-        ct[k] = 1; // LHS > 0. Mean thrust vector Z axis greater than -thrust magnitude
+        ct[k] = 1; // LHS > 0. Means thrust vector Z axis greater than -thrust magnitude
         k++;
       }
 
@@ -456,8 +456,11 @@ namespace HopperGuidance
       // Constrain thrust to be at least amin in any direction
       for( int i=0; i<N; i++ )
       {
-          c[k,N*3+i] = 1.0; // thrust weight
-          c[k,rhs] = amin;
+          //c[k,N*3+i] = 1.0; // thrust weight
+          //c[k,rhs] = amin;
+          //ct[k] = 1; // LHS > RHS
+          c[k,i*3+1] = 1.0; // thrust weight of Y component
+          c[k,rhs] = amin; // may mean thrust is TOO upright
           ct[k] = 1; // LHS > RHS
           k++;
       }

@@ -21,10 +21,10 @@ namespace HopperGuidance
         LinkedList<GameObject> thrusts = new LinkedList<GameObject>();
         PID3d _pid3d = new PID3d();
         bool _enabled = false;
-        double errProp = 0.1f; // extra tolerance for errors as a proportion
-        double predictTime = 0.2f;
+        float errMargin = 0.1f; // margin of error in solution to allow for headroom in amax
+        float predictTime = 0;
         double lowestY = 0; // Y position of bottom of craft relative to centre
-        float _maxThrust;
+        float _minThrust, _maxThrust;
         Color trackcol = new Color(0,1,0,0.3f); // transparent green
         Color targetcol = new Color(1,1,0,0.5f); // solid yellow
         Color thrustcol = new Color(1,0.2f,0.2f,0.3f); // transparent red
@@ -35,7 +35,8 @@ namespace HopperGuidance
         Transform _transform = null;
         double last_t = -1; // last time data was logged
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
-        double extendTime = 2.0f; // extend trajectory to slowly descent to touch down
+        double extendTime = 4; // duration to extend trajectory to slowly descent to touch down and below at touchDownSpeed
+        double touchDownSpeed = 1.4f;
         double setTgtLatitude, setTgtLongitude, setTgtAltitude, setTgtSize;
         bool setShowTrack = true;
         float lastTgtLatitude, lastTgtLongitude, lastTgtAltitude;
@@ -48,11 +49,11 @@ namespace HopperGuidance
         float tgtSize = 10;
 
         [UI_FloatRange(minValue = -90.0f, maxValue = 90.0f, stepIncrement = 0.0001f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = true, guiUnits="°")]
         float tgtLatitude = -0.0968071692165f; // H-Pad
 
         [UI_FloatRange(minValue = -180.0f, maxValue = 180.0f, stepIncrement = 0.0001f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Longitude", guiFormat = "F7", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Longitude", guiFormat = "F7", isPersistant = true, guiUnits = "°")]
         float tgtLongitude = -74.6172808614f; // H-Pad
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 10000.0f, stepIncrement = 0.001f)]
@@ -60,45 +61,52 @@ namespace HopperGuidance
         float tgtAltitude = 176f; // H-Pad
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 90.0f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = true, guiUnits = "m")]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = true, guiUnits = "°")]
         float minDescentAngle = 20.0f;
 
         [UI_FloatRange(minValue = 1, maxValue = 1500, stepIncrement = 10f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max velocity", guiFormat = "F0", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max velocity", guiFormat = "F0", isPersistant = true, guiUnits = "m/s")]
         float maxV = 150f; // Max. vel to add to get towards target - not too large that vessel can't turn around
 
         [UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust angle", guiFormat = "F1", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust angle", guiFormat = "F1", isPersistant = true, guiUnits="°")]
         float maxThrustAngle = 45f; // Max. thrust angle from vertical
 
         [UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max landing thrust angle", guiFormat = "F1", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max landing thrust angle", guiFormat = "F1", isPersistant = true, guiUnits="°")]
         float maxLandingThrustAngle = 5f; // Max. final thrust angle from vertical
 
-        [UI_FloatRange(minValue = 0, maxValue = 100, stepIncrement = 0.1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min thrust %", guiFormat = "F1", isPersistant = true)]
-        float minPercentThrust = 0.1f; // raise for Realism Overhaul to engine doesn't cut out and can steer
+        //[UI_FloatRange(minValue = 0, maxValue = 100, stepIncrement = 0.1f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min thrust %", guiFormat = "F1", isPersistant = true, guiUnits="%")]
+        //float minPercentThrust = 0.01f; // raise for Realism Overhaul to engine doesn't cut out and can steer
 
-        [UI_FloatRange(minValue = 0, maxValue = 300f, stepIncrement = 5f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust %", isPersistant = true, guiUnits = "%")]
-        float maxPercentThrust = 90f;
+        //[UI_FloatRange(minValue = 0, maxValue = 300f, stepIncrement = 5f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust %", isPersistant = true, guiUnits = "%")]
+        //float maxPercentThrust = 90f;
 
         [UI_FloatRange(minValue = 0.0f, maxValue = 5.0f, stepIncrement = 0.1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Time penalty", guiFormat = "F1", isPersistant = false)]
         float timePenalty = 0.0f; // Fuel penalty to every extra second
 
         [UI_FloatRange(minValue = 0f, maxValue = 90f, stepIncrement = 5f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = true, guiUnits = "°")]
         float idleAngle = 90.0f;
 
 
         [UI_FloatRange(minValue = 0.01f, maxValue = 1f, stepIncrement = 0.01f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Position gain", guiFormat = "F2", isPersistant = true)]
-        float kP1 = 0.3f; // If 1 then at 1m error aim to close a 1m/s
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "correction factor", guiFormat = "F2", isPersistant = true)]
+        float corrFactor = 0.2f; // If 1 then at 1m error aim to close a 1m/s
+        // Set this down to 0.05 for large craft and up to 0.4 for very agile small craft
 
-        [UI_FloatRange(minValue = 0.0f, maxValue = 2f, stepIncrement = 0.1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Err: Velocity gain", guiFormat = "F1", isPersistant = true)]
-        float kP2 = 2.0f; // If 1 then at 1m/s error in velocity acceleration at an extra 1m/s/s
+        float vMult = 1;
+        float yMult = 2; // Extra weight for Y to try and minimise height error over other errors
+
+        float ki1 = 0;
+        float ki2 = 0;
+
+        [UI_Toggle(disabledText = "Off", enabledText = "On")]
+        [KSPField(guiActive = true, guiActiveEditor = false, guiName = "Keep engine ignited", isPersistant = false)]
+        bool _keepIgnited = false;
 
         [UI_Toggle(disabledText = "Off", enabledText = "On")]
         [KSPField(guiActive = true, guiActiveEditor = false, guiName = "Show track", isPersistant = false)]
@@ -107,6 +115,7 @@ namespace HopperGuidance
         [UI_Toggle(disabledText = "Off", enabledText = "On")]
         [KSPField(guiActive = true, guiActiveEditor = false, guiName = "Enable logging", isPersistant = false)]
         bool _logging = false;
+
 
         // Quad should be described a,b,c,d in anti-clockwise order when looking at it
         public void AddQuad(Vector3[] vertices, int vi, int[] triangles, int ti,
@@ -201,7 +210,7 @@ namespace HopperGuidance
           meshf.mesh = mesh;
         }
 
-        public void DrawTrack(Trajectory traj, Transform transform, Color color, float amult=1)
+        public void DrawTrack(Trajectory traj, Transform transform, Color color, bool pretransform=true, float amult=1)
         {
             if (_track_obj != null)
             {
@@ -230,7 +239,10 @@ namespace HopperGuidance
             int j = 0;
             for (int i = 0; i < traj.Length(); i++)
             {
-              line.SetPosition(j++,transform.TransformPoint(traj.r[i]));
+              if (pretransform)
+                line.SetPosition(j++,transform.TransformPoint(traj.r[i]));
+              else
+                line.SetPosition(j++,traj.r[i]);
               // Draw accelerations
               GameObject obj = new GameObject("Accel");
               // TODO - Work out why only one LineRender per GameObject - it seems wrong!
@@ -243,8 +255,16 @@ namespace HopperGuidance
               line2.startWidth = 0.4f;
               line2.endWidth = 0.4f;
               line2.positionCount = 2;
-              line2.SetPosition(0,transform.TransformPoint(traj.r[i]));
-              line2.SetPosition(1,transform.TransformPoint(traj.r[i] + traj.a[i]*amult));
+              if (pretransform)
+              {
+                line2.SetPosition(0,transform.TransformPoint(traj.r[i]));
+                line2.SetPosition(1,transform.TransformPoint(traj.r[i] + traj.a[i]*amult));
+              }
+              else
+              {
+                line2.SetPosition(0,traj.r[i]);
+                line2.SetPosition(1,traj.r[i] + traj.a[i]*amult);
+              }
             }
         }
 
@@ -383,18 +403,34 @@ namespace HopperGuidance
           return miny;
         }
 
-        public float ComputeMaxThrust()
+        public void ComputeMinMaxThrust(out float minThrust, out float maxThrust)
         {
-          float maxThrust = 0;
+          minThrust = 0;
+          maxThrust = 0;
           foreach (Part part in vessel.GetActiveParts())
           {
               part.isEngine(out List<ModuleEngines> engines);
               foreach (ModuleEngines engine in engines)
               {
-                  maxThrust += engine.GetMaxThrust();
+                  Debug.Log("Activate engine");
+                  engine.Activate(); // must be active to get thrusts or else realIsp=0
+                  for(float throttle=0; throttle<=1; throttle+=0.1f)
+                    Debug.Log("isp="+engine.realIsp+" throttle="+throttle+" Thrust="+engine.GetEngineThrust(engine.realIsp,throttle));
+                  // I think this will get the correct thrust given throttle in atmosphere (or wherever)
+                  minThrust += engine.GetEngineThrust(engine.realIsp, 0);
+                  maxThrust += engine.GetEngineThrust(engine.realIsp, 1);
               }
           }
-          return maxThrust;
+        }
+
+        public void ShutdownAllEngines()
+        {
+          foreach (Part part in vessel.GetActiveParts())
+          {
+            part.isEngine(out List<ModuleEngines> engines);
+            foreach (ModuleEngines engine in engines)
+              engine.Shutdown();
+          }
         }
 
         public void Enable()
@@ -404,10 +440,11 @@ namespace HopperGuidance
           Vector3d r0 = vessel.GetWorldPos3D();
           Vector3d v0 = vessel.GetSrfVelocity();
           Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
-          Vector3d rf = new Vector3d(0,-lowestY,0);
-          Vector3d vf = new Vector3d(0,-0.1,0);
-          _maxThrust = ComputeMaxThrust();
+          Vector3d rf = new Vector3d(0,-lowestY -0.5f*touchDownSpeed*extendTime,0);
+          Vector3d vf = new Vector3d(0,-touchDownSpeed,0);
+          ComputeMinMaxThrust(out _minThrust,out _maxThrust); // This might be including RCS (i.e. non main Throttle)
           _startTime = Time.time;
+          double amin = (_keepIgnited)?((1+errMargin)*_minThrust/vessel.totalMass):0;
           double amax = _maxThrust/vessel.totalMass;
 
           solver = new Solve();
@@ -415,26 +452,29 @@ namespace HopperGuidance
           solver.Tmax = 300; // 5 mins
           solver.tol = 0.1;
           solver.vmax = maxV;
-          solver.amax = amax*maxPercentThrust*0.01;
-          solver.amin = amax*minPercentThrust*0.01*(1+errProp); // Up minimum to allow thrust to go below
+          solver.amin = amin;
+          solver.amax = amax*(1-errMargin);
           solver.Nmin = 2;
           solver.Nmax = 6;
-          solver.minDurationPerThrust = 4;
+          solver.minDurationPerThrust = 2;
           solver.g = g.magnitude;
           solver.minDescentAngle = minDescentAngle;
           solver.maxThrustAngle = maxThrustAngle;
           solver.maxLandingThrustAngle = maxLandingThrustAngle;
           solver.timePenalty = timePenalty;
 
+          Debug.Log("amin="+amin+" amax="+amax);
+
           int retval;
           // Predict into future since solution makes 0.1-0.3 secs to compute
-          r0 = r0 + v0*predictTime + 0.5*g*predictTime*predictTime + 0.5f*amax*0.01*minPercentThrust*(new Vector3d(vessel.transform.up.x,vessel.transform.up.y,vessel.transform.up.z));
-          v0 = v0 + g*predictTime;
+          Vector3 att = new Vector3d(vessel.transform.up.x,vessel.transform.up.y,vessel.transform.up.z);
+          r0 = r0 + v0*predictTime + 0.5*g*predictTime*predictTime + 0.5f*(float)amin*att*predictTime*predictTime;
+          v0 = v0 + g*predictTime + (float)amin*att*predictTime;
 
           // Shut-off throttle
           FlightCtrlState ctrl = new FlightCtrlState();
           vessel.GetControlState(ctrl);
-          ctrl.mainThrottle = 0.01f*minPercentThrust;
+          ctrl.mainThrottle = (_keepIgnited)?0.01f:0;
 
           // Compute trajectory to landing spot
           double fuel;
@@ -451,14 +491,23 @@ namespace HopperGuidance
             _traj = new Trajectory(); // Transformed into world space
             // Use g vector from solution calculation
             _traj.Simulate(bestT, thrusts, tr0, tv0, new Vector3d(0,-g.magnitude,0), dt, extendTime);
+
+            // Simulate in world space - to get better precision
+            Trajectory traj2 = new Trajectory();
+            Vector3d [] thrusts2 = new Vector3d[thrusts.Length];
+            for(int i=0;i<thrusts.Length;i++)
+              thrusts2[i] = _transform.TransformVector(thrusts[i]);
+            traj2.Simulate(bestT, thrusts2, r0, v0, g, dt, extendTime);
+            traj2.CorrectFinal(_transform.TransformPoint(rf),_transform.TransformVector(vf));
+            DrawTrack(traj2, _transform, trackcol, false);
+
             double fdist = (_traj.r[_traj.r.Length-1] - rf).magnitude;
             Debug.Log("HopperGuidance: Final pos error = "+fdist);
             _traj.CorrectFinal(rf,vf);
 
             // Enable autopilot
-            _pid3d.Init(kP1,0,0,kP2,0,0,maxV,(float)(0.01f*maxPercentThrust*amax),2.0f);
+            _pid3d.Init(corrFactor,ki1,0,1,ki2,0,maxV,(float)amax,yMult,vMult);
             // TODO - Testing out using in solution co-ordinates
-            DrawTrack(_traj, _transform, trackcol);
             DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
             vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
             vessel.OnFlyByWire += new FlightInputCallback(Fly);
@@ -535,6 +584,10 @@ namespace HopperGuidance
             FlightCtrlState ctrl = new FlightCtrlState();
             vessel.GetControlState(ctrl);
             ctrl.mainThrottle = 0;
+            // Necessary on Realism Overhaul to shutdown engine as at throttle=0 the engine may still have
+            // a lot of thrust
+            if (_keepIgnited)
+              ShutdownAllEngines();
             return;
           }
 
@@ -545,7 +598,7 @@ namespace HopperGuidance
           // TODO - Transform with _transform
           Vector3d tr = _transform.InverseTransformPoint(r);
           Vector3d tv = _transform.InverseTransformVector(v);
-          _traj.FindClosest(tr, tv, out dr, out dv, out da, out desired_t);
+          _traj.FindClosest(tr, tv, out dr, out dv, out da, out desired_t, 0.4f, 0.6f);
           DrawAlign(tr,dr,_transform,aligncol);
           float throttle=0;
           
@@ -553,16 +606,23 @@ namespace HopperGuidance
           Vector3d F2 = _pid3d.Update(tr,tv,dr,dv,Time.deltaTime);
           Vector3d F = da + F2;
 
+          Debug.Log("r="+(Vector3)tr+" v="+(Vector3)tv+" dr="+(Vector3)dr+" dv="+(Vector3)dv+" F="+(Vector3)da+" F'="+(Vector3)F);
+
           // Restrict angle from vertical to thrust angle + allowed error
-          double maxAngle = maxThrustAngle*(1+errProp);
+          float maxAngle = maxThrustAngle;
+          // Limit maxAngle + error margin at 90 degrees to keep thrust angle constraint
+          if (maxAngle < 90)
+            maxAngle = Mathf.Min(90,maxAngle + 90*errMargin);
+          Debug.Log("maxAngle="+maxAngle);
           float amax = (float)(_maxThrust/vessel.totalMass); // F = m*a. We want, unit of throttle for each 1m/s/s
-          float amin = (float)(_maxThrust/vessel.totalMass*0.01f*minPercentThrust);
+          float amin = (float)(_minThrust/vessel.totalMass);
 
           // Return the closest possible thrust vector to the desired one but that
           // is inside the thrust cone constrainted by maxAngle from vertical
           // and the minimum acceleration amin and max acceleration amax
           // Note that currently of maxAngle > 90 this function has no effect
           F = ConeUtils.ClosestThrustInsideCone((float)maxAngle,(float)amin,(float)amax,F);
+          Debug.Log("limF="+(Vector3)F+" amin="+amin+" amax="+amax);
 
           // Logging
           double t = Time.time - _startTime;
@@ -572,22 +632,18 @@ namespace HopperGuidance
           DrawSteer(tr, tr+10*Vector3d.Normalize(F), _transform, thrustcol);
           F = _transform.TransformVector(F);
 
-          throttle = (float)F.magnitude/(amax+0.001f); // protect against divide by zero
+          if (_keepIgnited)
+            throttle = Mathf.Clamp((float)(F.magnitude-amin)/(amax-amin),0.01f,1);
+          else
+            throttle = Mathf.Clamp((float)(F.magnitude-amin)/(amax-amin),0,1);
 
           // Shutoff throttle if pointing in wrong direction
           Vector3d att = new Vector3d(vessel.transform.up.x,vessel.transform.up.y,vessel.transform.up.z);
           float ddot = (float)Vector3d.Dot(Vector3d.Normalize(att),Vector3d.Normalize(F));
           if ((ddot < Mathf.Cos((float)idleAngle*(Mathf.PI/180.0f))) && (F.magnitude>0.01))
           {
-            throttle = 0.01f*minPercentThrust; // some throttle to steer? (if no RCS and main thruster gimbals)
+            throttle = 0.01f; // some throttle to steer? (if no RCS and main thruster gimbals)
           }
-
-          // This might cause problems since thrust might be in the wrong direction
-          throttle = Math.Max(throttle,0.01f*minPercentThrust);
-
-          // Set throttle and direction
-          //if (F.magnitude < 0.01)
-          //  F = _transform.TransformVector(new Vector3d(0,1,0)); // up
 
           if (throttle > 0)
           {
