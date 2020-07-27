@@ -584,7 +584,10 @@ namespace HopperGuidance
             FlightCtrlState ctrl = new FlightCtrlState();
             vessel.GetControlState(ctrl);
             ctrl.mainThrottle = 0;
-            ShutdownAllEngines();
+            // Necessary on Realism Overhaul to shutdown engine as at throttle=0 the engine may still have
+            // a lot of thrust
+            if (_keepIgnited)
+              ShutdownAllEngines();
             return;
           }
 
