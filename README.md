@@ -13,7 +13,7 @@ as it suffers from Flat Earthism and treats the planet surface as flat, doesn't 
 atmospheric drag. It may waste quite a bit of fuel trying to keep to the pre-calculated trajectory too. You can give it a try though, its all good fun.
 
 The algorithm used is aimed to be an implementation of the G-FOLD algorithm for fuel optimal diverts
-reputably used by Lars Blackmore for landing the SpaceX Falcon-9 rocket. However my algorithm is simplified version. See later.
+reputably used by Lars Blackmore for landing the SpaceX Falcon-9 rocket. However my algorithm is a simplified version. See later.
 
 Please see the video https://www.youtube.com/watch?v=Ekywp-P6EBQ&t=301
 
