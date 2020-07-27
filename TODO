@@ -2,3 +2,5 @@
 - Show path travelled by vessel
 - Get a working Visual Studio Project file
 - Make show track toggle work properly with steer and align vectors
+- Get align vector in the right place againi
+- Realtime tinkering of correct factors
