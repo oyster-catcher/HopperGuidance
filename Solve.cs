@@ -20,6 +20,7 @@ namespace HopperGuidance
     public int Nmin = 2;
     public int Nmax = 10;
     public double minDurationPerThrust = 4;
+    public double checkGap = 2; // duration between checks (none at T=0)
     public double g = 9.8;
     public double amin = 0;
     public double amax = 30;
@@ -163,7 +164,9 @@ namespace HopperGuidance
         N = Nmin;
       if (N > Nmax)
         N = Nmax;
-      int numchecks = N*3; // number of checks for descent angle
+      int numchecks = 0;
+      for( double tX=checkGap; tX<T; tX+=checkGap )
+        numchecks++;
 
       alglib.minqpstate state;
       alglib.minqpreport rep;
@@ -318,10 +321,10 @@ namespace HopperGuidance
 
 #if (MINDESCENTANGLE)
       // Constrain N intermediate positions to be within minimumDescentAngle
-      for( int j=0; j<numchecks; j++ )
+      for( double tX=checkGap; tX<T; tX+=checkGap )
       {
-        // No check at t=0 and t=T
-        double tX = (T*(j+1))/(numchecks+1);
+        // No check at t=T
+        //double tX = T*((float)(j+1)/(numchecks+1));
         // Get whole weight vector up to time t
         RVWeightsToTime(tX,T,N,dt,out double[] wr,out double[] wv);
 
@@ -676,6 +679,10 @@ namespace HopperGuidance
             solver.maxLandingThrustAngle = d;
           else if (k=="maxThrustAngle")
             solver.maxThrustAngle = d;
+          else if (k=="timePenalty")
+            solver.timePenalty = d;
+          else if (k=="checkGap")
+            solver.checkGap = d;
           else
           {
             System.Console.Error.WriteLine("No such parameter: {0}",k);
