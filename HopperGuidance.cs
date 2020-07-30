@@ -459,7 +459,7 @@ namespace HopperGuidance
           solver.minDurationPerThrust = 2;
           solver.g = g.magnitude;
           solver.minDescentAngle = minDescentAngle;
-          solver.maxThrustAngle = maxThrustAngle;
+          solver.maxThrustAngle = maxThrustAngle*(1-errMargin);
           solver.maxLandingThrustAngle = maxLandingThrustAngle;
           solver.timePenalty = timePenalty;
 
@@ -520,9 +520,21 @@ namespace HopperGuidance
           {
             Disable();
             Events["OnToggle"].guiName = "Enable fail: Try again";
-            Debug.Log("HopperGuidance: Failure to find solution: error code "+retval);
-            string message = "Failure to find solution within constraints - try relaxing them";
-            ScreenMessages.PostScreenMessage(message, 3.0f, ScreenMessageStyle.UPPER_CENTER);
+            string msg = "HopperGuidance: Failure to find solution because ";
+            // Do some checks
+            if (tv0.magnitude > maxV)
+              msg = msg + " velocity over "+maxV+" m/s";
+            else
+            {
+              Vector3d r = tr0 - rf;
+              double cos_descentAng = Math.Sqrt(r.x*r.x + r.z*r.z) / r.magnitude;
+              if (cos_descentAng < Math.Cos(Math.PI*minDescentAngle))
+                msg = msg + "below min. descent angle "+minDescentAngle+"°";
+              else
+                msg = msg + "impossible to reach target within constraints";
+            }
+            Debug.Log(msg);
+            ScreenMessages.PostScreenMessage(msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
           }
         }
 
@@ -610,10 +622,6 @@ namespace HopperGuidance
 
           // Restrict angle from vertical to thrust angle + allowed error
           float maxAngle = maxThrustAngle;
-          // Limit maxAngle + error margin at 90 degrees to keep thrust angle constraint
-          if (maxAngle < 90)
-            maxAngle = Mathf.Min(90,maxAngle + 90*errMargin);
-          Debug.Log("maxAngle="+maxAngle);
           float amax = (float)(_maxThrust/vessel.totalMass); // F = m*a. We want, unit of throttle for each 1m/s/s
           float amin = (float)(_minThrust/vessel.totalMass);
 
@@ -622,7 +630,6 @@ namespace HopperGuidance
           // and the minimum acceleration amin and max acceleration amax
           // Note that currently of maxAngle > 90 this function has no effect
           F = ConeUtils.ClosestThrustInsideCone((float)maxAngle,(float)amin,(float)amax,F);
-          Debug.Log("limF="+(Vector3)F+" amin="+amin+" amax="+amax);
 
           // Logging
           double t = Time.time - _startTime;
