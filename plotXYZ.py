@@ -12,25 +12,37 @@ def plot_line(ax,data,fx,fy,color='black',label=''):
   ax.plot(xx,yy,color=color,label=label)
 
 
-def plot_checks(ax,data,fx,fy,checkGap,color='red'):
-  if not checkGap:
+def plot_checks(ax,data,fx,fy,checkGapFirst,checkGapMult,color='red'):
+  if not checkGapFirst or not checkGapMult:
     return
   T = data[-1]['time']
-  tX=checkGap
   cx,cy=[],[]
-  while (tX < T):
+  tX=[]
+  gap = checkGapFirst
+  t = checkGapFirst
+  while(t < 0.5*T):
+    tX.append(t)
+    t = t + gap
+    gap = gap * checkGapMult
+  gap = checkGapFirst
+  t = checkGapFirst
+  while(t < 0.5*T):
+    tX.append(T-t)
+    t = t + gap
+    gap = gap * checkGapMult
+
+  for t in tX:
     done = False
     for i,d in enumerate(data):
-      if data[i]['time'] >= tX and (not done):
+      if data[i]['time'] >= t and (not done):
         cx.append(data[i][fx])
         cy.append(data[i][fy])
         done = True
-    tX += checkGap
   ax.plot(cx,cy,color=color,marker='o',markersize=10,linestyle='')
 
 
 def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
-         vxmin,vxmax,vymin,vymax,vzmin,vzmax,tmax=30,amult=1,askip=3,checkGap=None,minDescentAngle=None,
+         vxmin,vxmax,vymin,vymax,vzmin,vzmax,tmax=30,amult=1,askip=3,checkGapFirst=None,checkGapMult=None,minDescentAngle=None,
          amin=None,amax=None,
          filenames=[]):
 
@@ -48,7 +60,7 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
   ax.set_ylim([xmin,xmax])
   for col,data in zip(colors,datas):
     plot_line(ax,data,'time','x',color=col)
-    plot_checks(ax,data,'time','x',checkGap)
+    plot_checks(ax,data,'time','x',checkGapFirst,checkGapMult)
   ax.grid()
 
   P.subplot2grid((3,5),(0,1), colspan=1, rowspan=1)
@@ -59,7 +71,7 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
   ax.set_ylim([vxmin,vxmax])
   for col,data in zip(colors,datas):
     plot_line(ax,data,'time','vx',color=col)
-    plot_checks(ax,data,'time','vx',checkGap)
+    plot_checks(ax,data,'time','vx',checkGapFirst,checkGapMult)
   ax.grid()
 
   P.subplot2grid((3,5),(1,0), colspan=1, rowspan=1)
@@ -70,7 +82,7 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
   ax.set_ylim([ymin,ymax])
   for col,data in zip(colors,datas):
     plot_line(ax,data,'time','y',color=col)
-    plot_checks(ax,data,'time','y',checkGap)
+    plot_checks(ax,data,'time','y',checkGapFirst,checkGapMult)
   ax.grid()
 
   P.subplot2grid((3,5),(1,1), colspan=1, rowspan=1)
@@ -81,7 +93,7 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
   ax.set_ylim([vymin,vymax])
   for col,data in zip(colors,datas):
     plot_line(ax,data,'time','vy',color=col)
-    plot_checks(ax,data,'time','vy',checkGap)
+    plot_checks(ax,data,'time','vy',checkGapFirst,checkGapMult)
   ax.grid()
 
   P.subplot2grid((3,5),(2,0), colspan=1, rowspan=1)
@@ -92,7 +104,7 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
   ax.set_ylim([zmin,zmax])
   for col,data in zip(colors,datas):
     plot_line(ax,data,'time','z',color=col)
-    plot_checks(ax,data,'time','z',checkGap)
+    plot_checks(ax,data,'time','z',checkGapFirst,checkGapMult)
   ax.grid()
   ax.legend()
   P.subplot2grid((3,5),(2,1), colspan=1, rowspan=1)
@@ -103,7 +115,7 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
   ax.set_ylim([vzmin,vzmax])
   for col,data in zip(colors,datas):
     plot_line(ax,data,'time','vz',color=col)
-    plot_checks(ax,data,'time','vz',checkGap)
+    plot_checks(ax,data,'time','vz',checkGapFirst,checkGapMult)
   ax.grid()
 
   # Throttle
@@ -121,7 +133,7 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
       T=np.array([d['ax'],d['ay'],d['az']])
       d['mag_accel'] = np.linalg.norm(T)
     plot_line(ax,data,'time','mag_accel',color=col)
-    plot_checks(ax,data,'time','mag_accel',checkGap)
+    plot_checks(ax,data,'time','mag_accel',checkGapFirst,checkGapMult)
     if amin:
       ax.plot([0,data[-1]['time']],[amin,amin],color='blue',linestyle='--')
     if amax:
@@ -149,7 +161,7 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
       ax.plot(xx,yy,color=col,alpha=0.5)
     plot_line(ax,data,'x','y',color=colors[di],label=filenames[di])
     # Show checkpoints
-    plot_checks(ax,data,'x','y',checkGap)
+    plot_checks(ax,data,'x','y',checkGapFirst,checkGapMult)
 
   # Draw min descent angle
   if minDescentAngle:
@@ -201,7 +213,8 @@ parser.add_argument('--vzmax', type=float, help='Maximum vz position', default=N
 parser.add_argument('--tmax', type=float, help='Maximum time', default=None)
 parser.add_argument('--amin', type=float, help='Show minimum acceleration constraint', default=None)
 parser.add_argument('--amax', type=float, help='Show maximum acceleration constraint', default=None)
-parser.add_argument('--checkGap', type=float, help='Gap between checks in seconds', default=None)
+parser.add_argument('--checkGapFirst', type=float, help='Time of first check from start and end', default=None)
+parser.add_argument('--checkGapMult', type=float, help='Multiplier to set time to next check (use >1)', default=None)
 parser.add_argument('--minDescentAngle', type=float, help='Show cone for minimum descent angle', default=None)
 parser.add_argument('--amult', type=float, help='Multiplier for scale up thrust acceleration lines', default=1)
 parser.add_argument('--square', action='store_true', help='Make XY plot square (roughly as depends on window size)', default=False)
@@ -259,4 +272,4 @@ if args.square:
 
 plot(datas,args.filename,xmin=args.xmin,xmax=args.xmax,ymin=args.ymin,ymax=args.ymax,zmin=args.zmin,zmax=args.zmax,
      vxmin=args.vxmin,vxmax=args.vxmax,vymin=args.vymin,vymax=args.vymax,vzmin=args.vzmin,vzmax=args.vzmax,tmax=args.tmax,
-     amult=args.amult,checkGap=args.checkGap,filenames=args.filename,minDescentAngle=args.minDescentAngle,amin=args.amin,amax=args.amax)
+     amult=args.amult,checkGapFirst=args.checkGapFirst,checkGapMult=args.checkGapMult,filenames=args.filename,minDescentAngle=args.minDescentAngle,amin=args.amin,amax=args.amax)
