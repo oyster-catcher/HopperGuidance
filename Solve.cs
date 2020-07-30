@@ -16,11 +16,12 @@ namespace HopperGuidance
   {
     // Parameters to control solution
     public double Tmin = 0;
-    public double Tmax = 30;
+    public double Tmax = 300;
     public int Nmin = 2;
     public int Nmax = 10;
     public double minDurationPerThrust = 4;
-    public double checkGap = 2; // duration between checks (none at T=0)
+    public double checkGapFirst = 1; // duration between checks (none at T=0)
+    public double checkGapMult = 1.5; // increase time from ends by this proportion
     public double g = 9.8;
     public double amin = 0;
     public double amax = 30;
@@ -165,8 +166,9 @@ namespace HopperGuidance
       if (N > Nmax)
         N = Nmax;
       int numchecks = 0;
-      for( double tX=checkGap; tX<T; tX+=checkGap )
-        numchecks++;
+      double tX;
+      for( tX=checkGapFirst; tX<0.5*T; tX=tX*checkGapMult )
+        numchecks+=2; // From start and from end
 
       alglib.minqpstate state;
       alglib.minqpreport rep;
@@ -321,7 +323,10 @@ namespace HopperGuidance
 
 #if (MINDESCENTANGLE)
       // Constrain N intermediate positions to be within minimumDescentAngle
-      for( double tX=checkGap; tX<T; tX+=checkGap )
+      tX = checkGapFirst;
+      bool fromStart = true;
+      bool done = false;
+      while(!done)
       {
         // No check at t=T
         //double tX = T*((float)(j+1)/(numchecks+1));
@@ -377,6 +382,22 @@ namespace HopperGuidance
                    + V4[2] * (rf[2] - (r0[2] + v0[2]*tX)); // RHS
         ct[k+3] = 1; // LHS > RHS
         k += 4;
+        if (fromStart)
+        {
+          tX = tX * checkGapMult;
+          if (tX > 0.5*T)
+          {
+            fromStart = false;
+            tX = (T-checkGapMult);
+          }
+        }
+        else
+        {
+          // Move closer to end in smaller steps
+          tX = T - (T-tX)*checkGapMult;
+          if (tX < 0.5*T)
+            done = true;
+        }
       }
 #endif
 
@@ -385,7 +406,7 @@ namespace HopperGuidance
       for( int j=0; j<N; j++ )
       {
         // No check at t=0 and t=T
-        double tX = T*((double)(j+1))/(N+1);
+        tX = T*((double)(j+1))/(N+1);
         // Get whole weight vector up to time t
         RVWeightsToTime(tX,T,N,dt,out double[] wr,out double[] wv);
 
@@ -580,16 +601,23 @@ namespace HopperGuidance
       double a = Tmin;
       double b = Tmax;
       double c,d;
+      double last_c,last_d;
       int retvalc=-1,retvald=-1;
 
       o_thrusts = new Vector3d[N];
+      Vector3d [] thrustsc = new Vector3d[N];
+      Vector3d [] thrustsd = new Vector3d[N];
 
       c = b - (b - a) / gr;
       d = a + (b - a) / gr;
+      last_c = c;
+      last_d = d;
       while (Math.Abs(c - d) > tol)
       {
-        fc = GFold(a_r0,a_v0,a_rf,a_vf,c,out o_thrusts,out retvalc);
-        fd = GFold(a_r0,a_v0,a_rf,a_vf,d,out o_thrusts,out retvald);
+        last_c = c;
+        last_d = d;
+        fc = GFold(a_r0,a_v0,a_rf,a_vf,c,out thrustsc,out retvalc);
+        fd = GFold(a_r0,a_v0,a_rf,a_vf,d,out thrustsd,out retvald);
         if (fc < fd)
             {b = d;}
         else
@@ -605,15 +633,37 @@ namespace HopperGuidance
       retval = o_retval;
       if ((o_retval<1) || (o_retval>5))
       {
+        System.Console.Error.WriteLine("Fallback "+last_c+" "+last_d+" "+fc+","+fd+","+retvalc+","+retvald);
+        // Fall back to c or d positions for 0.5*(a+b) failed
+        if ((fc < fd) && ((retvalc>=1) && (retvalc<=5)))
+        {
+          o_fuel = fc;
+          o_thrusts = thrustsc;
+          o_retval = retvalc;
+          r0 = a_r0;
+          v0 = a_v0;
+          rf = a_rf;
+          vf = a_vf;
+          return last_c;
+        }
+        if ((fd < fc) && ((retvald>=1) && (retvald<=5)))
+        {
+          o_fuel = fd;
+          o_thrusts = thrustsd;
+          o_retval = retvald;
+          r0 = a_r0;
+          v0 = a_v0;
+          rf = a_rf;
+          vf = a_vf;
+          return last_d;
+        }
         System.Console.Error.WriteLine("FAILED AT T={0}",0.5*(a+b));
+        return bestT;
       }
-      else
-      {
-        r0 = a_r0;
-        v0 = a_v0;
-        rf = a_rf;
-        vf = a_vf;
-      }
+      r0 = a_r0;
+      v0 = a_v0;
+      rf = a_rf;
+      vf = a_vf;
       
       return bestT;
     }
@@ -681,8 +731,10 @@ namespace HopperGuidance
             solver.maxThrustAngle = d;
           else if (k=="timePenalty")
             solver.timePenalty = d;
-          else if (k=="checkGap")
-            solver.checkGap = d;
+          else if (k=="checkGapFirst")
+            solver.checkGapFirst = d;
+          else if (k=="checkGapMult")
+            solver.checkGapMult = d;
           else
           {
             System.Console.Error.WriteLine("No such parameter: {0}",k);
@@ -697,6 +749,7 @@ namespace HopperGuidance
       double bestT = solver.GoldenSearchGFold(r0,v0,rf,vf,out thrusts,out fuel,out retval);
 
       System.Console.Error.WriteLine(solver.DumpString());
+      System.Console.Error.WriteLine(bestT+" "+thrusts.Length+" "+retval);
       if ((retval>=1) && (retval<=5))
       {
         double final_r_err = 0;
