@@ -610,7 +610,8 @@ namespace HopperGuidance
             _pid3d.Init(corrFactor,ki1,0,accGain,ki2,0,maxV,(float)amax,yMult);
             vessel.OnFlyByWire += new FlightInputCallback(FlyForceLanding);
             Events["ToggleForceLanding"].guiName = "Disable forced landing";
-            SetUpTransform((float)vessel.latitude,(float)vessel.longitude,0);
+            SetUpTransform((float)vessel.latitude,(float)vessel.longitude,(float)vessel.mainBody.TerrainAltitude(vessel.latitude,vessel.longitude));
+            _startTime = Time.time;
             _forceLanding = true;
           }
           else
@@ -711,11 +712,29 @@ namespace HopperGuidance
             Debug.Log("HopperGuidance: h="+height+" tv="+(Vector3d)tv+" dv="+(Vector3d)dv+" t_hit="+t+" F="+(Vector3d)F+" F2="+(Vector3d)F2+" throttle="+throttle);
           }
 
-
           // Shutoff throttle if pointing in wrong direction
-          F = _transform.TransformVector(F); // transform back to world co-ordinates
-          float ddot = (float)Vector3d.Dot(Vector3d.Normalize(att),Vector3d.Normalize(F));
-          if ((ddot < Mathf.Cos((float)idleAngle*(Mathf.PI/180.0f))) && (F.magnitude>0.01))
+          float ddot = (float)Vector3d.Dot(Vector3d.Normalize(tatt),Vector3d.Normalize(F));
+          float att_err = Mathf.Acos(ddot)*180/Mathf.PI;
+
+          // Open log files
+          if ((_vesselWriter == null) && (_logging))
+          {
+            _vesselWriter = new System.IO.StreamWriter(_vesselLogFilename);
+            _vesselWriter.WriteLine("time x y z vx vy vz ax ay az att_err");
+            _tgtWriter = new System.IO.StreamWriter(_tgtLogFilename);
+            _tgtWriter.WriteLine("time x y z vx vy vz ax ay az att_err");
+          }
+
+          double lt = Time.time - _startTime;
+          if ((_logging)&&(lt >= last_t+log_interval))
+          {
+            LogData(_tgtWriter, lt, tr, dv, F, 0);
+            LogData(_vesselWriter, lt, tr, tv, F, att_err);
+            last_t = t;
+          }
+
+
+          if ((att_err >= idleAngle) && (F.magnitude>0.01))
           {
             Debug.Log("HopperGuidance: Attitude wrong");
             throttle = 0.01f; // some throttle to steer? (if no RCS and main thruster gimbals)
@@ -727,6 +746,7 @@ namespace HopperGuidance
             // Draw steer vector
             DrawSteer(tr, tr+3*vessel.vesselSize.y*Vector3d.Normalize(F), _transform, thrustcol);
           }
+          F = _transform.TransformVector(F); // transform back to world co-ordinates
           vessel.Autopilot.SAS.lockedMode = false;
           vessel.Autopilot.SAS.SetTargetOrientation(F,false);
           state.mainThrottle = throttle;
