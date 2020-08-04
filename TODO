@@ -1,6 +1,11 @@
-- Try with different vechicles like Falcon 9
 - Show path travelled by vessel
 - Get a working Visual Studio Project file
 - Make show track toggle work properly with steer and align vectors
-- Get align vector in the right place againi
+- Get align vector in the right place again
 - Realtime tinkering of correct factors
+- Check speed, minDescentAngle check so more around start and finish to cope better when outside of constraints at start
+- Combine code for force landing and autopilot landing
+- Ensure tracks can be toggled to forced landing
+- Further tuning of PIDs and simplifying parameters for small/large craft
+- Logging for forced landing
+- More accurate computation of trajectory
