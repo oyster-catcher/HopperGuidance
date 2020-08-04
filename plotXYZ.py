@@ -119,7 +119,7 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
   ax.grid()
 
   # Throttle
-  P.subplot2grid((3,5),(0,2), colspan=3, rowspan=1)
+  P.subplot2grid((3,5),(0,2), colspan=2, rowspan=1)
   ax = P.gca()
   ax.set_xlabel("time")
   ax.set_ylabel("mag(accel)")
@@ -133,11 +133,22 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
       T=np.array([d['ax'],d['ay'],d['az']])
       d['mag_accel'] = np.linalg.norm(T)
     plot_line(ax,data,'time','mag_accel',color=col)
-    plot_checks(ax,data,'time','mag_accel',checkGapFirst,checkGapMult)
+    plot_checks(ax,data,'time','mag_accel',checkGapFirst,checkGapMult,color=col)
     if amin:
       ax.plot([0,data[-1]['time']],[amin,amin],color='blue',linestyle='--')
     if amax:
       ax.plot([0,data[-1]['time']],[amax,amax],color='blue',linestyle='--')
+  ax.grid()
+
+  # Attitude error
+  P.subplot2grid((3,5),(0,4), colspan=1, rowspan=1)
+  ax = P.gca()
+  ax.set_xlabel("time")
+  ax.set_ylabel("attitude error /degrees")
+  ax.set_xlim([0,tmax])
+  ax.set_ylim([0,90])
+  for col,data in zip(colors,datas):
+    plot_line(ax,data,'time','att_err',color=col)
   ax.grid()
 
   # XY
@@ -158,10 +169,10 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
       yy.append(d['y'])
       xx.append(d['x']+d['ax']*amult)
       yy.append(d['y']+d['ay']*amult)
-      ax.plot(xx,yy,color=col,alpha=0.5)
+      ax.plot(xx,yy,color=colors[di],alpha=0.5)
     plot_line(ax,data,'x','y',color=colors[di],label=filenames[di])
     # Show checkpoints
-    plot_checks(ax,data,'x','y',checkGapFirst,checkGapMult)
+    plot_checks(ax,data,'x','y',color=colors[di],checkGapFirst=checkGapFirst,checkGapMult=checkGapMult)
 
   # Draw min descent angle
   if minDescentAngle:
