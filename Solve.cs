@@ -157,7 +157,6 @@ namespace HopperGuidance
     public double GFold(double[] r0, double[] v0, double[] rf, double[] vf, double T,
                         out double[,] a_thrusts, out int a_retval)
     {
-      double fidelity = 10; // this many steps inbetween thrust positions
       a_thrusts = null;
 
       N = (int)(T/minDurationPerThrust);
