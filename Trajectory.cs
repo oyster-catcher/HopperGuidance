@@ -86,7 +86,7 @@ namespace HopperGuidance
       Vector3d svB = vB * vWeight;
       Vector3d sr = r * rWeight;
       Vector3d sv = v * vWeight;
-      double [] a_to_p = new double [] {sr.x-srA.x,  sr.y-srA.y,  sr.z-srA.z,  sv.x-svA.x,  sv.y-svA.y,  sv.z-svA.z};
+      double [] a_to_p = new double [] {sr.x-srA.x,  sr.y-srA.y,  sr.z-srA.z,  sv.x-svA.x, sv.y-svA.y,  sv.z-svA.z};
       double [] a_to_b = new double [] {srB.x-srA.x, srB.y-srA.y, srB.z-srA.z, svB.x-svA.x, svB.y-svA.y, svB.z-svA.z};
       double atb2 = a_to_b[0]*a_to_b[0] + a_to_b[1]*a_to_b[1] + a_to_b[2]*a_to_b[2] +
                     a_to_b[3]*a_to_b[3] + a_to_b[4]*a_to_b[4] + a_to_b[5]*a_to_b[5];
@@ -211,13 +211,13 @@ namespace HopperGuidance
       double t = 0;
       Vector3d tr = Vector3d.zero;
       Vector3d tv,ta;
-      f.WriteLine("time x y z vx vy vz ax ay az");
+      f.WriteLine("time x y z vx vy vz ax ay az att_err");
       for(int i = 0 ; i < Length() ; i++)
       {
         tr = r[i];
         tv = v[i];
         ta = a[i];
-        f.WriteLine(string.Format("{0} {1:F5} {2:F5} {3:F5} {4:F5} {5:F5} {6:F5} {7:F1} {8:F1} {9:F1}",t,tr.x,tr.y,tr.z,tv.x,tv.y,tv.z,ta.x,ta.y,ta.z));
+        f.WriteLine(string.Format("{0} {1:F5} {2:F5} {3:F5} {4:F5} {5:F5} {6:F5} {7:F1} {8:F1} {9:F1} 0",t,tr.x,tr.y,tr.z,tv.x,tv.y,tv.z,ta.x,ta.y,ta.z));
         t += dt;
       }
       f.Close();
