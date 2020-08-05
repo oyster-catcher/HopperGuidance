@@ -5,7 +5,7 @@ namespace HopperGuidance
 {
   public class Trajectory
   {
-    double dt = 0;
+    public double dt = 0;
     public Vector3d [] r;
     public Vector3d [] v;
     public Vector3d [] a;
