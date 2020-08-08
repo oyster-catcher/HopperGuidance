@@ -1,14 +1,15 @@
 using KSPAssets;
 using UnityEngine;
+using System;
 
 namespace HopperGuidance
 {
   public class Trajectory
   {
     public double dt = 0;
-    public Vector3d [] r;
-    public Vector3d [] v;
-    public Vector3d [] a;
+    public Vector3d [] r = null;
+    public Vector3d [] v = null;
+    public Vector3d [] a = null;
 
     // Take a set of thrust vectors at positions 0, dt, 2*dt, etc...
     // and return a higher fidelity track of positions and thrust directions: r, rrr
@@ -19,15 +20,27 @@ namespace HopperGuidance
       dt = a_dt;
       Vector3d cr = r0;
       Vector3d cv = v0;
-      int j = 0;
+      int start = 0;
+      if (r != null)
+        start = r.Length;
+      int j = start;
       int N = thrusts.Length;
       int M = (int)(T/dt+1);
       int extendM = (int)((T+extendTime)/dt+1);
       double t=0;
-      r = new Vector3d[extendM];
-      v = new Vector3d[extendM];
-      a = new Vector3d[extendM];
-      while(j < M)
+      if (r == null)
+      {
+        r = new Vector3d[extendM];
+        v = new Vector3d[extendM];
+        a = new Vector3d[extendM];
+      }
+      else
+      {
+        Array.Resize(ref r, start+extendM);
+        Array.Resize(ref v, start+extendM);
+        Array.Resize(ref a, start+extendM);
+      }
+      while(j < start+M)
       {
         r[j] = cr;
         v[j] = cv;
@@ -45,7 +58,7 @@ namespace HopperGuidance
       }
       // Continue with same position and velocity and acceleration
       // to equal gravity
-      while(j < extendM)
+      while(j < start+extendM)
       {
         r[j] = cr;
         v[j] = cv;

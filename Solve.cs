@@ -7,6 +7,7 @@
 
 using System;
 using System.IO;
+using System.Collections.Generic;
 using KSPAssets;
 
 
@@ -154,7 +155,7 @@ namespace HopperGuidance
 
     // It is expected that g is position and acts in the direction Y downwards
     // returns fuel used
-    public double GFold(double[] r0, double[] v0, double[] rf, double[] vf, double T,
+    public double GFold(double[] r0, double[] v0, double[] rf, bool rfset, double[] vf, bool vfset, double T,
                         out double[,] a_thrusts, out int a_retval)
     {
       a_thrusts = null;
@@ -231,11 +232,16 @@ namespace HopperGuidance
       // 1 constraint on final Y vel.
       // 1 constraint for each Ty[i]>0
 
-      int constraints = 3 + 3 + 6*N;
+      int constraints = 6*N;
+      if (rfset)
+         constraints += 3;
+      if (vfset)
+         constraints += 3;
 
       // for minDescentAngle, N points for 4 planes to make square 'cones'
 #if (MINDESCENTANGLE)
-      constraints += 4*numchecks;
+      if (minDescentAngle >= 0)
+        constraints += 4*numchecks;
 #endif
 
 #if (MAXVELOCITY)
@@ -297,34 +303,47 @@ namespace HopperGuidance
         double [] w = BasisWeights(t,T,N); // Vector for all N weights at time, t
         for(int i = 0 ; i < N ; i++)
         {
+          int tk = k;
           // constrain final r=[0,0,0]
-          c[k+0,i*3+0] += tr*w[i]*dt + 0.5*w[i]*dt*dt;
-          c[k+1,i*3+1] += tr*w[i]*dt + 0.5*w[i]*dt*dt;
-          c[k+2,i*3+2] += tr*w[i]*dt + 0.5*w[i]*dt*dt;
-          // constrain final v=[0,0,0]
-          c[k+3,i*3+0] += w[i]*dt;
-          c[k+4,i*3+1] += w[i]*dt;
-          c[k+5,i*3+2] += w[i]*dt;
+          if (rfset) // specified?
+          {
+            c[tk+0,i*3+0] += tr*w[i]*dt + 0.5*w[i]*dt*dt;
+            c[tk+1,i*3+1] += tr*w[i]*dt + 0.5*w[i]*dt*dt;
+            c[tk+2,i*3+2] += tr*w[i]*dt + 0.5*w[i]*dt*dt;
+            tk+=3;
+          }
+          if (vfset) // specified?
+          {
+            // constrain final v=[0,0,0]
+            c[tk+0,i*3+0] += w[i]*dt;
+            c[tk+1,i*3+1] += w[i]*dt;
+            c[tk+2,i*3+2] += w[i]*dt;
+            tk+=3;
+          }
         }
       }
-      for( int i = 0 ; i < N ; i++ )
+      if (rfset) // specified?
       {
         // final r function sums to this
         c[k+0,rhs] = rf[0] - (r0[0] + v0[0]*T); // X constant
         c[k+1,rhs] = rf[1] - (r0[1] + v0[1]*T - 0.5*T*T*g); // Y constant
         c[k+2,rhs] = rf[2] - (r0[2] + v0[2]*T); // Z constant
-        // final v function sums to this
-        c[k+3,rhs] = vf[0] - v0[0];
-        c[k+4,rhs] = vf[1] - (v0[1] - T*g);
-        c[k+5,rhs] = vf[2] - v0[2];
+        k += 3;
       }
-      k+=6;
+      if (vfset) // specified?
+      {
+        // final v function sums to this
+        c[k+0,rhs] = vf[0] - v0[0];
+        c[k+1,rhs] = vf[1] - (v0[1] - T*g);
+        c[k+2,rhs] = vf[2] - v0[2];
+        k += 3;
+      }
 
 #if (MINDESCENTANGLE)
       // Constrain N intermediate positions to be within minimumDescentAngle
       tX = checkGapFirst;
       bool fromStart = true;
-      bool done = false;
+      bool done = (minDescentAngle < 0); // Switch off min descent angle if < 0
       while(!done)
       {
         // No check at t=T
@@ -546,11 +565,11 @@ namespace HopperGuidance
 
    static double[] convToDouble3(Vector3d v)
    {
-       return new double[] { v.x, v.y, v.z };
+     return new double[] { v.x, v.y, v.z };
    }
 
    // If retval>0 than success. If retval<0 then various kind of failure. See https://www.alglib.net/translator/man/manual.csharp.html#minqpreportclass
-   public double GFold(Vector3d a_r0, Vector3d a_v0, Vector3d a_rf, Vector3d a_vf, double a_T,
+   public double GFold(Vector3d a_r0, Vector3d a_v0, Vector3d a_rf, bool refset, Vector3d a_vf, bool vfset, double a_T,
                        out Vector3d [] a_thrusts, out int a_retval)
    {
       T = a_T;
@@ -559,7 +578,7 @@ namespace HopperGuidance
       double [] _rf = convToDouble3(a_rf);
       double [] _vf = convToDouble3(a_vf);
       double [,] _thrusts = new double[N,3];
-      double fuel = GFold(_r0, _v0, _rf, _vf, T, out _thrusts, out a_retval);
+      double fuel = GFold(_r0, _v0, _rf, refset, _vf, vfset, T, out _thrusts, out a_retval);
       a_thrusts = null;
       if (retval > 0)
       {
@@ -575,7 +594,8 @@ namespace HopperGuidance
    }
 
 
-    public double GoldenSearchGFold(Vector3d a_r0, Vector3d a_v0, Vector3d a_rf, Vector3d a_vf,
+    public double GoldenSearchGFold(Vector3d a_r0, Vector3d a_v0, Vector3d a_rf, bool rfset,
+                                    Vector3d a_vf, bool vfset,
                                     out Vector3d [] o_thrusts, out double o_fuel, out int o_retval)
     {
       // Store best solution values
@@ -615,8 +635,8 @@ namespace HopperGuidance
       {
         last_c = c;
         last_d = d;
-        fc = GFold(a_r0,a_v0,a_rf,a_vf,c,out thrustsc,out retvalc);
-        fd = GFold(a_r0,a_v0,a_rf,a_vf,d,out thrustsd,out retvald);
+        fc = GFold(a_r0,a_v0,a_rf,rfset,a_vf,vfset,c,out thrustsc,out retvalc);
+        fd = GFold(a_r0,a_v0,a_rf,rfset,a_vf,vfset,d,out thrustsd,out retvald);
         if (fc < fd)
             {b = d;}
         else
@@ -628,8 +648,12 @@ namespace HopperGuidance
       }
 
       double bestT = 0.5*(a+b);
-      o_fuel = GFold(a_r0,a_v0,a_rf,a_vf,bestT,out o_thrusts,out o_retval);
+      o_fuel = GFold(a_r0,a_v0,a_rf,rfset,a_vf,vfset,bestT,out o_thrusts,out o_retval);
       retval = o_retval;
+      r0 = a_r0;
+      v0 = a_v0;
+      rf = a_rf;
+      vf = a_vf;
       if ((o_retval<1) || (o_retval>5))
       {
         System.Console.Error.WriteLine("Fallback "+last_c+" "+last_d+" "+fc+","+fd+","+retvalc+","+retvald);
@@ -639,10 +663,6 @@ namespace HopperGuidance
           o_fuel = fc;
           o_thrusts = thrustsc;
           o_retval = retvalc;
-          r0 = a_r0;
-          v0 = a_v0;
-          rf = a_rf;
-          vf = a_vf;
           return last_c;
         }
         if ((fd < fc) && ((retvald>=1) && (retvald<=5)))
@@ -650,20 +670,11 @@ namespace HopperGuidance
           o_fuel = fd;
           o_thrusts = thrustsd;
           o_retval = retvald;
-          r0 = a_r0;
-          v0 = a_v0;
-          rf = a_rf;
-          vf = a_vf;
           return last_d;
         }
         System.Console.Error.WriteLine("FAILED AT T={0}",0.5*(a+b));
         return bestT;
       }
-      r0 = a_r0;
-      v0 = a_v0;
-      rf = a_rf;
-      vf = a_vf;
-      
       return bestT;
     }
 
@@ -674,6 +685,10 @@ namespace HopperGuidance
       Vector3d v0 = Vector3d.zero;
       Vector3d rf = Vector3d.zero;
       Vector3d vf = Vector3d.zero;
+      // Intermediate positions and velocities
+      // Lists must be same length but can contain nulls (in future)
+      List<Vector3d> ir = new List<Vector3d>();
+      List<Vector3d> iv = new List<Vector3d>();
       Vector3d c;
       double d;
       for(int i=0;i<args.Length;i++)
@@ -694,6 +709,10 @@ namespace HopperGuidance
             rf = c;
           else if (k=="vf")
             vf = c;
+          else if (k=="ir")
+            ir.Add(c);
+          else if (k=="iv")
+            iv.Add(c);
         } else {
           d = Convert.ToDouble(v);
           System.Console.Error.WriteLine(k+"="+d);
@@ -741,31 +760,52 @@ namespace HopperGuidance
           }
         }
       }
-      // Now run Solver
-      double fuel;
-      int retval;
-      Vector3d [] thrusts;
-      double bestT = solver.GoldenSearchGFold(r0,v0,rf,vf,out thrusts,out fuel,out retval);
-
-      System.Console.Error.WriteLine(solver.DumpString());
-      System.Console.Error.WriteLine(bestT+" "+thrusts.Length+" "+retval);
-      if ((retval>=1) && (retval<=5))
+      // Check number of intermediates is the same
+      if (ir.Count != iv.Count)
       {
-        double final_r_err = 0;
-        Trajectory traj = new Trajectory();
-        Vector3d vg = new Vector3d(0,-solver.g,0);
-        traj.Simulate(bestT, thrusts, r0, v0, vg, solver.dt, 0);
-        traj.CorrectFinal(Vector3d.zero,Vector3d.zero);
-        traj.Write(null);
-        final_r_err = (traj.r[traj.r.Length-1] - rf).magnitude;
+        System.Console.Error.WriteLine("Numbers of intermediates: ir and iv not equal");
+        return(1);
       }
+
+      double a_dt = 0;
+      Trajectory traj = new Trajectory();
+      Vector3d cr = r0;
+      Vector3d cv = v0;
+      ir.Add(rf);
+      iv.Add(vf);
+      // Loop over intermediates computing the trajectory in parts to the next intermediate point
+      for(int i=0; i<ir.Count; i++)
+      {
+        // Now run Solver
+        double fuel;
+        int retval;
+        Vector3d [] thrusts;
+        double bestT = solver.GoldenSearchGFold(cr,cv,ir[i],true,iv[i],true,out thrusts,out fuel,out retval);
+
+        System.Console.Error.WriteLine(solver.DumpString());
+        System.Console.Error.WriteLine(bestT+" "+thrusts.Length+" "+retval);
+        if ((retval>=1) && (retval<=5))
+        {
+          Vector3d vg = new Vector3d(0,-solver.g,0);
+          // Extends trajectory
+          if (i==0)
+            a_dt = solver.dt;
+          traj.Simulate(bestT, thrusts, cr, cv, vg, a_dt, 0);
+          //traj.CorrectFinal(ir[i],iv[i]);
+          cr = traj.r[traj.Length()-1];
+          cv = traj.v[traj.Length()-1];
+        }
+        else
+          return(1);
+      }
+      traj.Write(null);
       return(0);
     }
 
     static int Main(string[] args)
     {
       if (args.Length == 0) {
-        System.Console.Error.WriteLine("usage: Solve.exe k=v ... - set of key=value pairs from r0,v0,rf,vf,Tmin,Tmax,amin,amax,g,minDescentAngle,tol,vmax which also have defaults");
+        System.Console.Error.WriteLine("usage: Solve.exe k=v ... - set of key=value pairs from r0,v0,rf,vf,Tmin,Tmax,amin,amax,g,minDescentAngle,tol,vmax,ir,iv which also have defaults (ir,iv are intermediates which be specified multiple times)");
         return(1);
       } else {
         return RunTest(args);
