@@ -6,3 +6,12 @@
 - Don't leave targets lying around
 - Add License.txt and Changelog.txt to installed mod
 - Better solution for intermediate targets (i.e. hopHeight)
+
+Handling additional targets
+- select like pickTarget
+- Need to be able to cancel target
+- Need to be able to set speed? (not for first version - might not have position even)
+- Setting order of targets is tricky. Specify them in order
+- Click on target to select then click elsewhere to move
+- Need to be able to adjust height of target when ground position specified
+- Compute trajectory without flying it? Nice to have. Perhaps show track will mean trajectory is automatically recomputed and then shown
