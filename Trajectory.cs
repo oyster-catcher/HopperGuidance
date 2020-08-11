@@ -117,14 +117,16 @@ namespace HopperGuidance
     // Correct final position in trajectory to cover up numeric errors
 
     // Correct final position in trajectory to cover up numeric errors
-    public void CorrectFinal(Vector3d rf, Vector3d vf)
+    public void CorrectFinal(Vector3d rf, Vector3d vf, bool correct_r, bool correct_v)
     {
       Vector3d r_err = r[Length()-1] - rf;
       Vector3d v_err = v[Length()-1] - vf;
       for( int i = 0 ; i < Length() ; i++ )
       {
-        r[i] = r[i] - r_err*((double)i/Length());
-        v[i] = v[i] - v_err*((double)i/Length());
+        if (correct_r)
+          r[i] = r[i] - r_err*((double)i/Length());
+        if (correct_v)
+          v[i] = v[i] - v_err*((double)i/Length());
       }
     }
 

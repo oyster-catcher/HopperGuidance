@@ -19,6 +19,18 @@ namespace HopperGuidance
       Failed
     }
 
+    public class Target
+    {
+      public Target(float a_lat,float a_lon,float a_alt)
+      {
+        lat = a_lat;
+        lon = a_lon;
+        alt = a_alt;
+      }
+
+      public float lat,lon,alt;
+    }
+
     public class HopperGuidance : PartModule
     {
         // Constants
@@ -28,12 +40,12 @@ namespace HopperGuidance
         static Color idlecol = new Color(1,0.2f,0.2f,0.9f); // right red (idling as off attitude target)
         static Color aligncol = new Color(0,0.1f,1.0f,0.3f); // blue
 
-        GameObject _tgt_obj = null; // new GameObject("Target");
+        List<GameObject> _tgt_objs = new List<GameObject>(); // new GameObject("Target");
         GameObject _track_obj = null; // new GameObject("Track");
         GameObject _align_obj = null; // new GameObject("Track");
         GameObject _steer_obj = null;
-        LineRenderer _align_line = null;
-        LineRenderer _steer_line = null;
+        LineRenderer _align_line = null; // so it can be updated
+        LineRenderer _steer_line = null; // so it can be updated
         LinkedList<GameObject> thrusts = new LinkedList<GameObject>();
         PID3d _pid3d = new PID3d();
         bool checkingLanded = false; // only check once in flight to avoid failure to start when already on ground
@@ -55,7 +67,6 @@ namespace HopperGuidance
         //double touchDownSpeed = 1.4f;
         double touchDownSpeed = 0;
         bool setShowTrack = true;
-        float lastTgtLatitude, lastTgtLongitude, lastTgtAltitude;
         bool pickingPositionTarget = false;
         string _vesselLogFilename = "vessel.dat";
         string _tgtLogFilename = "target.dat";
@@ -66,20 +77,19 @@ namespace HopperGuidance
         float tgtSize = 10;
         float setTgtSize;
 
-        [UI_FloatRange(minValue = -90.0f, maxValue = 90.0f, stepIncrement = 0.0001f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = true, guiUnits="°")]
-        float tgtLatitude = -0.0968071692165f; // H-Pad
-        float setTgtLatitude;
+        List<Target> _tgts = new List<Target>();
 
-        [UI_FloatRange(minValue = -180.0f, maxValue = 180.0f, stepIncrement = 0.0001f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Longitude", guiFormat = "F7", isPersistant = true, guiUnits = "°")]
-        float tgtLongitude = -74.6172808614f; // H-Pad
-        float setTgtLongitude;
+        //[UI_FloatRange(minValue = -90.0f, maxValue = 90.0f, stepIncrement = 0.0001f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = true, guiUnits="°")]
+        //float setTgtLatitude;
 
-        [UI_FloatRange(minValue = 0.1f, maxValue = 10000.0f, stepIncrement = 0.001f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Altitude", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
-        float tgtAltitude = 176; // H-Pad
-        float setTgtAltitude;
+        //[UI_FloatRange(minValue = -180.0f, maxValue = 180.0f, stepIncrement = 0.0001f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Longitude", guiFormat = "F7", isPersistant = true, guiUnits = "°")]
+        //float setTgtLongitude;
+
+        //[UI_FloatRange(minValue = 0.1f, maxValue = 10000.0f, stepIncrement = 0.001f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Altitude", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
+        //float setTgtAltitude;
 
         [UI_FloatRange(minValue = -1, maxValue = 90.0f, stepIncrement = 1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = true, guiUnits = "°")]
@@ -150,13 +160,10 @@ namespace HopperGuidance
           triangles[ti++] = vi+2;
         }
 
-        public void DrawTarget(Vector3d pos, Transform transform, Color color, double size)
+        public void DrawTarget(Target tgt, Transform transform, Color color, double size)
         {
           double[] r = new double[]{size*0.5,size*0.55,size*0.95,size};
-          if (_tgt_obj != null)
-          {
-            Destroy(_tgt_obj);
-          }
+          Vector3d pos = new Vector3d(0,0,0);
           pos = transform.TransformPoint(pos); // convert to World Pos
 
           Vector3d vx = new Vector3d(1,0,0);
@@ -167,9 +174,10 @@ namespace HopperGuidance
           vy = transform.TransformVector(vy);
           vz = transform.TransformVector(vz);
 
-          _tgt_obj = new GameObject("Target");
-          MeshFilter meshf = _tgt_obj.AddComponent<MeshFilter>();
-          MeshRenderer meshr = _tgt_obj.AddComponent<MeshRenderer>();
+          GameObject o = new GameObject();
+          _tgt_objs.Add(o);
+          MeshFilter meshf = o.AddComponent<MeshFilter>();
+          MeshRenderer meshr = o.AddComponent<MeshRenderer>();
           meshr.transform.parent = transform;
           meshr.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
           meshr.material.color = color;
@@ -224,6 +232,14 @@ namespace HopperGuidance
           mesh.triangles = triangles;
           mesh.RecalculateNormals();
           meshf.mesh = mesh;
+        }
+
+        public void DrawTargets(List<Target> tgts, Transform transform, Color color, double size)
+        {
+          foreach (GameObject obj in _tgt_objs)
+            Destroy(obj);
+          foreach (Target tgt in tgts)
+            DrawTarget(tgt,transform,color,size);
         }
 
         public void DrawTrack(Trajectory traj, Transform transform, Color color, bool pretransform=true, float amult=1)
@@ -346,13 +362,13 @@ namespace HopperGuidance
           DisableLand();
         }
 
-        public void SetUpTransform(float lat, float lon, float alt)
+        public void SetUpTransform(Target final)
         {
           // Set up transform so Y is up and (0,0,0) is target position
           CelestialBody body = vessel.mainBody;
-          Vector3d origin = body.GetWorldSurfacePosition(lat, lon, alt);
-          Vector3d vEast = body.GetWorldSurfacePosition(lat, lon-0.1, alt) - origin;
-          Vector3d vUp = body.GetWorldSurfacePosition(lat, lon, alt+1) - origin;
+          Vector3d origin = body.GetWorldSurfacePosition(final.lat, final.lon, final.alt);
+          Vector3d vEast = body.GetWorldSurfacePosition(final.lat, final.lon-0.1, final.alt) - origin;
+          Vector3d vUp = body.GetWorldSurfacePosition(final.lat, final.lon, final.alt+1) - origin;
           // Convert to body co-ordinates
           origin = body.transform.InverseTransformPoint(origin);
           vEast = body.transform.InverseTransformVector(vEast);
@@ -483,7 +499,13 @@ namespace HopperGuidance
               Vector3d [] world_thrusts = new Vector3d[local_thrusts.Length];
               for(int j=0; j<local_thrusts.Length; j++)
                 world_thrusts[j] = transform.TransformVector(local_thrusts[j]);
+
               world_traj.Simulate(bestT, world_thrusts, world_r, world_v, world_g, dt, extendTime);
+
+              // Correct final positions
+              local_traj.CorrectFinal(local_tgt_r[i],local_tgt_v[i],use_tgt_r[i],use_tgt_v[i]);
+              world_traj.CorrectFinal(transform.TransformPoint(local_tgt_r[i]),transform.TransformPoint(local_tgt_v[i]),use_tgt_r[i],use_tgt_v[i]);
+
               world_r = world_traj.r[world_traj.r.Length-1];
               world_v = world_traj.v[world_traj.v.Length-1];
               o_fuel += fuel;
@@ -559,7 +581,7 @@ namespace HopperGuidance
             // Enable autopilot
             _pid3d.Init(corrFactor,ki1,0,accGain,ki2,0,maxV,(float)amax,yMult);
             // TODO - Testing out using in solution co-ordinates
-            DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
+            DrawTargets(_tgts,_transform,targetcol,tgtSize);
             vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
             vessel.OnFlyByWire += new FlightInputCallback(Fly);
             // Write solution
@@ -593,7 +615,8 @@ namespace HopperGuidance
         {
           autoMode = AutoMode.Off;
           if (_track_obj != null) {Destroy(_track_obj); _track_obj=null;}
-          if (_tgt_obj   != null) {Destroy(_tgt_obj);     _tgt_obj=null;}
+          foreach (GameObject obj in _tgt_objs)
+            Destroy(obj);
           if (_align_obj != null) {Destroy(_align_obj); _align_obj=null;}
           if (_steer_obj != null) {Destroy(_steer_obj); _steer_obj=null;}
           LinkedListNode<GameObject> node = thrusts.First;
@@ -622,15 +645,20 @@ namespace HopperGuidance
           DisableLand();
         }
 
+        [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Clear targets", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
+        public void ClearTargets()
+        {
+          _tgts.Clear();
+          DrawTargets(_tgts,_transform,targetcol,tgtSize);
+          DisableLand();
+        }
+
         [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Pick target", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
         public void PickTarget()
         {
           pickingPositionTarget = true;
           string message = "Click to select a target";
           ScreenMessages.PostScreenMessage(message, 3.0f, ScreenMessageStyle.UPPER_CENTER);
-          lastTgtLongitude = tgtLongitude;
-          lastTgtLatitude = tgtLatitude;
-          lastTgtAltitude = tgtAltitude;
         }
 
         [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Land at target", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
@@ -660,7 +688,7 @@ namespace HopperGuidance
             vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
             vessel.OnFlyByWire += new FlightInputCallback(Fly);
             Events["ToggleLandHere"].guiName = "Cancel land here";
-            SetUpTransform((float)vessel.latitude,(float)vessel.longitude,(float)vessel.mainBody.TerrainAltitude(vessel.latitude,vessel.longitude));
+            //SetUpTransform(vessel.latitude,(float)vessel.longitude,(float)vessel.mainBody.TerrainAltitude(vessel.latitude,vessel.longitude));
             _startTime = Time.time;
             autoMode = AutoMode.LandHere;
           }
@@ -842,25 +870,12 @@ namespace HopperGuidance
           // - Redraw target
           // - Draw/delete track
           bool recomputeTrajectory = false;
-          bool redrawTarget = false;
+          bool redrawTargets = false;
           bool resetPID = false;
-          if ((tgtLatitude != setTgtLatitude) || (tgtLongitude != setTgtLongitude)) 
-          {
-            redrawTarget = true;
-            recomputeTrajectory = true;
-            setTgtLatitude = tgtLatitude;
-            setTgtLongitude = tgtLongitude;
-          }
           if (tgtSize != setTgtSize)
           {
             setTgtSize = tgtSize;
-            redrawTarget = true;
-          }
-          if ((tgtAltitude != setTgtAltitude) || (tgtSize != setTgtSize))
-          {
-            setTgtAltitude = tgtAltitude;
-            redrawTarget = true;
-            recomputeTrajectory = true;
+            redrawTargets = true;
           }
           if ((corrFactor != setCorrFactor) || (accGain != setAccGain))
           {
@@ -891,10 +906,7 @@ namespace HopperGuidance
             if (Input.GetKeyDown(KeyCode.Escape))
             {
               // Previous position
-              tgtLatitude = lastTgtLatitude;
-              tgtLongitude = lastTgtLongitude;
-              tgtAltitude = lastTgtAltitude;
-              redrawTarget = true;
+              redrawTargets = true;
               pickingPositionTarget = false;
             }
             RaycastHit hit;
@@ -903,10 +915,10 @@ namespace HopperGuidance
               // Picked
               double lat, lon, alt;
               vessel.mainBody.GetLatLonAlt(hit.point, out lat, out lon, out alt);
-              tgtLatitude = (float)lat;
-              tgtLongitude = (float)lon;
-              tgtAltitude = (float)(alt+0.5);
-              redrawTarget = true;
+              Target tgt = new Target((float)lat,(float)lon,(float)alt);
+              _tgts.Clear();
+              _tgts.Add(tgt);
+              redrawTargets = true;
               // If clicked stop picking
               if (Input.GetMouseButtonDown(0))
               {
@@ -916,14 +928,12 @@ namespace HopperGuidance
             }
           }
           // Activate the required updates
-          if (redrawTarget)
+          if (redrawTargets)
           {
-            setTgtLatitude = tgtLatitude;
-            setTgtLongitude = tgtLongitude;
-            setTgtAltitude = tgtAltitude;
             setTgtSize = tgtSize;
-            SetUpTransform(tgtLatitude, tgtLongitude, tgtAltitude);
-            DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
+            if (_tgts.Count > 0)
+              SetUpTransform(_tgts[_tgts.Count-1]);
+            DrawTargets(_tgts,_transform,targetcol,tgtSize);
           }
           if ((recomputeTrajectory)&&((autoMode == AutoMode.LandAtTarget)||(autoMode == AutoMode.Failed)))
             EnableLandAtTarget();
@@ -942,18 +952,14 @@ namespace HopperGuidance
         [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Set target here", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
         public void SetTargetHere()
         {
-            // Find vessel co-ordinates
-            tgtLatitude = (float)vessel.latitude;
-            tgtLongitude = (float)vessel.longitude;
             // Note: compensate for height of vessel by getting bottom Y of vessel
             lowestY = FindLowestPointOnVessel();
             Vector3 up = FlightGlobals.getUpAxis(vessel.GetWorldPos3D());
-            tgtAltitude = (float)(FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D() + up*(float)lowestY));
-            SetUpTransform(tgtLatitude, tgtLongitude, tgtAltitude);
-            DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
-            setTgtLatitude = tgtLatitude;
-            setTgtLongitude = tgtLongitude;
-            setTgtAltitude = tgtAltitude;
+            float alt = (float)(FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D() + up*(float)lowestY));
+            Target final = new Target((float)vessel.latitude,(float)vessel.longitude,alt);
+            _tgts.Add(final);
+            SetUpTransform(final);
+            DrawTargets(_tgts,_transform,targetcol,tgtSize);
         }
     }
 }
