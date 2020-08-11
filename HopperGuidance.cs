@@ -446,8 +446,9 @@ namespace HopperGuidance
         public double ComputeTrajectory(ref Trajectory local_traj, Transform transform,
                                         ref Trajectory world_traj,
                                         Vector3d local_r, Vector3d local_v,
-                                        List<Vector3d> local_int_r, List<Vector3d> local_int_v,
-                                        Vector3d local_rf, Vector3d local_vf, float g,
+                                        List<Vector3d> local_tgt_r, List<Vector3d> local_tgt_v,
+                                        List<bool> use_tgt_r, List<bool> use_tgt_v,
+                                        float g,
                                         out double o_fuel, out int retval)
         {
           double dt = 0;
@@ -458,18 +459,16 @@ namespace HopperGuidance
           o_fuel = 0;
           retval = -1;
 
-          local_int_r.Add(local_rf);
-          local_int_v.Add(local_vf);
           solver.minDescentAngle = -1;
-          for(int i=0 ; i < local_int_r.Count ; i++ )
+          for(int i=0 ; i < local_tgt_r.Count ; i++ )
           {
             // Compute trajectory to landing spot
             double fuel;
             Vector3d [] local_thrusts;
-            if (i==local_int_r.Count-1) // minDescentAngle only for final descent
+            if (i==local_tgt_r.Count-1) // minDescentAngle only for final descent
               solver.minDescentAngle = minDescentAngle;
             // Currently uses intermediate positions, ir[], but ignores iv[
-            double bestT = solver.GoldenSearchGFold(local_r, local_v, local_int_r[i], true, local_int_v[i], (i!=0), out local_thrusts, out fuel, out retval);
+            double bestT = solver.GoldenSearchGFold(local_r, local_v, local_tgt_r[i], use_tgt_r[i], local_tgt_v[i], use_tgt_v[i], out local_thrusts, out fuel, out retval);
             Debug.Log(solver.DumpString());
             if ((retval>=1) && (retval<=5))
             {
@@ -538,13 +537,20 @@ namespace HopperGuidance
 
           // Compute trajectory to landing spot
           double fuel;
-          List<Vector3d> ir = new List<Vector3d>();
+          List<Vector3d> tgt_r = new List<Vector3d>();
+          List<Vector3d> tgt_v = new List<Vector3d>();
+          List<bool> use_r = new List<bool>();
+          List<bool> use_v = new List<bool>();
           Vector3d tr0 = _transform.InverseTransformPoint(r0);
           Vector3d tv0 = _transform.InverseTransformVector(v0);
-          List<Vector3d> iv = new List<Vector3d>();
           _traj = new Trajectory();
           Trajectory traj2 = new Trajectory();
-          ComputeTrajectory(ref _traj, _transform, ref traj2, tr0, tv0, ir, iv, rf, vf, (float)g.magnitude, out fuel, out retval);
+          // Add targets for final
+          tgt_r.Add(rf);
+          use_r.Add(true);
+          tgt_v.Add(vf);
+          use_v.Add(true);
+          ComputeTrajectory(ref _traj, _transform, ref traj2, tr0, tv0, tgt_r, tgt_v, use_r, use_v, (float)g.magnitude, out fuel, out retval);
           Debug.Log(solver.DumpString());
           if ((retval>=1) && (retval<=5))
           {
