@@ -29,6 +29,7 @@ namespace HopperGuidance
         static Color aligncol = new Color(0,0.1f,1.0f,0.3f); // blue
 
         GameObject _tgt_obj = null; // new GameObject("Target");
+        GameObject _itgt_obj = null; // hop Target
         GameObject _track_obj = null; // new GameObject("Track");
         GameObject _align_obj = null; // new GameObject("Track");
         GameObject _steer_obj = null;
@@ -40,6 +41,7 @@ namespace HopperGuidance
         AutoMode autoMode = AutoMode.Off;
         float errMargin = 0.1f; // margin of error in solution to allow for headroom in amax (use double for maxThrustAngle)
         float predictTime = 0.2f;
+        float finalDescentHeight = 0; // Descent straight down below this height
         double lowestY = 0; // Y position of bottom of craft relative to centre
         float _minThrust, _maxThrust;
         Solve solver; // Stores solution inputs, output and trajectory
@@ -80,10 +82,11 @@ namespace HopperGuidance
         float tgtAltitude = 176; // H-Pad
         float setTgtAltitude;
 
-        [UI_FloatRange(minValue = 0.1f, maxValue = 10000.0f, stepIncrement = 0.001f)]
+        [UI_FloatRange(minValue = 0, maxValue = 10000.0f, stepIncrement = 0.001f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Hop height", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
         float hopHeight = 0;
         float setHopHeight;
+        Vector3d tgtHop; // only reset when hop height changed or target reset (ground position)
 
         [UI_FloatRange(minValue = -1, maxValue = 90.0f, stepIncrement = 1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = true, guiUnits = "°")]
@@ -152,6 +155,41 @@ namespace HopperGuidance
           triangles[ti++] = vi;
           triangles[ti++] = vi+3;
           triangles[ti++] = vi+2;
+        }
+
+        public void DrawIntermediateTarget(Vector3d gpos, Transform transform, Color color, double height, double size)
+        {
+          if (_itgt_obj != null)
+          {
+            Destroy(_itgt_obj);
+          }
+          Vector3d tpos = transform.TransformPoint(gpos + new Vector3d(0,height,0)); // convert to World Pos (top)
+          gpos = transform.TransformPoint(gpos); // convert to World Pos (ground)
+
+          Vector3d vx = new Vector3d(1,0,0);
+          Vector3d vy = new Vector3d(0,1,0);
+          Vector3d vz = new Vector3d(0,0,1);
+          vx = transform.TransformVector(vx);
+          vy = transform.TransformVector(vy);
+          vz = transform.TransformVector(vz);
+
+          _itgt_obj = new GameObject("IntermediateTarget");
+          LineRenderer line = _itgt_obj.AddComponent<LineRenderer>();
+          line.transform.parent = transform;
+          line.useWorldSpace = false;
+          line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
+          line.material.color = color;
+          line.startWidth = 0.4f;
+          line.endWidth = 0.4f;
+          line.positionCount = 8;
+          line.SetPosition(0,gpos);
+          line.SetPosition(1,tpos + vy);
+          line.SetPosition(2,tpos);
+          line.SetPosition(3,tpos - vx);
+          line.SetPosition(4,tpos + vx);
+          line.SetPosition(5,tpos);
+          line.SetPosition(6,tpos - vz);
+          line.SetPosition(7,tpos + vz);
         }
 
         public void DrawTarget(Vector3d pos, Transform transform, Color color, double size)
@@ -548,7 +586,7 @@ namespace HopperGuidance
           // Add intermediate at 150m altitude (in local space)
           if (hopHeight > 0)
           {
-            ir.Add(0.5*(tr0+rf) + new Vector3d(0,hopHeight,0)); // hopHeight is above mid-point
+            ir.Add(tgtHop + new Vector3d(0,hopHeight));
             iv.Add(Vector3d.zero); // ignored
           }
           _traj = new Trajectory();
@@ -563,6 +601,7 @@ namespace HopperGuidance
             _pid3d.Init(corrFactor,ki1,0,accGain,ki2,0,maxV,(float)amax,yMult);
             // TODO - Testing out using in solution co-ordinates
             DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
+            DrawIntermediateTarget(tgtHop,_transform,targetcol,hopHeight,tgtSize);
             vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
             vessel.OnFlyByWire += new FlightInputCallback(Fly);
             // Write solution
@@ -597,6 +636,7 @@ namespace HopperGuidance
           autoMode = AutoMode.Off;
           if (_track_obj != null) {Destroy(_track_obj); _track_obj=null;}
           if (_tgt_obj   != null) {Destroy(_tgt_obj);     _tgt_obj=null;}
+          if (_itgt_obj  != null) {Destroy(_itgt_obj);   _itgt_obj=null;}
           if (_align_obj != null) {Destroy(_align_obj); _align_obj=null;}
           if (_steer_obj != null) {Destroy(_steer_obj); _steer_obj=null;}
           LinkedListNode<GameObject> node = thrusts.First;
@@ -824,7 +864,8 @@ namespace HopperGuidance
           float g = (float)FlightGlobals.getGeeForceAtPosition(r).magnitude;
 
           Vector3d dr,dv,da;
-          if (autoMode == AutoMode.LandHere)
+          // Switch to land here when close to ground
+          if ((autoMode == AutoMode.LandHere) && (tr.y < finalDescentHeight - lowestY))
             DesiredPosVelAccForLandHere(tr,tv,out dr,out dv,out da,g);
           else
             DesiredPosVelAccForLandAtTarget(tr,tv,out dr,out dv,out da,g);
@@ -846,15 +887,27 @@ namespace HopperGuidance
           bool recomputeTrajectory = false;
           bool redrawTarget = false;
           bool resetPID = false;
-          if ((tgtLatitude != setTgtLatitude) || (tgtLongitude != setTgtLongitude) || (tgtAltitude != setTgtAltitude) || (tgtSize != setTgtSize) || (hopHeight != setHopHeight))
+          bool resetHop = false;
+          if ((tgtLatitude != setTgtLatitude) || (tgtLongitude != setTgtLongitude)) 
           {
             redrawTarget = true;
             recomputeTrajectory = true;
+            resetHop = true;
             setTgtLatitude = tgtLatitude;
             setTgtLongitude = tgtLongitude;
+          }
+          if (tgtSize != setTgtSize)
+          {
+            setTgtSize = tgtSize;
+            redrawTarget = true;
+          }
+          if ((tgtAltitude != setTgtAltitude) || (tgtSize != setTgtSize) || (hopHeight != setHopHeight))
+          {
             setTgtAltitude = tgtAltitude;
             setHopHeight = hopHeight;
-            setTgtSize = tgtSize;
+            redrawTarget = true;
+            recomputeTrajectory = true;
+            resetHop = true;
           }
           if ((corrFactor != setCorrFactor) || (accGain != setAccGain))
           {
@@ -904,8 +957,10 @@ namespace HopperGuidance
               // If clicked stop picking
               if (Input.GetMouseButtonDown(0))
               {
+                // Setup intermediate local positions (i.e. hop)
                 recomputeTrajectory = true;
                 pickingPositionTarget = false;
+                resetHop = true;
               }
             }
           }
@@ -917,7 +972,13 @@ namespace HopperGuidance
             setTgtAltitude = tgtAltitude;
             setTgtSize = tgtSize;
             SetUpTransform(tgtLatitude, tgtLongitude, tgtAltitude);
+            if (resetHop)
+            {
+              Vector3 tr0 = _transform.InverseTransformPoint(vessel.GetWorldPos3D());
+              tgtHop = 0.5f * tr0; // half way to final position (0,0,0)
+            }
             DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
+            DrawIntermediateTarget(tgtHop,_transform,targetcol,hopHeight,tgtSize);
           }
           if ((recomputeTrajectory)&&((autoMode == AutoMode.LandAtTarget)||(autoMode == AutoMode.Failed)))
             EnableLandAtTarget();
@@ -945,9 +1006,14 @@ namespace HopperGuidance
             tgtAltitude = (float)(FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D() + up*(float)lowestY));
             SetUpTransform(tgtLatitude, tgtLongitude, tgtAltitude);
             DrawTarget(Vector3d.zero,_transform,targetcol,tgtSize);
+            DrawIntermediateTarget(tgtHop,_transform,targetcol,hopHeight,tgtSize);
             setTgtLatitude = tgtLatitude;
             setTgtLongitude = tgtLongitude;
             setTgtAltitude = tgtAltitude;
+            // Setup intermediate local positions (i.e. hop)
+            Vector3 tr0 = _transform.InverseTransformPoint(vessel.GetWorldPos3D());
+            tgtHop = tr0;
+            tgtHop.y = tgtHop.y + hopHeight;
         }
     }
 }
