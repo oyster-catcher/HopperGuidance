@@ -466,10 +466,11 @@ namespace HopperGuidance
             // Compute trajectory to landing spot
             double fuel;
             Vector3d [] local_thrusts;
+            if (i==local_int_r.Count-1) // minDescentAngle only for final descent
+              solver.minDescentAngle = minDescentAngle;
             // Currently uses intermediate positions, ir[], but ignores iv[
             double bestT = solver.GoldenSearchGFold(local_r, local_v, local_int_r[i], true, local_int_v[i], (i!=0), out local_thrusts, out fuel, out retval);
             Debug.Log(solver.DumpString());
-            solver.minDescentAngle = minDescentAngle;
             if ((retval>=1) && (retval<=5))
             {
                T += solver.T;
@@ -837,12 +838,10 @@ namespace HopperGuidance
           bool recomputeTrajectory = false;
           bool redrawTarget = false;
           bool resetPID = false;
-          bool resetHop = false;
           if ((tgtLatitude != setTgtLatitude) || (tgtLongitude != setTgtLongitude)) 
           {
             redrawTarget = true;
             recomputeTrajectory = true;
-            resetHop = true;
             setTgtLatitude = tgtLatitude;
             setTgtLongitude = tgtLongitude;
           }
@@ -856,7 +855,6 @@ namespace HopperGuidance
             setTgtAltitude = tgtAltitude;
             redrawTarget = true;
             recomputeTrajectory = true;
-            resetHop = true;
           }
           if ((corrFactor != setCorrFactor) || (accGain != setAccGain))
           {
