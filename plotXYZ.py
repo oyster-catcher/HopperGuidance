@@ -178,6 +178,8 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
   if minDescentAngle:
     fx = datas[0][-1]['x']
     fy = datas[0][-1]['y']
+    fx = 0
+    dy = 0
     s = sin(radians(minDescentAngle))
     c = cos(radians(minDescentAngle))
     d = (xmax-xmin) + (ymax-ymin)
