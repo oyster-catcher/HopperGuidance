@@ -21,14 +21,15 @@ namespace HopperGuidance
 
     public class Target
     {
-      public Target(float a_lat,float a_lon,float a_alt)
+      public Target(float a_lat,float a_lon,float a_alt,float a_height)
       {
         lat = a_lat;
         lon = a_lon;
         alt = a_alt;
+        height = a_height;
       }
 
-      public float lat,lon,alt;
+      public float lat,lon,alt,height;
     }
 
     public class HopperGuidance : PartModule
@@ -40,13 +41,13 @@ namespace HopperGuidance
         static Color idlecol = new Color(1,0.2f,0.2f,0.9f); // right red (idling as off attitude target)
         static Color aligncol = new Color(0,0.1f,1.0f,0.3f); // blue
 
-        List<GameObject> _tgt_objs = new List<GameObject>(); // new GameObject("Target");
-        GameObject _track_obj = null; // new GameObject("Track");
-        GameObject _align_obj = null; // new GameObject("Track");
-        GameObject _steer_obj = null;
-        LineRenderer _align_line = null; // so it can be updated
-        LineRenderer _steer_line = null; // so it can be updated
-        LinkedList<GameObject> thrusts = new LinkedList<GameObject>();
+        static List<GameObject> _tgt_objs = new List<GameObject>(); // new GameObject("Target");
+        static GameObject _track_obj = null; // new GameObject("Track");
+        static GameObject _align_obj = null; // new GameObject("Track");
+        static GameObject _steer_obj = null;
+        static LineRenderer _align_line = null; // so it can be updated
+        static LineRenderer _steer_line = null; // so it can be updated
+        static LinkedList<GameObject> thrusts = new LinkedList<GameObject>();
         PID3d _pid3d = new PID3d();
         bool checkingLanded = false; // only check once in flight to avoid failure to start when already on ground
         AutoMode autoMode = AutoMode.Off;
@@ -90,6 +91,11 @@ namespace HopperGuidance
         //[UI_FloatRange(minValue = 0.1f, maxValue = 10000.0f, stepIncrement = 0.001f)]
         //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Altitude", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
         //float setTgtAltitude;
+
+        [UI_FloatRange(minValue = 0, maxValue = 1000, stepIncrement = 1)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target height", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
+        float tgtHeight;
+        float setTgtHeight;
 
         [UI_FloatRange(minValue = -1, maxValue = 90.0f, stepIncrement = 1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = true, guiUnits = "°")]
@@ -145,8 +151,9 @@ namespace HopperGuidance
         bool _logging = false;
 
         // Quad should be described a,b,c,d in anti-clockwise order when looking at it
-        public void AddQuad(Vector3[] vertices, int vi, int[] triangles, int ti,
-                            Vector3d a, Vector3d b, Vector3d c, Vector3d d)
+        public void AddQuad(Vector3[] vertices, ref int vi, int[] triangles, ref int ti,
+                            Vector3d a, Vector3d b, Vector3d c, Vector3d d,
+                            bool double_sided = false)
         {
           vertices[vi+0] = a;
           vertices[vi+1] = b;
@@ -158,13 +165,24 @@ namespace HopperGuidance
           triangles[ti++] = vi;
           triangles[ti++] = vi+3;
           triangles[ti++] = vi+2;
+          if (double_sided)
+          {
+            triangles[ti++] = vi;
+            triangles[ti++] = vi+1;
+            triangles[ti++] = vi+2;
+            triangles[ti++] = vi;
+            triangles[ti++] = vi+2;
+            triangles[ti++] = vi+3;
+          }
+          vi += 4;
         }
 
-        public void DrawTarget(Target tgt, Transform transform, Color color, double size)
+        // pos is ground position, but draw up to height
+        public void DrawTarget(Vector3d pos, Transform transform, Color color, double size, float height)
         {
           double[] r = new double[]{size*0.5,size*0.55,size*0.95,size};
-          Vector3d pos = new Vector3d(0,0,0);
-          pos = transform.TransformPoint(pos); // convert to World Pos
+          Vector3d gpos = transform.TransformPoint(pos); // convert to World Pos
+          Vector3d tpos = transform.TransformPoint(pos + new Vector3d(0,height,0));
 
           Vector3d vx = new Vector3d(1,0,0);
           Vector3d vy = new Vector3d(0,1,0);
@@ -183,8 +201,8 @@ namespace HopperGuidance
           meshr.material.color = color;
 
           Mesh mesh = new Mesh();
-          Vector3[] vertices = new Vector3[36*4+4+4+4];
-          int[] triangles = new int[(36*2*2-8+2+2+2)*3]; // take away gaps
+          Vector3[] vertices = new Vector3[36*4+4+4+4+8];
+          int[] triangles = new int[(36*2*2-8+2+2+2+4+4)*3]; // take away gaps
           int i,j;
           int v=0,t=0;
           for(j=0;j<4;j++) // four concentric rings
@@ -192,7 +210,7 @@ namespace HopperGuidance
             for(i=0;i<36;i++)
             {
               float a = -(i*10)*Mathf.PI/180.0f;
-              vertices[v++] = pos + vx*Mathf.Sin(a)*r[j] + vz*Mathf.Cos(a)*r[j];
+              vertices[v++] = gpos + vx*Mathf.Sin(a)*r[j] + vz*Mathf.Cos(a)*r[j];
             }
           }
           for(j=0;j<2;j++)
@@ -216,17 +234,22 @@ namespace HopperGuidance
           Vector3 cx = vx*size*0.03;
           Vector3 cz = vz*size*0.03;
           float cs=8;
-          AddQuad(vertices,v,triangles,t,
-                  pos-cx*cs-cz,pos+cx*cs-cz,pos+cx*cs+cz,pos-cx*cs+cz);
-          v+=4; t+=6;
+          AddQuad(vertices,ref v,triangles,ref t,
+                  tpos-cx*cs-cz,tpos+cx*cs-cz,tpos+cx*cs+cz,tpos-cx*cs+cz);
           // One side
-          AddQuad(vertices,v,triangles,t,
-                  pos-cx+cz,pos+cx+cz,pos+cx+cz*cs,pos-cx+cz*cs);
-          v+=4; t+=6;
+          AddQuad(vertices,ref v,triangles,ref t,
+                  tpos-cx+cz,tpos+cx+cz,tpos+cx+cz*cs,tpos-cx+cz*cs);
           // Other size
-          AddQuad(vertices,v,triangles,t,
-                  pos-cx-cz*cs,pos+cx-cz*cs,pos+cx-cz,pos-cx-cz);
-          v+=4; t+=6;
+          AddQuad(vertices,ref v,triangles,ref t,
+                  tpos-cx-cz*cs,tpos+cx-cz*cs,tpos+cx-cz,tpos-cx-cz);
+
+          // Draw quads from cross at actual height to the rings on the ground
+          cx = vx*size*0.01;
+          cz = vz*size*0.01;
+          AddQuad(vertices,ref v,triangles,ref t,
+                  gpos-cx,gpos+cx,tpos+cx,tpos-cx,true);
+          AddQuad(vertices,ref v,triangles,ref t,
+                  gpos-cz,gpos+cz,tpos+cz,tpos-cz,true);
 
           mesh.vertices = vertices;
           mesh.triangles = triangles;
@@ -238,8 +261,13 @@ namespace HopperGuidance
         {
           foreach (GameObject obj in _tgt_objs)
             Destroy(obj);
-          foreach (Target tgt in tgts)
-            DrawTarget(tgt,transform,color,size);
+          _tgt_objs.Clear();
+          foreach (Target t in tgts)
+          {
+            Vector3d pos = vessel.mainBody.GetWorldSurfacePosition(t.lat, t.lon, t.alt);
+            pos = transform.InverseTransformPoint(pos); // convert to local (for orientation)
+            DrawTarget(pos,transform,color,size,t.height);
+          }
         }
 
         public void DrawTrack(Trajectory traj, Transform transform, Color color, bool pretransform=true, float amult=1)
@@ -247,6 +275,7 @@ namespace HopperGuidance
             if (_track_obj != null)
             {
               Destroy(_track_obj); // delete old track
+              _track_obj = null;
               // delete old thrusts
               LinkedListNode<GameObject> node = thrusts.First;
               while(node != null)
@@ -360,6 +389,9 @@ namespace HopperGuidance
         public void OnDestroy()
         {
           DisableLand();
+          // Remove targets as they are not removed on DisableLand()
+          foreach (GameObject obj in _tgt_objs)
+            Destroy(obj);
         }
 
         public void SetUpTransform(Target final)
@@ -457,65 +489,6 @@ namespace HopperGuidance
           }
         }
 
-        // All positions and velocities supplied in local space relative to landing target at (0,0,0)
-        // but the trajectory, world_traj, is also computed using the transform, given in transform
-        public double ComputeTrajectory(ref Trajectory local_traj, Transform transform,
-                                        ref Trajectory world_traj,
-                                        Vector3d local_r, Vector3d local_v,
-                                        List<Vector3d> local_tgt_r, List<Vector3d> local_tgt_v,
-                                        List<bool> use_tgt_r, List<bool> use_tgt_v,
-                                        float g,
-                                        out double o_fuel, out int retval)
-        {
-          double dt = 0;
-          double T = 0;
-          Vector3d world_r = transform.TransformPoint(local_r);
-          Vector3d world_v = transform.TransformVector(local_v);
-          Vector3d world_g = transform.TransformVector(new Vector3d(0,-g,0));
-          o_fuel = 0;
-          retval = -1;
-
-          solver.minDescentAngle = -1;
-          for(int i=0 ; i < local_tgt_r.Count ; i++ )
-          {
-            // Compute trajectory to landing spot
-            double fuel;
-            Vector3d [] local_thrusts;
-            if (i==local_tgt_r.Count-1) // minDescentAngle only for final descent
-              solver.minDescentAngle = minDescentAngle;
-            // Currently uses intermediate positions, ir[], but ignores iv[
-            double bestT = solver.GoldenSearchGFold(local_r, local_v, local_tgt_r[i], use_tgt_r[i], local_tgt_v[i], use_tgt_v[i], out local_thrusts, out fuel, out retval);
-            Debug.Log(solver.DumpString());
-            if ((retval>=1) && (retval<=5))
-            {
-               T += solver.T;
-               if (i==0)
-                 dt = solver.dt; // set from first segment. TODO - might not be best
-              // Simulate local trajectory given thrusts
-              local_traj.Simulate(bestT, local_thrusts, local_r, local_v, new Vector3d(0,-world_g.magnitude,0), dt, extendTime);
-              local_r = local_traj.r[local_traj.r.Length-1];
-              local_v = local_traj.v[local_traj.v.Length-1];
-              // Simulate world trajectory given transformed thrusts
-              Vector3d [] world_thrusts = new Vector3d[local_thrusts.Length];
-              for(int j=0; j<local_thrusts.Length; j++)
-                world_thrusts[j] = transform.TransformVector(local_thrusts[j]);
-
-              world_traj.Simulate(bestT, world_thrusts, world_r, world_v, world_g, dt, extendTime);
-
-              // Correct final positions
-              local_traj.CorrectFinal(local_tgt_r[i],local_tgt_v[i],use_tgt_r[i],use_tgt_v[i]);
-              world_traj.CorrectFinal(transform.TransformPoint(local_tgt_r[i]),transform.TransformPoint(local_tgt_v[i]),use_tgt_r[i],use_tgt_v[i]);
-
-              world_r = world_traj.r[world_traj.r.Length-1];
-              world_v = world_traj.v[world_traj.v.Length-1];
-              o_fuel += fuel;
-            }
-            else
-              return 0;
-          }
-          return T;
-        }
-
         public void EnableLandAtTarget()
         {
           checkingLanded = false; // stop trajectory being cancelled while on ground
@@ -524,7 +497,8 @@ namespace HopperGuidance
           Vector3d r0 = vessel.GetWorldPos3D();
           Vector3d v0 = vessel.GetSrfVelocity();
           Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
-          Vector3d rf = new Vector3d(0,-lowestY -0.5f*touchDownSpeed*extendTime,0);
+          //TODO: Add this back in. An extra target?
+          Vector3d rf = new Vector3d(0,-lowestY,0);
           Vector3d vf = new Vector3d(0,-touchDownSpeed,0);
           ComputeMinMaxThrust(out _minThrust,out _maxThrust); // This might be including RCS (i.e. non main Throttle)
           _startTime = Time.time;
@@ -533,18 +507,18 @@ namespace HopperGuidance
 
           solver = new Solve();
           solver.Tmin = 1;
-          solver.Tmax = 300; // 5 mins
           solver.tol = 0.1;
           solver.vmax = maxV;
           solver.amin = amin*(1+errMargin);
           solver.amax = amax*(1-errMargin);
           solver.Nmin = 2;
-          solver.Nmax = 6;
+          solver.Nmax = 2+(_tgts.Count*2);
           solver.minDurationPerThrust = 2;
           solver.g = g.magnitude;
           solver.minDescentAngle = minDescentAngle;
           solver.maxThrustAngle = maxThrustAngle*(1-2*errMargin);
           solver.maxLandingThrustAngle = maxLandingThrustAngle*(1-2*errMargin);
+          solver.apex = rf; // for minimum descent for final trajectory
 
           int retval;
           // Predict into future since solution makes 0.1-0.3 secs to compute
@@ -559,25 +533,40 @@ namespace HopperGuidance
 
           // Compute trajectory to landing spot
           double fuel;
-          List<Vector3d> tgt_r = new List<Vector3d>();
-          List<Vector3d> tgt_v = new List<Vector3d>();
-          List<bool> use_r = new List<bool>();
-          List<bool> use_v = new List<bool>();
+          List<SolveTarget> targets = new List<SolveTarget>();
           Vector3d tr0 = _transform.InverseTransformPoint(r0);
+          // Guess maximum solution time - TODO: Improve this. Estimate could be quite good
+          //solver.Tmax = Math.Abs(tr0.y/5); // assume average 5 m/s fall
+          solver.Tmax = 60;
+
+          // Create list of solve targets
+          for(int i=0; i<_tgts.Count; i++)
+          {
+            SolveTarget tgt = new SolveTarget();
+            Vector3d pos = vessel.mainBody.GetWorldSurfacePosition(_tgts[i].lat, _tgts[i].lon, _tgts[i].alt + _tgts[i].height);
+            tgt.r = _transform.InverseTransformPoint(pos); // convert to local (for orientation)
+            tgt.type = SolveTargetType.Position;
+            if (i==_tgts.Count-1) // final target
+            {
+              tgt.type = SolveTargetType.Both;
+              tgt.v = vf;
+            }
+            tgt.t = -1;
+            targets.Add(tgt);
+          }
+          //SolveTarget final = new SolveTarget();
+          //final.r = rf;
+          //final.v = vf;
+          //final.type = SolveTargetType.Both;
+          //final.t = -1;
+          //targets.Add(final);
+
           Vector3d tv0 = _transform.InverseTransformVector(v0);
           _traj = new Trajectory();
-          Trajectory traj2 = new Trajectory();
-          // Add targets for final
-          tgt_r.Add(rf);
-          use_r.Add(true);
-          tgt_v.Add(vf);
-          use_v.Add(true);
-          ComputeTrajectory(ref _traj, _transform, ref traj2, tr0, tv0, tgt_r, tgt_v, use_r, use_v, (float)g.magnitude, out fuel, out retval);
+          MainProg.MultiPartSolve(ref solver, ref _traj, tr0, tv0, targets, (float)g.magnitude, out fuel, out retval);
           Debug.Log(solver.DumpString());
-          if ((retval>=1) && (retval<=5))
+          if ((retval>=1) && (retval<=5)) // solved for complete path?
           {
-            // Draw track computed in world space
-            DrawTrack(traj2, _transform, trackcol, false);
             // Enable autopilot
             _pid3d.Init(corrFactor,ki1,0,accGain,ki2,0,maxV,(float)amax,yMult);
             // TODO - Testing out using in solution co-ordinates
@@ -609,14 +598,16 @@ namespace HopperGuidance
             ScreenMessages.PostScreenMessage(msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
             autoMode = AutoMode.Failed;
           }
+          // Draw track computed in world space - even if partially completed
+          DrawTrack(_traj, _transform, trackcol, true);
         }
 
         public void DisableLand()
         {
           autoMode = AutoMode.Off;
           if (_track_obj != null) {Destroy(_track_obj); _track_obj=null;}
-          foreach (GameObject obj in _tgt_objs)
-            Destroy(obj);
+          //foreach (GameObject obj in _tgt_objs)
+          //  Destroy(obj);
           if (_align_obj != null) {Destroy(_align_obj); _align_obj=null;}
           if (_steer_obj != null) {Destroy(_steer_obj); _steer_obj=null;}
           LinkedListNode<GameObject> node = thrusts.First;
@@ -688,7 +679,9 @@ namespace HopperGuidance
             vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
             vessel.OnFlyByWire += new FlightInputCallback(Fly);
             Events["ToggleLandHere"].guiName = "Cancel land here";
-            //SetUpTransform(vessel.latitude,(float)vessel.longitude,(float)vessel.mainBody.TerrainAltitude(vessel.latitude,vessel.longitude));
+            float alt = (float)vessel.mainBody.TerrainAltitude((float)vessel.latitude,(float)vessel.longitude);
+            Target final = new Target((float)vessel.latitude, (float)vessel.longitude, alt, 0);
+            SetUpTransform(final);
             _startTime = Time.time;
             autoMode = AutoMode.LandHere;
           }
@@ -698,18 +691,7 @@ namespace HopperGuidance
 
         Vector3d GetLandHereDesiredVel(float height, Vector3d tv, float g, float amax)
         {
-          // Find time to hit ground with just gravity
-          // 0 = a*x*x + b*x + c;
-          // height = 0.5*amax*t*t + v*t; 
-          float a = 0.5f*g;
-          float b = (float)tv.magnitude;
-          float c = -height;
-          float x1 = (-b + Mathf.Sqrt(b*b-4*a*c))/(2*a);
-          float x2 = (-b - Mathf.Sqrt(b*b-4*a*c))/(2*a);
-          float t = x1;
-          if (x2 > 0)
-            t = x2;
-          float maxv = t*(amax-g)*0.75f;
+          float maxv = height*1.7f*(amax-g); // should be 2
           return new Vector3d(0,-maxv,0);
         }
 
@@ -863,6 +845,7 @@ namespace HopperGuidance
         
         public override void OnUpdate()
         {
+          List<Target> tgts = new List<Target>(_tgts);
           base.OnUpdate();
           // Check for changes to slider. This can trigger one of many actions
           // - If autopilot enabled, recompute trajectory
@@ -872,6 +855,11 @@ namespace HopperGuidance
           bool recomputeTrajectory = false;
           bool redrawTargets = false;
           bool resetPID = false;
+          if (tgtHeight != setTgtHeight)
+          {
+            redrawTargets = true;
+            setTgtHeight = tgtHeight;
+          }
           if (tgtSize != setTgtSize)
           {
             setTgtSize = tgtSize;
@@ -915,13 +903,14 @@ namespace HopperGuidance
               // Picked
               double lat, lon, alt;
               vessel.mainBody.GetLatLonAlt(hit.point, out lat, out lon, out alt);
-              Target tgt = new Target((float)lat,(float)lon,(float)alt);
-              _tgts.Clear();
-              _tgts.Add(tgt);
+              Target tgt = new Target((float)lat,(float)lon,(float)alt+0.1f,tgtHeight);
+              tgts.Add(tgt); // Add temporarily to end of list
               redrawTargets = true;
               // If clicked stop picking
               if (Input.GetMouseButtonDown(0))
               {
+                _tgts = new List<Target>(tgts); // Copy to final list of targets
+                Debug.Log("HopperGuidance: Targets="+_tgts.Count);
                 recomputeTrajectory = true;
                 pickingPositionTarget = false;
               }
@@ -930,10 +919,13 @@ namespace HopperGuidance
           // Activate the required updates
           if (redrawTargets)
           {
-            setTgtSize = tgtSize;
+            // Reset height of last target
             if (_tgts.Count > 0)
-              SetUpTransform(_tgts[_tgts.Count-1]);
-            DrawTargets(_tgts,_transform,targetcol,tgtSize);
+              _tgts[_tgts.Count-1].height = tgtHeight;
+            setTgtSize = tgtSize;
+            if (tgts.Count > 0)
+              SetUpTransform(tgts[tgts.Count-1]);
+            DrawTargets(tgts,_transform,targetcol,tgtSize);
           }
           if ((recomputeTrajectory)&&((autoMode == AutoMode.LandAtTarget)||(autoMode == AutoMode.Failed)))
             EnableLandAtTarget();
@@ -956,7 +948,7 @@ namespace HopperGuidance
             lowestY = FindLowestPointOnVessel();
             Vector3 up = FlightGlobals.getUpAxis(vessel.GetWorldPos3D());
             float alt = (float)(FlightGlobals.getAltitudeAtPos(vessel.GetWorldPos3D() + up*(float)lowestY));
-            Target final = new Target((float)vessel.latitude,(float)vessel.longitude,alt);
+            Target final = new Target((float)vessel.latitude,(float)vessel.longitude,alt,tgtHeight);
             _tgts.Add(final);
             SetUpTransform(final);
             DrawTargets(_tgts,_transform,targetcol,tgtSize);
