@@ -511,8 +511,8 @@ namespace HopperGuidance
           solver.vmax = maxV;
           solver.amin = amin*(1+errMargin);
           solver.amax = amax*(1-errMargin);
-          solver.Nmin = 2;
-          solver.Nmax = 2+(_tgts.Count*2);
+          //solver.Nmin = 2;
+          //solver.Nmax = 2+(_tgts.Count*2);
           solver.minDurationPerThrust = 2;
           solver.g = g.magnitude;
           solver.minDescentAngle = minDescentAngle;
@@ -537,9 +537,10 @@ namespace HopperGuidance
           Vector3d tr0 = _transform.InverseTransformPoint(r0);
           // Guess maximum solution time - TODO: Improve this. Estimate could be quite good
           //solver.Tmax = Math.Abs(tr0.y/5); // assume average 5 m/s fall
-          solver.Tmax = 60;
 
           // Create list of solve targets
+          double d = 0;
+          Vector3 cr = tr0;
           for(int i=0; i<_tgts.Count; i++)
           {
             SolveTarget tgt = new SolveTarget();
@@ -548,18 +549,34 @@ namespace HopperGuidance
             tgt.type = SolveTargetType.Position;
             if (i==_tgts.Count-1) // final target
             {
+              //tgt.r.y += 6; // 6m above ground (compensate for bottom) then vertical descent
+              tgt.r.y += 6 - lowestY;
               tgt.type = SolveTargetType.Both;
               tgt.v = vf;
+              tgt.r = _transform.InverseTransformPoint(pos);
             }
             tgt.t = -1;
+            d = d + (cr-tgt.r).magnitude;
+            cr = tgt.r;
             targets.Add(tgt);
           }
-          //SolveTarget final = new SolveTarget();
-          //final.r = rf;
-          //final.v = vf;
-          //final.type = SolveTargetType.Both;
-          //final.t = -1;
-          //targets.Add(final);
+          // Add extra target below ground to ensure final vertical descent
+          // intersects ground plane
+/*
+          // Failing with alglib exception for a strange reason!
+          int k = _tgts.Count - 1;
+          if (k >= 0)
+          {
+            SolveTarget tgt = new SolveTarget();
+            Vector3d pos = vessel.mainBody.GetWorldSurfacePosition(_tgts[k].lat, _tgts[k].lon, _tgts[k].alt + _tgts[k].height - 2);
+            tgt.r = _transform.InverseTransformPoint(pos); // convert to local (for orientation)
+            tgt.v = vf;
+            tgt.type = SolveTargetType.Both;
+            targets.Add(tgt);
+          }
+*/
+
+          solver.Tmax = d/(0.1f*maxV); // assume average 10% of max velocity
 
           Vector3d tv0 = _transform.InverseTransformVector(v0);
           _traj = new Trajectory();
@@ -858,6 +875,7 @@ namespace HopperGuidance
           if (tgtHeight != setTgtHeight)
           {
             redrawTargets = true;
+            recomputeTrajectory = true;
             setTgtHeight = tgtHeight;
           }
           if (tgtSize != setTgtSize)

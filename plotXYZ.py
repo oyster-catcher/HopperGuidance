@@ -197,6 +197,8 @@ def read_data(fname):
   dat=[]
   for line in file(fname):
     line=line.strip("\n\r")
+    if line.startswith("#"):
+      continue
     if not fields:
       fields = line.split(None)
     else:

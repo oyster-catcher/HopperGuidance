@@ -1,6 +1,7 @@
 using KSPAssets;
 using UnityEngine;
 using System;
+using System.Collections.Generic;
 
 namespace HopperGuidance
 {
@@ -14,7 +15,7 @@ namespace HopperGuidance
     // Take a set of thrust vectors at positions 0, dt, 2*dt, etc...
     // and return a higher fidelity track of positions and thrust directions: r, rrr
     // at intervals of simdt
-    public void Simulate(double T, Vector3d[] thrusts, Vector3d r0, Vector3d v0, Vector3d g, double a_dt, double extendTime)
+    public void Simulate(double T, Vector3d[] thrusts, List<float> thrusts_t, Vector3d r0, Vector3d v0, Vector3d g, double a_dt, double extendTime)
     {
       // Simulate
       dt = a_dt;
@@ -45,11 +46,9 @@ namespace HopperGuidance
         r[j] = cr;
         v[j] = cv;
         Vector3d ca = Vector3d.zero;
-        double [] w = Solve.BasisWeights(t,T,N);
+        double [] w = Solve.BasisWeights(t,thrusts_t);
         for( int i = 0 ; i < N ; i++ )
-        {
           ca = ca + w[i] * thrusts[i];
-        }
         a[j] = ca;
         cr += cv*dt + 0.5*ca*dt*dt + 0.5*g*dt*dt;
         cv += ca*dt + g*dt;
@@ -140,7 +139,10 @@ namespace HopperGuidance
 
     public int Length()
     {
-      return r.Length;
+      if (r != null)
+        return r.Length;
+      else
+        return 0;
     }
 
     // Weight distance on the position and velocity vector from 1 to 2
@@ -216,7 +218,7 @@ namespace HopperGuidance
       }
     }
 
-    public void Write(string filename = null)
+    public void Write(string filename = null, List<string> comments = null)
     {
       System.IO.StreamWriter f;
       if (filename != null)
@@ -226,6 +228,11 @@ namespace HopperGuidance
       double t = 0;
       Vector3d tr = Vector3d.zero;
       Vector3d tv,ta;
+      if (comments != null)
+      {
+        foreach( string comment in comments)
+          f.WriteLine("# "+comment);
+      }
       f.WriteLine("time x y z vx vy vz ax ay az att_err");
       for(int i = 0 ; i < Length() ; i++)
       {
