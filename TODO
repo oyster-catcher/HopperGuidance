@@ -1,17 +1,12 @@
 - Show path travelled by vessel
 - Get a working Visual Studio Project file
 - Get align vector in the right place again
-- Check speed, minDescentAngle check so more around start and finish to cope better when outside of constraints at start
 - More accurate computation of trajectory
-- Don't leave targets lying around
 - Add License.txt and Changelog.txt to installed mod
 - Better solution for intermediate targets (i.e. hopHeight)
-
-Handling additional targets
-- select like pickTarget
-- Need to be able to cancel target
-- Need to be able to set speed? (not for first version - might not have position even)
-- Setting order of targets is tricky. Specify them in order
-- Click on target to select then click elsewhere to move
-- Need to be able to adjust height of target when ground position specified
-- Compute trajectory without flying it? Nice to have. Perhaps show track will mean trajectory is automatically recomputed and then shown
+- Fly craft relative to another craft, say in orbit? Basically autodock, but MJ does this
+- Problem with final landing. Not corrected trajectory for final position?
+- Correct final not working on multi-part trajectories (or drawn position is wrong)
+- Make trajectory computation work when on ground. Looks to be related to very short T solution with too many checks, T<firstGapTime ?
+- In multi-part trajectory reuse previous results for extra speed
+- Better solution to final landing now minDescentAngle doesn't work for low trajectories
