@@ -200,13 +200,13 @@ namespace HopperGuidance
       float zmin = -(amax-g);
 
       // Compute position with zero velocity
-      t = (float)v0.magnitude / (amax-g);
-
-      Vector3d ca = -(amax-g) * v0/v0.magnitude;
-      r0 = r0 + v0*t + 0.5*ca*t*t;
-
-      // r0 and v0 represent stationary after velocity cancelled out
-      v0 = Vector3d.zero;
+      if (v0.magnitude > 1)
+      {
+        t = (float)v0.magnitude / (amax-g);
+        Vector3d ca = -(amax-g) * v0/v0.magnitude;
+        r0 = r0 + v0*t + 0.5*ca*t*t;
+      }
+      // r0 represents stationary position after velocity cancelled out
 
       foreach( SolveTarget tgt in tgts )
       {
