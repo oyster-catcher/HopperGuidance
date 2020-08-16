@@ -111,21 +111,20 @@ namespace HopperGuidance
     {
       string msg = ((retval>=1)&&(retval<=5))?"SUCCEED":"FAIL";
       string stargets = "";
+      Vector3d rf = Vector3d.zero;
+      Vector3d vf = Vector3d.zero;
       foreach( SolveTarget tgt in targets )
       {
-        stargets = stargets + "target=";
         if( tgt.type == SolveTargetType.Position )
           stargets = stargets + String.Format("target="+Vec2Str(tgt.r)) + " ";
         if(tgt.type == SolveTargetType.Both)
         {
-          stargets = stargets + "{" + String.Format("r="+Vec2Str(tgt.r)) + ":" + String.Format("v="+Vec2Str(tgt.v)) + "} ";
+          rf = tgt.r;
+          vf = tgt.v;
         }
-/*
-        stargets = stargets + String.Format("t={0:F2}",tgt.t) + "} ";
-*/
       }
       // TODO - Missing constraints?
-      return string.Format("HopperGuidance: "+msg+" tol="+tol+" minDurationPerThrust="+minDurationPerThrust+" maxThrustsBetweenTargets="+maxThrustsBetweenTargets+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle+" apex="+Vec2Str(apex)+" {0}",stargets);
+      return string.Format("HopperGuidance: "+msg+" tol="+tol+" minDurationPerThrust="+minDurationPerThrust+" maxThrustsBetweenTargets="+maxThrustsBetweenTargets+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle+" apex="+Vec2Str(apex)+" rf="+Vec2Str(rf)+" vf="+Vec2Str(vf)+" {0}",stargets);
     }
  
     public static double [] BasisWeights(double t, ThrustVectorTime [] thrusts)
