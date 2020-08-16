@@ -57,7 +57,8 @@ namespace HopperGuidance
         double lowestY = 0; // Y position of bottom of craft relative to centre
         float _minThrust, _maxThrust;
         Solve solver; // Stores solution inputs, output and trajectory
-        Trajectory _traj; // trajectory of solution in world space?
+        Trajectory _traj; // trajectory of solution in local space
+        Trajectory _wtraj; // trajectory of solution in world space
         double _startTime = 0; // Start solution starts to normalize vessel times to start at 0
         Transform _transform = null;
         double last_t = -1; // last time data was logged
@@ -112,13 +113,13 @@ namespace HopperGuidance
         float maxThrustAngle = 45f; // Max. thrust angle from vertical
         float setMaxThrustAngle;
 
-        [UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max landing thrust angle", guiFormat = "F1", isPersistant = true, guiUnits="°")]
-        float maxLandingThrustAngle = 5f; // Max. final thrust angle from vertical
+        //[UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max landing thrust angle", guiFormat = "F1", isPersistant = true, guiUnits="°")]
+        float maxLandingThrustAngle = 0; // Max. final thrust angle from vertical
         float setMaxLandingThrustAngle;
 
-        [UI_FloatRange(minValue = 0f, maxValue = 90f, stepIncrement = 5f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = true, guiUnits = "°")]
+        //[UI_FloatRange(minValue = 0f, maxValue = 90f, stepIncrement = 5f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = true, guiUnits = "°")]
         float idleAngle = 90.0f;
 
         [UI_FloatRange(minValue = 0.01f, maxValue = 1f, stepIncrement = 0.01f)]
@@ -511,14 +512,12 @@ namespace HopperGuidance
           solver.vmax = maxV;
           solver.amin = amin*(1+errMargin);
           solver.amax = amax*(1-errMargin);
-          //solver.Nmin = 2;
-          //solver.Nmax = 2+(_tgts.Count*2);
-          solver.minDurationPerThrust = 2;
+          solver.minDurationPerThrust = 4;
+          solver.maxThrustsBetweenTargets = 3;
           solver.g = g.magnitude;
           solver.minDescentAngle = minDescentAngle;
           solver.maxThrustAngle = maxThrustAngle*(1-2*errMargin);
           solver.maxLandingThrustAngle = maxLandingThrustAngle*(1-2*errMargin);
-          solver.apex = rf; // for minimum descent for final trajectory
 
           int retval;
           // Predict into future since solution makes 0.1-0.3 secs to compute
@@ -535,12 +534,12 @@ namespace HopperGuidance
           double fuel;
           List<SolveTarget> targets = new List<SolveTarget>();
           Vector3d tr0 = _transform.InverseTransformPoint(r0);
-          // Guess maximum solution time - TODO: Improve this. Estimate could be quite good
-          //solver.Tmax = Math.Abs(tr0.y/5); // assume average 5 m/s fall
 
           // Create list of solve targets
           double d = 0;
           Vector3 cr = tr0;
+          Vector3d wrf = Vector3d.zero;
+          Vector3d wvf = Vector3d.zero;
           for(int i=0; i<_tgts.Count; i++)
           {
             SolveTarget tgt = new SolveTarget();
@@ -549,38 +548,34 @@ namespace HopperGuidance
             tgt.type = SolveTargetType.Position;
             if (i==_tgts.Count-1) // final target
             {
-              //tgt.r.y += 6; // 6m above ground (compensate for bottom) then vertical descent
-              tgt.r.y += 6 - lowestY;
+              tgt.r.y += - lowestY;
+              wrf = _transform.TransformPoint(tgt.r);
               tgt.type = SolveTargetType.Both;
               tgt.v = vf;
-              tgt.r = _transform.InverseTransformPoint(pos);
+              wvf = _transform.TransformVector(tgt.v); // to correct final later
             }
             tgt.t = -1;
             d = d + (cr-tgt.r).magnitude;
             cr = tgt.r;
             targets.Add(tgt);
           }
-          // Add extra target below ground to ensure final vertical descent
-          // intersects ground plane
-/*
-          // Failing with alglib exception for a strange reason!
-          int k = _tgts.Count - 1;
-          if (k >= 0)
-          {
-            SolveTarget tgt = new SolveTarget();
-            Vector3d pos = vessel.mainBody.GetWorldSurfacePosition(_tgts[k].lat, _tgts[k].lon, _tgts[k].alt + _tgts[k].height - 2);
-            tgt.r = _transform.InverseTransformPoint(pos); // convert to local (for orientation)
-            tgt.v = vf;
-            tgt.type = SolveTargetType.Both;
-            targets.Add(tgt);
-          }
-*/
-
           solver.Tmax = d/(0.1f*maxV); // assume average 10% of max velocity
+
+          // Find lowest point to define min. descent angle
+          solver.apex = rf;
+          foreach ( SolveTarget tgt in targets )
+          {
+            if (tgt.r.y < solver.apex.y)
+              solver.apex = tgt.r;
+          }
+
+          // TODO - Insert additional target to give high final descent by finding a point on the
+          // trajectory without this target and then raising that point
 
           Vector3d tv0 = _transform.InverseTransformVector(v0);
           _traj = new Trajectory();
-          MainProg.MultiPartSolve(ref solver, ref _traj, tr0, tv0, targets, (float)g.magnitude, out fuel, out retval);
+          ThrustVectorTime [] local_thrusts = null;
+          double bestT = MainProg.MultiPartSolve(ref solver, ref _traj, tr0, tv0, targets, (float)g.magnitude, out local_thrusts, out fuel, out retval);
           Debug.Log(solver.DumpString());
           if ((retval>=1) && (retval<=5)) // solved for complete path?
           {
@@ -605,7 +600,7 @@ namespace HopperGuidance
             // Do some checks
             if (v0.magnitude > maxV)
               msg = msg + " velocity over "+maxV+" m/s";
-            else if (cos_descentAng < Math.Cos(Math.PI*minDescentAngle))
+            else if (cos_descentAng > Math.Cos(Math.PI*minDescentAngle))
               msg = msg + "below min. descent angle "+minDescentAngle+"°";
             else if (amax < g.magnitude)
               msg = msg + "engine has insufficient thrust, no engines active or no fuel";
@@ -615,8 +610,22 @@ namespace HopperGuidance
             ScreenMessages.PostScreenMessage(msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
             autoMode = AutoMode.Failed;
           }
-          // Draw track computed in world space - even if partially completed
-          DrawTrack(_traj, _transform, trackcol, true);
+          if ((retval>=1) && (retval<=5)) // solved for complete path? - show partial?
+          {
+            _wtraj = new Trajectory();
+            ThrustVectorTime [] world_thrusts = new ThrustVectorTime[local_thrusts.Length];
+            for( int i=0; i<local_thrusts.Length; i++)
+            {
+              world_thrusts[i] = new ThrustVectorTime();
+              world_thrusts[i].v = _transform.TransformVector(local_thrusts[i].v);
+              world_thrusts[i].t = local_thrusts[i].t;
+              Debug.Log("thrust["+i+"]="+(Vector3)world_thrusts[i].v+" at "+world_thrusts[i].t);
+            }
+            _wtraj.Simulate(bestT, world_thrusts, r0, v0, g, solver.dt, extendTime);
+            _wtraj.CorrectFinal(wrf,wvf,true,false);
+            // Draw track computed in world space - even if partially completed
+            DrawTrack(_wtraj, vessel.mainBody.transform, trackcol, false);
+          }
         }
 
         public void DisableLand()
@@ -904,7 +913,7 @@ namespace HopperGuidance
           }  
           if (showTrack != setShowTrack)
           {
-            DrawTrack(_traj, _transform, trackcol);
+            DrawTrack(_wtraj, vessel.mainBody.transform, trackcol, false);
             setShowTrack = showTrack;
           }
           if (pickingPositionTarget)

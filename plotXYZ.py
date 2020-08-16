@@ -12,6 +12,10 @@ def plot_line(ax,data,fx,fy,color='black',label=''):
   ax.plot(xx,yy,color=color,label=label)
 
 
+def plot_times(ax, times):
+  for t in times:
+    ax.axvspan(t-0.1,t+0.1,facecolor='g',alpha=0.5)
+
 def plot_checks(ax,data,fx,fy,checkGapFirst,checkGapMult,color='red'):
   if not checkGapFirst or not checkGapMult:
     return
@@ -44,7 +48,7 @@ def plot_checks(ax,data,fx,fy,checkGapFirst,checkGapMult,color='red'):
 def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
          vxmin,vxmax,vymin,vymax,vzmin,vzmax,tmax=30,amult=1,askip=3,checkGapFirst=None,checkGapMult=None,minDescentAngle=None,
          amin=None,amax=None,
-         filenames=[]):
+         filenames=[], thrust_times=[]):
 
   colors=['red','blue','green','black','pink','grey','purple','salmon']
   alim = [0,40]
@@ -138,6 +142,7 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
       ax.plot([0,data[-1]['time']],[amin,amin],color='blue',linestyle='--')
     if amax:
       ax.plot([0,data[-1]['time']],[amax,amax],color='blue',linestyle='--')
+  plot_times(ax, thrust_times)
   ax.grid()
 
   # Attitude error
@@ -191,13 +196,25 @@ def plot(datas,labels,xmin,xmax,ymin,ymax,zmin,zmax,
   ax.grid()
   P.show()
 
+def extract_items(line):
+  d = {}
+  for kv in line.split(" "):
+    if '=' in kv:
+      k,v = kv.split('=',1)
+      d[k] = v
+  return d
 
-def read_data(fname):
+def read_data(fname, d):
+  """Reads column data file, values space or tab separated. First line in column names.
+     Comments lines with hash can contain key=value pairs which will be returned in d"""
   fields=None
   dat=[]
   for line in file(fname):
     line=line.strip("\n\r")
     if line.startswith("#"):
+      dd = extract_items(line[1:])
+      print(dd)
+      d.update(dd)
       continue
     if not fields:
       fields = line.split(None)
@@ -237,8 +254,18 @@ parser.add_argument('--square', action='store_true', help='Make XY plot square (
 args = parser.parse_args()
 
 datas=[]
+info={}
 for filename in args.filename:
-  datas.append(read_data(filename))
+  datas.append(read_data(filename,info))
+thrust_times = []
+try:
+  args.minDescentAngle = float(info['minDescentAngle'])
+except:
+  pass
+try:
+  thrust_times = [float(t) for t in info['thrust_times'].split(',')]
+except:
+  pass
 
 alldata = []
 for data in datas:
@@ -287,4 +314,4 @@ if args.square:
 
 plot(datas,args.filename,xmin=args.xmin,xmax=args.xmax,ymin=args.ymin,ymax=args.ymax,zmin=args.zmin,zmax=args.zmax,
      vxmin=args.vxmin,vxmax=args.vxmax,vymin=args.vymin,vymax=args.vymax,vzmin=args.vzmin,vzmax=args.vzmax,tmax=args.tmax,
-     amult=args.amult,checkGapFirst=args.checkGapFirst,checkGapMult=args.checkGapMult,filenames=args.filename,minDescentAngle=args.minDescentAngle,amin=args.amin,amax=args.amax)
+     amult=args.amult,checkGapFirst=args.checkGapFirst,checkGapMult=args.checkGapMult,filenames=args.filename,minDescentAngle=args.minDescentAngle,amin=args.amin,amax=args.amax,thrust_times=thrust_times)

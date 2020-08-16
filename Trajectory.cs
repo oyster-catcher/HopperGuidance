@@ -2,6 +2,7 @@ using KSPAssets;
 using UnityEngine;
 using System;
 using System.Collections.Generic;
+using HopperGuidance;
 
 namespace HopperGuidance
 {
@@ -15,7 +16,7 @@ namespace HopperGuidance
     // Take a set of thrust vectors at positions 0, dt, 2*dt, etc...
     // and return a higher fidelity track of positions and thrust directions: r, rrr
     // at intervals of simdt
-    public void Simulate(double T, Vector3d[] thrusts, List<float> thrusts_t, Vector3d r0, Vector3d v0, Vector3d g, double a_dt, double extendTime)
+    public void Simulate(double T, ThrustVectorTime [] thrusts, Vector3d r0, Vector3d v0, Vector3d g, double a_dt, double extendTime)
     {
       // Simulate
       dt = a_dt;
@@ -43,17 +44,28 @@ namespace HopperGuidance
       }
       while(j < start+M)
       {
+        Vector3d ca = Vector3d.zero;
+        cr = r0;
+        cv = v0;
+        double [] wr;
+        double [] wv;
+        // TODO: This is slow and expensive in RVWeightsToTime but accurate and
+        // avoid accumulation of error when computing forwards only
+        Solve.RVWeightsToTime(t, dt, thrusts, out wr, out wv);
+        double [] w = Solve.BasisWeights(t, thrusts);
+        for(int i = 0 ; i < N ; i++)
+        {
+          ca += w[i]  * thrusts[i].v;
+          cr += wr[i] * thrusts[i].v;
+          cv += wv[i] * thrusts[i].v;
+        }
+        cr = cr + v0*t + 0.5*t*t*g;
+        cv = cv + g*t;
+        a[j] = ca;
         r[j] = cr;
         v[j] = cv;
-        Vector3d ca = Vector3d.zero;
-        double [] w = Solve.BasisWeights(t,thrusts_t);
-        for( int i = 0 ; i < N ; i++ )
-          ca = ca + w[i] * thrusts[i];
-        a[j] = ca;
-        cr += cv*dt + 0.5*ca*dt*dt + 0.5*g*dt*dt;
-        cv += ca*dt + g*dt;
-        t += dt;
         j++;
+        t += dt;
       }
       // Continue with same position and velocity and acceleration
       // to equal gravity
