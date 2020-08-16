@@ -490,6 +490,53 @@ namespace HopperGuidance
           }
         }
 
+        float AxisTime(float dist, float amin, float amax)
+        {
+          float t;
+          if (dist > 0)
+            t = Mathf.Sqrt(dist/amax);
+          else
+            t = Mathf.Sqrt(dist/amin);
+          return 2*t;
+        }
+
+        float EstimateTimeBetweenTargets(Vector3d r0, Vector3d v0, List<SolveTarget> tgts, float amax, float g, float vmax)
+        {
+          if (g > amax)
+            return -1; // can't even hover
+          float t=0;
+          // Estimate time to go from stationary at one target to stationary at next, to provide
+          // an upper estimate on the solution time
+          float xmax = amax - g;
+          float xmin = -(amax-g);
+          float ymin = -g;
+          float ymax = amax - g;
+          float zmax = amax - g;
+          float zmin = -(amax-g);
+
+          // Compute position with zero velocity
+          t = (float)v0.magnitude / (amax-g);
+       
+          Vector3d ca = -(amax-g) * v0/v0.magnitude; 
+          r0 = r0 + v0*t + 0.5*ca*t*t;
+
+          // r0 and v0 represent stationary after velocity cancelled out
+          v0 = Vector3d.zero;
+
+          foreach( SolveTarget tgt in tgts )
+          {
+            float dx = (float)(tgt.r.x - r0.x);
+            float dy = (float)(tgt.r.y - r0.y);
+            float dz = (float)(tgt.r.z - r0.z);
+            // Compute time to move in each orthogonal axis
+            float tx = AxisTime(dx, xmin, xmax);
+            float ty = AxisTime(dy, ymin, ymax);
+            float tz = AxisTime(dz, zmin, zmax);
+            t = t + tx + ty + tz;
+          }
+          return t;
+        }
+
         public void EnableLandAtTarget()
         {
           checkingLanded = false; // stop trajectory being cancelled while on ground
@@ -534,6 +581,7 @@ namespace HopperGuidance
           double fuel;
           List<SolveTarget> targets = new List<SolveTarget>();
           Vector3d tr0 = _transform.InverseTransformPoint(r0);
+          Vector3d tv0 = _transform.InverseTransformVector(v0);
 
           // Create list of solve targets
           double d = 0;
@@ -559,7 +607,7 @@ namespace HopperGuidance
             cr = tgt.r;
             targets.Add(tgt);
           }
-          solver.Tmax = d/(0.1f*maxV); // assume average 10% of max velocity
+          solver.Tmax = -1; // Forces estimation given initial position, velocity and targets
 
           // Find lowest point to define min. descent angle
           solver.apex = rf;
@@ -572,7 +620,6 @@ namespace HopperGuidance
           // TODO - Insert additional target to give high final descent by finding a point on the
           // trajectory without this target and then raising that point
 
-          Vector3d tv0 = _transform.InverseTransformVector(v0);
           _traj = new Trajectory();
           ThrustVectorTime [] local_thrusts = null;
           double bestT = MainProg.MultiPartSolve(ref solver, ref _traj, tr0, tv0, targets, (float)g.magnitude, out local_thrusts, out fuel, out retval);

@@ -124,7 +124,7 @@ namespace HopperGuidance
         }
       }
       // TODO - Missing constraints?
-      return string.Format("HopperGuidance: "+msg+" tol="+tol+" minDurationPerThrust="+minDurationPerThrust+" maxThrustsBetweenTargets="+maxThrustsBetweenTargets+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle+" apex="+Vec2Str(apex)+" rf="+Vec2Str(rf)+" vf="+Vec2Str(vf)+" {0}",stargets);
+      return string.Format("HopperGuidance: "+msg+" tol="+tol+" minDurationPerThrust="+minDurationPerThrust+" maxThrustsBetweenTargets="+maxThrustsBetweenTargets+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle+" apex="+Vec2Str(apex)+" rf="+Vec2Str(rf)+" vf="+Vec2Str(vf)+" T="+T+" {0}",stargets);
     }
  
     public static double [] BasisWeights(double t, ThrustVectorTime [] thrusts)
@@ -172,6 +172,54 @@ namespace HopperGuidance
           wv[i] += w[i]*dt;
         }
       }
+    }
+
+    static float AxisTime(float dist, float amin, float amax)
+    {
+      float t;
+      if (dist > 0)
+        t = Mathf.Sqrt(dist/amax);
+      else
+        t = Mathf.Sqrt(dist/amin);
+      return 2*t;
+    }
+
+    public static float EstimateTimeBetweenTargets(Vector3d r0, Vector3d v0, List<SolveTarget> tgts, float amax, float g, float vmax)
+    {
+      if (g > amax)
+        return -1; // can't even hover
+      float t=0;
+      // Estimate time to go from stationary at one target to stationary at next, to provide
+      // an upper estimate on the solution time
+      // TODO: Adjust with maxThrustAngle
+      float xmax = amax - g;
+      float xmin = -(amax-g);
+      float ymin = -g;
+      float ymax = amax - g;
+      float zmax = amax - g;
+      float zmin = -(amax-g);
+
+      // Compute position with zero velocity
+      t = (float)v0.magnitude / (amax-g);
+
+      Vector3d ca = -(amax-g) * v0/v0.magnitude;
+      r0 = r0 + v0*t + 0.5*ca*t*t;
+
+      // r0 and v0 represent stationary after velocity cancelled out
+      v0 = Vector3d.zero;
+
+      foreach( SolveTarget tgt in tgts )
+      {
+        float dx = (float)(tgt.r.x - r0.x);
+        float dy = (float)(tgt.r.y - r0.y);
+        float dz = (float)(tgt.r.z - r0.z);
+        // Compute time to move in each orthogonal axis
+        float tx = AxisTime(dx, xmin, xmax);
+        float ty = AxisTime(dy, ymin, ymax);
+        float tz = AxisTime(dz, zmin, zmax);
+        t = t + tx + ty + tz;
+      }
+      return t;
     }
 
     // Are the constraints satisfied?
@@ -795,6 +843,12 @@ namespace HopperGuidance
       retval = -1;
       o_thrusts = null;
 
+      if (solver.Tmax < 0)
+      {
+        solver.Tmax = Solve.EstimateTimeBetweenTargets(local_r, local_v, a_targets, (float)solver.amax, (float)solver.g, (float)solver.vmax);
+        System.Console.Error.WriteLine("Estimated Tmax="+solver.Tmax);
+      }
+
       // Compute trajectory to landing spot
       double fuel;
 
@@ -846,6 +900,7 @@ namespace HopperGuidance
     static int RunTest(string[] args)
     {
       Solve solver = new Solve();
+      solver.Tmax = -1; // means estimate if not set
       Vector3d r0 = Vector3d.zero;
       Vector3d v0 = Vector3d.zero;
       Vector3d rf = Vector3d.zero;
