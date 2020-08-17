@@ -1,12 +1,7 @@
-- Show path travelled by vessel
+- Show path travelled by vessel?
 - Get a working Visual Studio Project file
-- Get align vector in the right place again
-- More accurate computation of trajectory
+- Get align vector in the right place again (use _wtraj?)
 - Add License.txt and Changelog.txt to installed mod
 - Better solution for intermediate targets (i.e. hopHeight)
 - Fly craft relative to another craft, say in orbit? Basically autodock, but MJ does this
-- Problem with final landing. Not corrected trajectory for final position?
-- Correct final not working on multi-part trajectories (or drawn position is wrong)
-- Make trajectory computation work when on ground. Looks to be related to very short T solution with too many checks, T<firstGapTime ?
 - In multi-part trajectory reuse previous results for extra speed
-- Better solution to final landing now minDescentAngle doesn't work for low trajectories
