@@ -4,6 +4,7 @@
 #define MINTHRUST
 //#define DUMP
 //#define DEBUG
+//#define UNITYDEBUG
 
 using System;
 using System.IO;
@@ -295,6 +296,9 @@ namespace HopperGuidance
 #if (DEBUG)
         System.Console.Error.WriteLine("thrust_t="+thrust_times[i]);
 #endif
+#if (UNITYDEBUG)
+        Debug.Log("thrust_t="+thrust_times[i]);
+#endif
         o_thrusts[i] = new ThrustVectorTime();
         o_thrusts[i].v = Vector3d.zero;
         o_thrusts[i].t = thrust_times[i];
@@ -493,13 +497,17 @@ namespace HopperGuidance
 
       // distance = (init vel) * (time) * 0.5
 
-      // Use last Y position target
+      // Use lowest Y position as ground - not true but this only to avoid
+      // making partial trajectories don't allow time to not hit ground
+      float groundY = (float)r0.y;
+      foreach( SolveTarget tgt in a_targets)
+        groundY = Mathf.Min(groundY,(float)tgt.r.y); 
       // TODO: Calculate final position
       Vector3d tgt_r = a_targets[a_targets.Count-1].r;
-      float height = (float)tgt_r.y;
+      float height = (float)tgt_r.y - groundY;
       // Crude height above descent angle
-      //float d = (float)Math.Sqrt(tgt_r.x*tgt_r.x + tgt_r.y*tgt_r.y);
-      float maxv = Mathf.Sqrt((float)amax*1.7f*height); // should really be 2.0
+      float maxv = 0;
+      maxv = Mathf.Sqrt((float)amax*1.7f*height); // should really be 2.0
       RVWeightsToTime(T,dt,o_thrusts,out double[] wr2,out double[] wv2);
       for(int i = 0 ; i < N ; i++)
         c[k,i*3+1] = wv2[i]; // Y
@@ -842,6 +850,10 @@ namespace HopperGuidance
       o_fuel = 0;
       retval = -1;
       o_thrusts = null;
+#if (UNITYDEBBUG)
+      Debug.Log("local_r="+(Vector3)local_r);
+      Debug.Log("local_v="+(Vector3)local_v);
+#endif
 
       if (solver.Tmax < 0)
       {
@@ -862,6 +874,9 @@ namespace HopperGuidance
         // Create list of targets up to final undefined target
         foreach( SolveTarget tgt in a_targets )
         {
+#if (UNITYDEBUG)
+          Debug.Log("target="+(Vector3)tgt.r);
+#endif
           partial_targets.Add(tgt);
           if (tgt.t < 0)
             break; // Make this last
