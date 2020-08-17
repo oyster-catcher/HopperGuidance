@@ -671,7 +671,7 @@ namespace HopperGuidance
             _wtraj.Simulate(bestT, world_thrusts, r0, v0, g, solver.dt, extendTime);
             _wtraj.CorrectFinal(wrf,wvf,true,false);
             // Draw track computed in world space - even if partially completed
-            DrawTrack(_wtraj, vessel.mainBody.transform, trackcol, false);
+            DrawTrack(_wtraj, _transform, trackcol, false);
           }
         }
 
@@ -960,7 +960,7 @@ namespace HopperGuidance
           }  
           if (showTrack != setShowTrack)
           {
-            DrawTrack(_wtraj, vessel.mainBody.transform, trackcol, false);
+            DrawTrack(_wtraj, _transform, trackcol, false);
             setShowTrack = showTrack;
           }
           if (pickingPositionTarget)
