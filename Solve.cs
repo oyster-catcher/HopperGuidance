@@ -14,19 +14,17 @@ using UnityEngine;
 
 namespace HopperGuidance
 {
-  public enum SolveTargetType
-  {
-    Position,
-    Velocity,
-    Both
-  }
-
   public class SolveTarget
   {
+    public const int X = 1;
+    public const int Y = 2;
+    public const int Z = 4;
+
     public Vector3d r;
+    public int raxes; // combination of X, Y, Z
     public Vector3d v;
+    public int vaxes; // combination of X, Y, Z
     public float t;
-    public SolveTargetType type;
   }
 
   public class ThrustVectorTime
@@ -103,9 +101,25 @@ namespace HopperGuidance
       System.Console.WriteLine("]");
     }
 #endif
-    public string Vec2Str(Vector3d v)
+    // axes it bitfield of X, Y, Z flags
+    public string Vec2Str(Vector3d v, int axes=7)
     {
-      return string.Format("[{0:F2},{1:F2},{2:F2}]",v.x,v.y,v.z);
+      string s = "";
+      if ((axes & SolveTarget.X) != 0)
+        s = s + string.Format("{0:F2}",v.x);
+      else
+        s = s + "*";
+      s = s + ",";
+      if ((axes & SolveTarget.Y) != 0)
+        s = s + string.Format("{0:F2}",v.y);
+      else
+        s = s + "*";
+      s = s + ",";
+      if ((axes & SolveTarget.Z) != 0)
+        s = s + string.Format("{0:F2}",v.z);
+      else
+        s = s + "*";
+      return "[" + s + "]";
     }
 
     public string DumpString()
@@ -114,18 +128,29 @@ namespace HopperGuidance
       string stargets = "";
       Vector3d rf = Vector3d.zero;
       Vector3d vf = Vector3d.zero;
-      foreach( SolveTarget tgt in targets )
+      int rfaxes = 0;
+      int vfaxes = 0;
+      for(int i=0; i<targets.Count; i++)
       {
-        if( tgt.type == SolveTargetType.Position )
-          stargets = stargets + String.Format("target="+Vec2Str(tgt.r)) + " ";
-        if(tgt.type == SolveTargetType.Both)
+        SolveTarget tgt = targets[i];
+        if (i == targets.Count-1)
         {
           rf = tgt.r;
+          rfaxes = tgt.raxes;
           vf = tgt.v;
+          vfaxes = tgt.vaxes;
+        }
+        else
+        {
+          stargets = stargets + String.Format("target="+Vec2Str(tgt.r,tgt.raxes)) + " ";
         }
       }
+      if (rfaxes != 0)
+        stargets = stargets + " rf="+Vec2Str(rf,rfaxes);
+      if (vfaxes != 0)
+        stargets = stargets + " vf="+Vec2Str(vf,vfaxes);
       // TODO - Missing constraints?
-      return string.Format("HopperGuidance: "+msg+" tol="+tol+" minDurationPerThrust="+minDurationPerThrust+" maxThrustsBetweenTargets="+maxThrustsBetweenTargets+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle+" apex="+Vec2Str(apex)+" rf="+Vec2Str(rf)+" vf="+Vec2Str(vf)+" T="+T+" {0}",stargets);
+      return string.Format("HopperGuidance: "+msg+" tol="+tol+" minDurationPerThrust="+minDurationPerThrust+" maxThrustsBetweenTargets="+maxThrustsBetweenTargets+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle+" apex="+Vec2Str(apex)+" T="+T+" {0}",stargets);
     }
  
     public static double [] BasisWeights(double t, ThrustVectorTime [] thrusts)
@@ -214,7 +239,7 @@ namespace HopperGuidance
         float dx = (float)(tgt.r.x - r0.x);
         float dy = (float)(tgt.r.y - r0.y);
         float dz = (float)(tgt.r.z - r0.z);
-        // Compute time to move in each orthogonal axis
+        // Compute time to move in each orthogonal axes
         float tx = AxisTime(dx, xmin, xmax);
         float ty = AxisTime(dy, ymin, ymax);
         float tz = AxisTime(dz, zmin, zmax);
@@ -264,7 +289,7 @@ namespace HopperGuidance
       foreach( SolveTarget tgt in a_targets )
       {
         float tgt_t = tgt.t;
-        if ((tgt.type != SolveTargetType.Both) && (tgt_t > 0))
+        if ((tgt.raxes != 0) && (tgt_t > 0))
           last_target_t = tgt.t;
         if (tgt_t < 0)
           tgt_t = (float)T;
@@ -286,7 +311,7 @@ namespace HopperGuidance
       }
       // Final targets isn't a landing point so this is a multi-part solution, don't restrict
       // this part to the minDescentAngle
-      if (a_targets[a_targets.Count-1].type != SolveTargetType.Both)
+      if ((a_targets[a_targets.Count-1].raxes == 0)||(a_targets[a_targets.Count-1].vaxes == 0))
         last_target_t = (float)T;
 
       N = thrust_times.Count;
@@ -375,12 +400,18 @@ namespace HopperGuidance
       int constraints = 6*N; // thrust magnitude limits
       foreach( SolveTarget tgt in a_targets )
       {
-        if (tgt.type == SolveTargetType.Position)
-          constraints += 3;
-        if (tgt.type == SolveTargetType.Velocity)
-          constraints += 3;
-        if (tgt.type == SolveTargetType.Both)
-          constraints += 6;
+        if ((tgt.raxes & SolveTarget.X) != 0)
+          constraints++;
+        if ((tgt.raxes & SolveTarget.Y) != 0)
+          constraints++;
+        if ((tgt.raxes & SolveTarget.Z) != 0)
+          constraints++;
+        if ((tgt.vaxes & SolveTarget.X) != 0)
+          constraints++;
+        if ((tgt.vaxes & SolveTarget.Y) != 0)
+          constraints++;
+        if ((tgt.vaxes & SolveTarget.Z) != 0)
+          constraints++;
       }
 
       constraints++; // For hit the ground in future constraint
@@ -421,29 +452,29 @@ namespace HopperGuidance
       {
         c[k,i*3+0] = 1.0;
         c[k,N*3+i] = -1.0;
-        ct[k] = -1; // LHS < 0. Means thrust vector X axis less than thrust magnitude
+        ct[k] = -1; // LHS < 0. Means thrust vector X axes less than thrust magnitude
         k++;
         c[k,i*3+0] = 1.0;
         c[k,N*3+i] = 1.0;
-        ct[k] = 1; // LHS > 0. Means thrust vector X axis greater than -thrust magnitude
+        ct[k] = 1; // LHS > 0. Means thrust vector X axes greater than -thrust magnitude
         k++;
 
         c[k,i*3+1] = 1.0;
         c[k,N*3+i] = -1.0;
-        ct[k] = -1; // LHS < 0. Means thrust vector Y axis less than thrust magnitude
+        ct[k] = -1; // LHS < 0. Means thrust vector Y axes less than thrust magnitude
         k++;
         c[k,i*3+1] = 1.0;
         c[k,N*3+i] = 1.0;
-        ct[k] = 1; // LHS > 0. Means thrust vector Y axis greater than -thrust magnitude
+        ct[k] = 1; // LHS > 0. Means thrust vector Y axes greater than -thrust magnitude
         k++;
 
         c[k,i*3+2] = 1.0;
         c[k,N*3+i] = -1.0;
-        ct[k] = -1; // LHS < 0. Means thrust vector Z axis less than thrust magnitude
+        ct[k] = -1; // LHS < 0. Means thrust vector Z axes less than thrust magnitude
         k++;
         c[k,i*3+2] = 1.0;
         c[k,N*3+i] = 1.0;
-        ct[k] = 1; // LHS > 0. Means thrust vector Z axis greater than -thrust magnitude
+        ct[k] = 1; // LHS > 0. Means thrust vector Z axes greater than -thrust magnitude
         k++;
       }
 
@@ -454,40 +485,68 @@ namespace HopperGuidance
           tX = T;
         RVWeightsToTime(tX,dt,o_thrusts,out double[] wr,out double[] wv);
         // Position contraint
-        if(( tgt.type == SolveTargetType.Position ) || (tgt.type == SolveTargetType.Both) )
+        if( tgt.raxes !=0 )
         {
+          int k_start = k;
           for(int i = 0 ; i < N ; i++)
           {
-            c[k+0,i*3+0] = wr[i]; // X
-            c[k+1,i*3+1] = wr[i]; // Y
-            c[k+2,i*3+2] = wr[i]; // Z
+            int kk = k;
+            if ((tgt.raxes & SolveTarget.X) != 0)
+              c[kk++,i*3+0] = wr[i]; // X
+            if ((tgt.raxes & SolveTarget.Y) != 0)
+              c[kk++,i*3+1] = wr[i]; // Y
+            if ((tgt.raxes & SolveTarget.Z) != 0)
+              c[kk++,i*3+2] = wr[i]; // Z
           }
-          c[k+0,rhs] = tgt.r.x - (r0.x + v0.x*tX);
-          c[k+1,rhs] = tgt.r.y - (r0.y + v0.y*tX - 0.5*tX*tX*g);
-          c[k+2,rhs] = tgt.r.z - (r0.z + v0.z*tX);
+          k = k_start;
           // Must equal
-          ct[k+0] = 0;
-          ct[k+1] = 0;
-          ct[k+2] = 0;
-          k += 3;
+          if ((tgt.raxes & SolveTarget.X) != 0)
+          {
+            c[k,rhs] = tgt.r.x - (r0.x + v0.x*tX);
+            ct[k++] = 0;
+          }
+          if ((tgt.raxes & SolveTarget.Y) != 0)
+          {
+            c[k,rhs] = tgt.r.y - (r0.y + v0.y*tX - 0.5*tX*tX*g);
+            ct[k++] = 0;
+          }
+          if ((tgt.raxes & SolveTarget.Z) != 0)
+          {
+            c[k,rhs] = tgt.r.z - (r0.z + v0.z*tX);
+            ct[k++] = 0;
+          }
         }
         // Velocity contraint
-        if(( tgt.type == SolveTargetType.Velocity ) || (tgt.type == SolveTargetType.Both) )
+        if( tgt.vaxes != 0)
         {
+          int k_start = k;
           for(int i = 0 ; i < N ; i++)
           {
-            c[k+0,i*3+0] = wv[i]; // X
-            c[k+1,i*3+1] = wv[i]; // Y
-            c[k+2,i*3+2] = wv[i]; // Z
+            int kk = k;
+            if ((tgt.vaxes & SolveTarget.X) != 0)
+              c[kk++,i*3+0] = wv[i]; // X
+            if ((tgt.vaxes & SolveTarget.Y) != 0)
+              c[kk++,i*3+1] = wv[i]; // Y
+            if ((tgt.vaxes & SolveTarget.Z) != 0)
+              c[kk++,i*3+2] = wv[i]; // Z
           }
-          c[k+0,rhs] = tgt.v.x - v0.x;
-          c[k+1,rhs] = tgt.v.y - (v0.y - tX*g);
-          c[k+2,rhs] = tgt.v.z - v0.z;
+          k = k_start;
           // Must equal
-          ct[k+0] = 0;
-          ct[k+1] = 0;
-          ct[k+2] = 0;
-          k += 3;
+          if ((tgt.vaxes & SolveTarget.X) != 0)
+          {
+            c[k,rhs] = tgt.v.x - v0.x;
+            ct[k++] = 0;
+          }
+          if ((tgt.vaxes & SolveTarget.Y) != 0)
+          {
+            c[k,rhs] = tgt.v.y - (v0.y - tX*g);
+            ct[k++] = 0;
+          }
+          if ((tgt.vaxes & SolveTarget.Z) != 0)
+          {
+            c[k,rhs] = tgt.v.z - v0.z;
+            ct[k++] = 0;
+          }
         }
       }
 
@@ -507,7 +566,7 @@ namespace HopperGuidance
       float height = (float)tgt_r.y - groundY;
       // Crude height above descent angle
       float maxv = 0;
-      maxv = Mathf.Sqrt((float)amax*1.7f*height); // should really be 2.0
+      maxv = Mathf.Sqrt((float)(amax-g)*height); // should really be 2.0
       RVWeightsToTime(T,dt,o_thrusts,out double[] wr2,out double[] wv2);
       for(int i = 0 ; i < N ; i++)
         c[k,i*3+1] = wv2[i]; // Y
@@ -920,8 +979,8 @@ namespace HopperGuidance
       Vector3d v0 = Vector3d.zero;
       Vector3d rf = Vector3d.zero;
       Vector3d vf = Vector3d.zero;
-      bool rfset = false;
-      bool vfset = false;
+      int rfaxes = 0;
+      int vfaxes = 0;
       // Intermediate positions and velocities
       List<SolveTarget> targets = new List<SolveTarget>();
       Vector3d c;
@@ -933,9 +992,26 @@ namespace HopperGuidance
         string v = args[i].Split(delim,2)[1];
         if (v.StartsWith("[")) {
           v = v.Replace("[","").Replace("]","");
-          double x = Convert.ToDouble(v.Split(',')[0]);
-          double y = Convert.ToDouble(v.Split(',')[1]);
-          double z = Convert.ToDouble(v.Split(',')[2]);
+          double x=0,y=0,z=0;
+          int axes = 0;
+          string sx = v.Split(',')[0];
+          string sy = v.Split(',')[1];
+          string sz = v.Split(',')[2];
+          if ((sx != "")&&(sx != "*"))
+          {
+            axes = axes | SolveTarget.X;
+            x = Convert.ToDouble(sx);
+          }
+          if ((sy != "")&&(sy != "*"))
+          {
+            axes = axes | SolveTarget.Y;
+            y = Convert.ToDouble(sy);
+          }
+          if ((sz != "")&&(sz != "*"))
+          {
+            axes = axes | SolveTarget.Z;
+            z = Convert.ToDouble(sz);
+          }
           c = new Vector3d(x,y,z);
           if (k=="r0")
             r0 = c;
@@ -944,12 +1020,12 @@ namespace HopperGuidance
           else if (k=="rf")
           {
             rf = c;
-            rfset = true;
+            rfaxes = axes;
           }
           else if (k=="vf")
           {
            vf = c;
-           vfset = true;
+           vfaxes = axes;
           }
           else if (k=="apex")
             solver.apex = c;
@@ -957,7 +1033,8 @@ namespace HopperGuidance
           {
             SolveTarget tgt = new SolveTarget();
             tgt.r = c;
-            tgt.type = SolveTargetType.Position;
+            tgt.raxes = axes;
+            tgt.vaxes = 0;
             tgt.t = -1;
             targets.Add(tgt);
           }
@@ -971,46 +1048,6 @@ namespace HopperGuidance
           //bool flag = v.StartsWith("T")?true:false;
           System.Console.Error.WriteLine("No such parameter name: "+k);
           return 1;
-        } else if (v.StartsWith("{") && (v.EndsWith("}"))) // compound
-        {
-          v = v.Replace("{","").Replace("}","");
-          string [] parts = v.Split(':');
-          SolveTarget tgt = new SolveTarget();
-          bool rset = false, vset = false;
-          for(int j=0; j<parts.Length; j++)
-          {
-            tgt.t = -1;
-            k = parts[j].Split('=')[0];
-            v = parts[j].Split('=')[1];
-            c = Vector3d.zero;
-            d = -1;
-            if (v.StartsWith("[") && v.EndsWith("]"))
-            {
-              v = v.Replace("[","").Replace("]","");
-              double x = Convert.ToDouble(v.Split(',')[0]);
-              double y = Convert.ToDouble(v.Split(',')[1]);
-              double z = Convert.ToDouble(v.Split(',')[2]);
-              c = new Vector3d(x,y,z);
-            } else {
-              d = Convert.ToDouble(v);
-            }
-            if( k=="r" )
-            {
-              tgt.r = c;
-              tgt.type = (vset)?SolveTargetType.Both:SolveTargetType.Position;
-              rset = true;
-            }
-            else if( k=="v" )
-            {
-              tgt.v = c;
-              tgt.type = (rset)?SolveTargetType.Both:SolveTargetType.Velocity;
-            }
-            else if( k=="t" )
-              tgt.t = (float)d;
-            else
-              System.Console.Error.WriteLine("No such element {0} in target. Only r, v or t",k);
-          }
-          targets.Add(tgt);
         } else {
           d = Convert.ToDouble(v);
           if (k=="N")
@@ -1056,17 +1093,14 @@ namespace HopperGuidance
       }
 
       // Add final target if set
-      if (rfset || vfset)
+      if ((rfaxes != 0)||(vfaxes != 0))
       {
+        System.Console.Error.WriteLine(rfaxes+" "+vfaxes);
         SolveTarget final = new SolveTarget();
-        if (rfset && vfset)
-          final.type = SolveTargetType.Both;
-        if (rfset && !vfset)
-          final.type = SolveTargetType.Position;
-        if (!rfset && vfset)
-          final.type = SolveTargetType.Velocity;
         final.r = rf;
+        final.raxes = rfaxes;
         final.v = vf;
+        final.vaxes = vfaxes;
         final.t = -1; // unset
         targets.Add(final);
       }
