@@ -60,6 +60,7 @@ namespace HopperGuidance
     public Vector3d r0;
     public Vector3d v0;
     public List<SolveTarget> targets;
+    public List<double> checktimes;
 
     // Outputs of solution (stored and returned)
     public int N; // choosen N given duration of flight
@@ -277,6 +278,7 @@ namespace HopperGuidance
     public double GFold(Vector3d r0, Vector3d v0,
                         List<SolveTarget> a_targets, double T,
                         out ThrustVectorTime [] o_thrusts,
+                        out List<double> o_checktimes,
                         out int a_retval)
     {
       // TODO: Ignoring Nmin and Nmax
@@ -329,16 +331,16 @@ namespace HopperGuidance
         o_thrusts[i].t = thrust_times[i];
       }
 
-      List<double> mdCheckTimes = new List<double>();
+      o_checktimes = new List<double>();
       double tX;
       if (minDescentAngle >= 0)
       {
         // from start
         for( tX=checkGapFirst; tX<0.5*T; tX=tX*checkGapMult )
-          mdCheckTimes.Add(tX);
+          o_checktimes.Add(tX);
         // from end
         for( tX=T-checkGapFirst; tX>0.5*T; tX=T-(T-tX)*checkGapMult )
-          mdCheckTimes.Add(tX);
+          o_checktimes.Add(tX);
       }
 
       alglib.minqpstate state;
@@ -419,7 +421,7 @@ namespace HopperGuidance
       // for minDescentAngle, N points for 4 planes to make square 'cones'
 #if (MINDESCENTANGLE)
       if (minDescentAngle >= 0)
-        constraints += 4*(mdCheckTimes.Count);
+        constraints += 4*(o_checktimes.Count);
 #endif
 
 #if (MAXVELOCITY)
@@ -576,7 +578,7 @@ namespace HopperGuidance
 
 #if (MINDESCENTANGLE)
       // Constrain N intermediate positions to be within minimumDescentAngle
-      foreach( float mdt in mdCheckTimes )
+      foreach( float mdt in o_checktimes )
       {
         // No check at t=T
         //double tX = T*((float)(j+1)/(numchecks+1));
@@ -758,7 +760,6 @@ namespace HopperGuidance
 #endif
 
       alglib.minqpsetalgodenseipm(state, 0.001);
-
       alglib.minqpoptimize(state);
       alglib.minqpresults(state, out x, out rep);
       double fuel=0;
@@ -831,6 +832,8 @@ namespace HopperGuidance
       o_thrusts = null;
       ThrustVectorTime [] thrustsc = new ThrustVectorTime[N];
       ThrustVectorTime [] thrustsd = new ThrustVectorTime[N];
+      List<double> checktimesc = null;
+      List<double> checktimesd = null;
 
       c = b - (b - a) / gr;
       d = a + (b - a) / gr;
@@ -841,12 +844,12 @@ namespace HopperGuidance
         last_c = c;
         last_d = d;
         // TODO - Adjust times on a_tr_t and a_tv_t for be fc and fd
-        fc = GFold(a_r0,a_v0,a_targets,c,out thrustsc,out retvalc);
-        fd = GFold(a_r0,a_v0,a_targets,d,out thrustsd,out retvald);
+        fc = GFold(a_r0,a_v0,a_targets,c,out thrustsc,out checktimesc,out retvalc);
+        fd = GFold(a_r0,a_v0,a_targets,d,out thrustsd,out checktimesd,out retvald);
         if (fc < fd)
-            {b = d;}
+          b = d;
         else
-            {a = c;}
+          a = c;
 
         // We recompute both c and d here to avoid loss of precision which may lead to incorrect results or infinite loop
         c = b - (b - a) / gr;
@@ -855,7 +858,7 @@ namespace HopperGuidance
 
       double bestT = 0.5*(a+b);
       // TODO - Adjust times on a_tr_t and a_tv_t for be fc and fd
-      o_fuel = GFold(a_r0,a_v0,a_targets,bestT,out o_thrusts,out o_retval);
+      o_fuel = GFold(a_r0,a_v0,a_targets,bestT,out o_thrusts,out checktimes,out o_retval);
       retval = o_retval;
       r0 = a_r0;
       v0 = a_v0;
@@ -869,6 +872,7 @@ namespace HopperGuidance
           o_fuel = fc;
           o_thrusts = thrustsc;
           o_retval = retvalc;
+          checktimes = checktimesc;
           T = last_c;
           retval = retvalc;
           targets[targets.Count-1].t = (float)last_c + extraTime;
@@ -879,6 +883,7 @@ namespace HopperGuidance
           o_fuel = fd;
           o_thrusts = thrustsd;
           o_retval = retvald;
+          checktimes = checktimesd;
           T = last_d;
           retval = retvald;
           targets[targets.Count-1].t = (float)last_d + extraTime;;
@@ -920,11 +925,13 @@ namespace HopperGuidance
         System.Console.Error.WriteLine("Estimated Tmax="+solver.Tmax);
       }
 
+
       // Compute trajectory to landing spot
       double fuel;
 
       // Solve for best time adding each intermediate constraint at a time
       bool done = false;
+      double tol = solver.tol;
       while(!done)
       {
         List<SolveTarget> partial_targets = new List<SolveTarget>();
@@ -942,7 +949,11 @@ namespace HopperGuidance
           last++;
         }
 
+
         // Currently uses intermediate positions, ir[]
+        // use rough tolerance for intermediate targets and reduce to actual set value for
+        // last target when complete final trajectory is computed
+        solver.tol = (a_targets.Count == partial_targets.Count)?tol:1;
         bestT = solver.GoldenSearchGFold(local_r, local_v, partial_targets, out o_thrusts, out fuel, out retval);
         System.Console.Error.WriteLine(solver.DumpString());
 
@@ -1118,10 +1129,6 @@ namespace HopperGuidance
       Trajectory traj = new Trajectory();
       ThrustVectorTime [] local_thrusts;
       MultiPartSolve(ref solver, ref traj, r0, v0, targets, (float)solver.g, out local_thrusts, out fuel, out retval);
-      for( int i=0; i<local_thrusts.Length; i++)
-      {
-        System.Console.Error.WriteLine("thrust["+i+"]="+(Vector3)local_thrusts[i].v+" at "+local_thrusts[i].t);
-      }
 
       List<string> comments = new List<string>();
       comments.Add(solver.DumpString());
@@ -1130,6 +1137,8 @@ namespace HopperGuidance
       for( int i=0; i<local_thrusts.Length; i++)
         thrust_times.Add(local_thrusts[i].t);
       comments.Add("thrust_times="+String.Join(",",thrust_times));
+      if( solver.checktimes != null )
+        comments.Add("check_times="+String.Join(",",solver.checktimes));
       
       traj.Write(null, comments);
       System.Console.Error.WriteLine(solver.DumpString());
