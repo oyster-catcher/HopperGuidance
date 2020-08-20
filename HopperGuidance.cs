@@ -63,9 +63,8 @@ namespace HopperGuidance
         double log_interval = 0.05f; // Interval between logging
         System.IO.StreamWriter _tgtWriter = null; // Actual vessel
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
-        double extendTime = 1; // duration to extend trajectory to slowly descent to touch down and below at touchDownSpeed
-        //double touchDownSpeed = 1.4f;
-        double touchDownSpeed = 0;
+        float extendTime = 1; // duration to extend trajectory to slowly descent to touch down and below at touchDownSpeed
+        double touchDownSpeed = 1.4f;
         bool pickingPositionTarget = false;
         string _vesselLogFilename = "vessel.dat";
         string _tgtLogFilename = "target.dat";
@@ -623,7 +622,7 @@ namespace HopperGuidance
 
           _traj = new Trajectory();
           ThrustVectorTime [] local_thrusts = null;
-          double bestT = MainProg.MultiPartSolve(ref solver, ref _traj, tr0, tv0, targets, (float)g.magnitude, out local_thrusts, out fuel, out retval);
+          double bestT = MainProg.MultiPartSolve(ref solver, ref _traj, tr0, tv0, targets, (float)g.magnitude, extendTime, out local_thrusts, out fuel, out retval);
           Debug.Log(solver.DumpString());
           if ((retval>=1) && (retval<=5)) // solved for complete path?
           {
@@ -680,8 +679,6 @@ namespace HopperGuidance
         {
           autoMode = AutoMode.Off;
           if (_track_obj != null) {Destroy(_track_obj); _track_obj=null;}
-          //foreach (GameObject obj in _tgt_objs)
-          //  Destroy(obj);
           if (_align_obj != null) {Destroy(_align_obj); _align_obj=null;}
           if (_steer_obj != null) {Destroy(_steer_obj); _steer_obj=null;}
           LinkedListNode<GameObject> node = thrusts.First;
