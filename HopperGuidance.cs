@@ -558,7 +558,7 @@ namespace HopperGuidance
 
           solver = new Solve();
           solver.Tmin = 1;
-          solver.tol = 0.1;
+          solver.tol = 0.5;
           solver.vmax = maxV;
           solver.amin = amin*(1+errMargin);
           solver.amax = amax*(1-errMargin);
@@ -783,12 +783,12 @@ namespace HopperGuidance
           {
             throttle = 0.01f; // some throttle to steer? (if no RCS and main thruster gimbals)
             // Draw steer vector
-            DrawSteer(tr, tr+3*vessel.vesselSize.x*Vector3d.Normalize(unlimda), _transform, idlecol);
+            DrawSteer(tr, tr+3*vessel.vesselSize.x*Vector3d.Normalize(da2), _transform, idlecol);
           }
           else
           {
             // Draw steer vector
-            DrawSteer(tr, tr+3*vessel.vesselSize.x*Vector3d.Normalize(unlimda), _transform, thrustcol);
+            DrawSteer(tr, tr+3*vessel.vesselSize.x*Vector3d.Normalize(da2), _transform, thrustcol);
           }
           DrawAlign(tr,dr,_transform,aligncol);
           // If no clear steer direction point upwards
