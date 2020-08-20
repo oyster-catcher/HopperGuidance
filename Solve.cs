@@ -907,6 +907,7 @@ namespace HopperGuidance
                                         Vector3d local_r, Vector3d local_v,
                                         List<SolveTarget> a_targets,
                                         float g,
+                                        float extendTime, // extend trajectory on same vel
                                         out ThrustVectorTime [] o_thrusts,
                                         out double o_fuel, out int retval)
     {
@@ -976,7 +977,7 @@ namespace HopperGuidance
         }
       }
       local_traj = new Trajectory();
-      local_traj.Simulate(bestT, o_thrusts, local_r, local_v, new Vector3d(0,-g,0), solver.dt, 0);
+      local_traj.Simulate(bestT, o_thrusts, local_r, local_v, new Vector3d(0,-g,0), solver.dt, extendTime);
       local_traj.CorrectFinal(a_targets[a_targets.Count-1].r,a_targets[a_targets.Count-1].v,true,false);
       solver.targets = a_targets; // fill in times
       return T;
@@ -1128,7 +1129,7 @@ namespace HopperGuidance
       int retval;
       Trajectory traj = new Trajectory();
       ThrustVectorTime [] local_thrusts;
-      MultiPartSolve(ref solver, ref traj, r0, v0, targets, (float)solver.g, out local_thrusts, out fuel, out retval);
+      MultiPartSolve(ref solver, ref traj, r0, v0, targets, (float)solver.g, 0, out local_thrusts, out fuel, out retval);
 
       List<string> comments = new List<string>();
       comments.Add(solver.DumpString());
