@@ -62,11 +62,10 @@ Parameters for (1) are used to compute the trajectory and can be used to control
 
 Click "Pick Target" then click on the main view to select the target, and then sets if height on the part UI if you wish. You will need to increase the target size to see far away targets. Note that the target is horizontal so it will get hidden on slopes.
 
-Parameters for (2) describe what to do when the craft is off the trajectory. The nearest point on the trajectory is marked by a blue line from the craft to the trajectory. This nearest point takes into account and position and velocity with a little more weight for velocity. This makes the craft behave more smoothly rather than blindy aiming for the nearest point in position. So the craft tries to match the position and velocity of the nearest point. If calculates a correct to the thrust vector to try and minimise the discrepancy. Six PID controllers are used to achieve this. 3 for the X,Y and Z positions and 3 for X, Y and Z velocities.
+Parameters for (2) describe what to do when the craft is off the trajectory. The nearest point on the trajectory is marked by a blue line from the craft to the trajectory. This nearest point takes into account and position and velocity with a little more weight for velocity. This makes the craft behave more smoothly rather than blindy aiming for the nearest point in position. So the craft tries to match the position and velocity of the nearest point. A correct to the thrust vector is calculated minimise the discrepancy. Six PID controllers are used to achieve this. 3 for the X,Y and Z positions and 3 for X, Y and Z velocities.
 
 - Idle attitude angle - If the craft is pointing more this angle away from the required direction of thrust then idle the engine at 1% thrust. This prevent the craft thrusting in the wrong direction and waits of it to point correctly
-- Correction factor - Sets the velocity to aim for to close the position error. If set of 1 then when 1m aware aim for a velocity of 1m/s towards the target. 0.1 to 0.4 are good values. Using 0.1 for large vessels that take longer to change their attitude. Lower this if the craft oscillates around the trajectory.
-- Acceleration gain - This behaves quite similarly to the correct factor. It controls how fast the throttle reacts to a mismatch in the desired and actual velocity. If this is too high the throttle rapidly oscillate and the craft will again oscillate around the trajectory. Use as low as 0.2 for large craft (Space X Starship size) and 0.8 for small craft.
+- Correction factor - Sets the velocity to aim for to close the position error. If set of 1 then when 1m aware aim for a velocity of 1m/s towards the target. 0.1 to 0.2 are good values. Using 0.1 for large vessels that take longer to change their attitude. Lower this if the craft oscillates around the trajectory.
 
 Finally there are a few toggle switches
 
@@ -100,18 +99,22 @@ Usually caused by one of the following
 - Other. Sadly sometimes the solver just fails particularly with lots of targets of if they are too close, making a trajectory impossible. Its worth trying again as that sometimes works
 
 Fun things to try
+=================
 
 Sets targets for a slalom course around some buildings
 Find the bridges at the launch site and fly under them
 Try and reproduce the SN5 Starship hop in Realism Overhaul
 Try setting targets round and round in a circle
+Create a trajectory that goes in a loop. If the starting and end points are close the vessel can 'snap' back to the starting point and go around again.
 
-Dealing with Small Craft:
+Dealing with Small Craft
+========================
 
 Small craft are exciting, like a sports car.
 You can try and push of max velocity, max thrust angle, max thrust angle to high values. The craft will then be able to move quickly and accelerate quickly leads to exciting but possible risky landings.
 
-Dealing with Large Craft:
+Dealing with Large Craft
+========================
 
 Large craft are hard to maneoveure since they have high mass and will take time to change its attitude. This leads to it pointing is the wrong direction and either thrusting in that wrong direction or waiting to change its attitude. Both these mean it cannot following the track. Another problem is that atmospheric drag is not included when solving for the best trajectory. So heres some tips for dealing with large craft
 
