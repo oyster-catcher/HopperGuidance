@@ -53,7 +53,7 @@ namespace HopperGuidance
     public int fidelity = 20;
     public double timePenalty = 0; // If zero minimize fuel, as 1 then 1 extra second cost 1 fuel
     public float extraTime = 0.5f; // Add this on to minimum fuel solution (helps larger craft?)
-    public Vector3d apex; // Apex position of cone of minimum descent
+    public Vector3d apex = Vector3d.zero; // min descent relative to this point
 
     // Last stored inputs to GFold() - in natural space for solution
     // with Y as the up direction
@@ -103,7 +103,7 @@ namespace HopperGuidance
     }
 #endif
     // axes it bitfield of X, Y, Z flags
-    public string Vec2Str(Vector3d v, int axes=7)
+    public static string Vec2Str(Vector3d v, int axes=7)
     {
       string s = "";
       if ((axes & SolveTarget.X) != 0)
@@ -281,6 +281,16 @@ namespace HopperGuidance
                         out List<double> o_checktimes,
                         out int a_retval)
     {
+      // Apex is for the final target for min descent angle
+      // If not in min descent region use ground and min descent angle=0 to keep above ground
+      Vector3d ground = r0;
+      foreach(SolveTarget tgt in a_targets)
+      {
+        if (tgt.r.y < ground.y)
+          ground = tgt.r;
+      }
+      if( apex.y < ground.y)
+        ground = apex;
       // TODO: Ignoring Nmin and Nmax
       a_retval = 0;
       List<float> thrust_times = new List<float>();
@@ -420,8 +430,13 @@ namespace HopperGuidance
 
       // for minDescentAngle, N points for 4 planes to make square 'cones'
 #if (MINDESCENTANGLE)
-      if (minDescentAngle >= 0)
-        constraints += 4*(o_checktimes.Count);
+      foreach( float mdt in o_checktimes )
+      {
+        if( mdt < last_target_t )
+          constraints++; // just check Y above ground
+        else
+          constraints += 4;
+      }
 #endif
 
 #if (MAXVELOCITY)
@@ -560,12 +575,9 @@ namespace HopperGuidance
 
       // Use lowest Y position as ground - not true but this only to avoid
       // making partial trajectories don't allow time to not hit ground
-      float groundY = (float)r0.y;
-      foreach( SolveTarget tgt in a_targets)
-        groundY = Mathf.Min(groundY,(float)tgt.r.y); 
       // TODO: Calculate final position
       Vector3d tgt_r = a_targets[a_targets.Count-1].r;
-      float height = (float)tgt_r.y - groundY;
+      float height = (float)tgt_r.y - (float)ground.y;
       // Crude height above descent angle
       float maxv = 0;
       maxv = Mathf.Sqrt((float)(amax-g)*height); // should really be 2.0
@@ -586,65 +598,73 @@ namespace HopperGuidance
         RVWeightsToTime(mdt,dt,o_thrusts,out double[] wr,out double[] wv);
 
         // Calculate Normal for plane to be above (like an upside down pyramid)
-        double ang = minDescentAngle;
         // ensure within 45 degress of landing in last 3 seconds
         // TODO: And beyond previous target
         if( mdt < last_target_t )
-          ang=0;
-#if (DEBUG)
-        System.Console.Error.WriteLine("minDescent angle="+ang+" t="+mdt+" k="+k+"/"+constraints);
-#endif
-        double vx = Math.Sin(ang*Math.PI/180.0);
-        double vy = Math.Cos(ang*Math.PI/180.0);
-        double [] V1 = new double [] {vx,vy,0}; // Normal vector of plane to be above
-        double [] V2 = new double [] {-vx,vy,0}; // Normal vector of plane to be above
-        double [] V3 = new double [] {0,vy,vx}; // Normal vector of plane to be above
-        double [] V4 = new double [] {0,vy,-vx}; // Normal vector of plane to be above
-        for(int i = 0 ; i < N ; i++)
         {
-          // proportions of thrusts[i] for XYZ for position
-          // 45 degrees when X<0
-          c[k+0,i*3+0] = V1[0] * wr[i]; // X
-          c[k+0,i*3+1] = V1[1] * wr[i]; // Y
-          c[k+0,i*3+2] = V1[2] * wr[i]; // Z
-          // proportions of thrusts[i] for XYZ for position
-          // 45 degrees when X<0
-          c[k+1,i*3+0] = V2[0] * wr[i]; // X
-          c[k+1,i*3+1] = V2[1] * wr[i]; // Y
-          c[k+1,i*3+2] = V2[2] * wr[i]; // Z
-          // proportions of thrusts[i] for XYZ for position
-          // 45 degrees when X<0
-          c[k+2,i*3+0] = V3[0] * wr[i]; // X
-          c[k+2,i*3+1] = V3[1] * wr[i]; // Y
-          c[k+2,i*3+2] = V3[2] * wr[i]; // Z
-          // proportions of thrusts[i] for XYZ for position
-          // 45 degrees when X<0
-          c[k+3,i*3+0] = V4[0] * wr[i]; // X
-          c[k+3,i*3+1] = V4[1] * wr[i]; // Y
-          c[k+3,i*3+2] = V4[2] * wr[i]; // Z
+          for(int i = 0 ; i < N ; i++)
+            c[k,i*3+1] = wr[i]; // Y
+          c[k,rhs] = ground.y - (r0[1] + v0[1]*mdt - 0.5*mdt*mdt*g);
+          ct[k] = 1; // LHS > RHS
+          k++;
         }
-        // LHS factors to tX[i] and tY[i]
-        // Final X + Y + Z
-        double rfx = apex.x;
-        double rfy = apex.y;
-        double rfz = apex.z;
-        c[k+0,rhs] = V1[0] * (rfx - (r0[0] + v0[0]*mdt))
-                   + V1[1] * (rfy - (r0[1] + v0[1]*mdt - 0.5*mdt*mdt*g))
-                   + V1[2] * (rfz - (r0[2] + v0[2]*mdt)); // RHS
-        ct[k+0] = 1; // LHS > RHS
-        c[k+1,rhs] = V2[0] * (rfx - (r0[0] + v0[0]*mdt))
-                   + V2[1] * (rfy - (r0[1] + v0[1]*mdt - 0.5*mdt*mdt*g))
-                   + V2[2] * (rfz - (r0[2] + v0[2]*mdt)); // RHS
-        ct[k+1] = 1; // LHS > RHS
-        c[k+2,rhs] = V3[0] * (rfx - (r0[0] + v0[0]*mdt))
-                   + V3[1] * (rfy - (r0[1] + v0[1]*mdt - 0.5*mdt*mdt*g))
-                   + V3[2] * (rfz - (r0[2] + v0[2]*mdt)); // RHS
-        ct[k+2] = 1; // LHS > RHS
-        c[k+3,rhs] = V4[0] * (rfx - (r0[0] + v0[0]*mdt))
-                   + V4[1] * (rfy - (r0[1] + v0[1]*mdt - 0.5*mdt*mdt*g))
-                   + V4[2] * (rfz - (r0[2] + v0[2]*mdt)); // RHS
-        ct[k+3] = 1; // LHS > RHS
-        k += 4;
+        else
+        {
+#if (DEBUG)
+          System.Console.Error.WriteLine("minDescent angle="+ang+" t="+mdt+" k="+k+"/"+constraints);
+#endif
+          double vx = Math.Sin(minDescentAngle*Math.PI/180.0);
+          double vy = Math.Cos(minDescentAngle*Math.PI/180.0);
+          double [] V1 = new double [] {vx,vy,0}; // Normal vector of plane to be above
+          double [] V2 = new double [] {-vx,vy,0}; // Normal vector of plane to be above
+          double [] V3 = new double [] {0,vy,vx}; // Normal vector of plane to be above
+          double [] V4 = new double [] {0,vy,-vx}; // Normal vector of plane to be above
+          for(int i = 0 ; i < N ; i++)
+          {
+            // proportions of thrusts[i] for XYZ for position
+            // 45 degrees when X<0
+            c[k+0,i*3+0] = V1[0] * wr[i]; // X
+            c[k+0,i*3+1] = V1[1] * wr[i]; // Y
+            c[k+0,i*3+2] = V1[2] * wr[i]; // Z
+            // proportions of thrusts[i] for XYZ for position
+            // 45 degrees when X<0
+            c[k+1,i*3+0] = V2[0] * wr[i]; // X
+            c[k+1,i*3+1] = V2[1] * wr[i]; // Y
+            c[k+1,i*3+2] = V2[2] * wr[i]; // Z
+            // proportions of thrusts[i] for XYZ for position
+            // 45 degrees when X<0
+            c[k+2,i*3+0] = V3[0] * wr[i]; // X
+            c[k+2,i*3+1] = V3[1] * wr[i]; // Y
+            c[k+2,i*3+2] = V3[2] * wr[i]; // Z
+            // proportions of thrusts[i] for XYZ for position
+            // 45 degrees when X<0
+            c[k+3,i*3+0] = V4[0] * wr[i]; // X
+            c[k+3,i*3+1] = V4[1] * wr[i]; // Y
+            c[k+3,i*3+2] = V4[2] * wr[i]; // Z
+          }
+          // LHS factors to tX[i] and tY[i]
+          // Final X + Y + Z
+          double rfx = apex.x;
+          double rfy = apex.y;
+          double rfz = apex.z;
+          c[k+0,rhs] = V1[0] * (rfx - (r0[0] + v0[0]*mdt))
+                     + V1[1] * (rfy - (r0[1] + v0[1]*mdt - 0.5*mdt*mdt*g))
+                     + V1[2] * (rfz - (r0[2] + v0[2]*mdt)); // RHS
+          ct[k+0] = 1; // LHS > RHS
+          c[k+1,rhs] = V2[0] * (rfx - (r0[0] + v0[0]*mdt))
+                     + V2[1] * (rfy - (r0[1] + v0[1]*mdt - 0.5*mdt*mdt*g))
+                     + V2[2] * (rfz - (r0[2] + v0[2]*mdt)); // RHS
+          ct[k+1] = 1; // LHS > RHS
+          c[k+2,rhs] = V3[0] * (rfx - (r0[0] + v0[0]*mdt))
+                     + V3[1] * (rfy - (r0[1] + v0[1]*mdt - 0.5*mdt*mdt*g))
+                     + V3[2] * (rfz - (r0[2] + v0[2]*mdt)); // RHS
+          ct[k+2] = 1; // LHS > RHS
+          c[k+3,rhs] = V4[0] * (rfx - (r0[0] + v0[0]*mdt))
+                     + V4[1] * (rfy - (r0[1] + v0[1]*mdt - 0.5*mdt*mdt*g))
+                     + V4[2] * (rfz - (r0[2] + v0[2]*mdt)); // RHS
+          ct[k+3] = 1; // LHS > RHS
+          k += 4;
+        }
       }
 #endif
 
@@ -841,6 +861,7 @@ namespace HopperGuidance
       last_d = d;
       while (Math.Abs(c - d) > tol)
       {
+        System.Console.Error.WriteLine("a="+a+" c="+c+" d="+d+" b="+b);
         last_c = c;
         last_d = d;
         // TODO - Adjust times on a_tr_t and a_tv_t for be fc and fd
@@ -925,7 +946,7 @@ namespace HopperGuidance
         solver.Tmax = Solve.EstimateTimeBetweenTargets(local_r, local_v, a_targets, (float)solver.amax, (float)solver.g, (float)solver.vmax);
         System.Console.Error.WriteLine("Estimated Tmax="+solver.Tmax);
       }
-
+      solver.apex = a_targets[a_targets.Count-1].r;
 
       // Compute trajectory to landing spot
       double fuel;
@@ -1039,8 +1060,6 @@ namespace HopperGuidance
            vf = c;
            vfaxes = axes;
           }
-          else if (k=="apex")
-            solver.apex = c;
           else if (k=="target")
           {
             SolveTarget tgt = new SolveTarget();
