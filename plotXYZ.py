@@ -211,7 +211,6 @@ def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
     plot_line(ax9,data,'x','y',color=colors[di],label=filenames[di])
     # Show checkpoints
     plot_checks(ax9,data,'x','y',check_times,color=colors[di])
-    print(targets)
     plot_targets(ax9,[(t.x,t.y) for t in targets])
 
   # Draw min descent angle
