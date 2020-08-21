@@ -102,7 +102,7 @@ Fun things to try
 =================
 
 Sets targets for a slalom course around some buildings
-Find the bridges at the launch site and fly under them
+Find the bridges at KSC and try to fly under them
 Try and reproduce the SN5 Starship hop in Realism Overhaul
 Try setting targets round and round in a circle
 Create a trajectory that goes in a loop. If the starting and end points are close the vessel can 'snap' back to the starting point and go around again.
@@ -167,18 +167,6 @@ Just type
 make
 ```
 But I include the Visual Studio project as it may be easy to get running on a Windows machine or on a Mac with some configuration hacks. Any help on this much appreciated.
-
-Locations
-=========
-
-You can type these values in for the landing site. Yeah, or know that is quite awkward to do right now.
-Its much easier to use "Pick target" if you can see the target.
-
-Kerbin:
-
-- KSC H-Pad: latitude=-0.0968 longitude=-74.6172 altitude=180
-- Island ATC Tower: latitude=-1.5233 longitude=-71.911 altitude=182
-- KSC Water tower: latitude=-0.0922 longitude=-74.55251 altitude=102
 
 ALGLIB
 ======
