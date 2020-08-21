@@ -143,7 +143,7 @@ Testing
 There is a way to run the algorithm outside of KSP via Solve.exe.
 I'm running on the Mac so I run
 ```
-mono ./Solve.exe r0=[40,500,20] v0=[10,10,10] g=9.8 > solution.dat
+mono ./Solve.exe r0=[40,500,20] v0=[10,10,10] rf=[0,0,0] vf=[0,0,0] g=9.8 > solution.dat
 ```
 for example and this produces a data file with a trajectory.
 This can be plotted (via matplotlib) by running
