@@ -51,7 +51,6 @@ namespace HopperGuidance
         bool checkingLanded = false; // only check once in flight to avoid failure to start when already on ground
         AutoMode autoMode = AutoMode.Off;
         float errMargin = 0.1f; // margin of error in solution to allow for headroom in amax (use double for maxThrustAngle)
-        float predictTime = 0.2f;
         double lowestY = 0; // Y position of bottom of craft relative to centre
         float _minThrust, _maxThrust;
         Solve solver; // Stores solution inputs, output and trajectory
@@ -108,26 +107,16 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust angle", guiFormat = "F1", isPersistant = true, guiUnits="°")]
         float maxThrustAngle = 45f; // Max. thrust angle from vertical
         float setMaxThrustAngle;
-
-        //[UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
-        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max landing thrust angle", guiFormat = "F1", isPersistant = true, guiUnits="°")]
-        float maxLandingThrustAngle = 0; // Max. final thrust angle from vertical
-        float setMaxLandingThrustAngle;
-
-        //[UI_FloatRange(minValue = 0f, maxValue = 90f, stepIncrement = 5f)]
-        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Idle attitude angle", guiFormat = "F0", isPersistant = true, guiUnits = "°")]
         float idleAngle = 90.0f;
 
-        [UI_FloatRange(minValue = 0.01f, maxValue = 1f, stepIncrement = 0.01f)]
+        [UI_FloatRange(minValue = 0.01f, maxValue = 0.25f, stepIncrement = 0.01f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Correction factor", guiFormat = "F2", isPersistant = true)]
-        float corrFactor = 0.2f; // If 1 then at 1m error aim to close a 1m/s
+        float corrFactor = 0.25f; // If 1 then at 1m error aim to close a 1m/s
         float setCorrFactor;
         // Set this down to 0.05 for large craft and up to 0.4 for very agile small craft
 
-        [UI_FloatRange(minValue = 0, maxValue = 1, stepIncrement = 0.1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Acceleration gain", guiFormat = "F1", isPersistant = true)]
-        float accGain = 0.8f;
-        float setAccGain;
+        // Let accGain be 4x corrFactor
+        float kP2Scale=4 ; // Makes kP2 = corrFactor * kP2Scale;
 
         float yMult = 2; // Extra weight for Y to try and minimise height error over other errors
 
@@ -566,13 +555,9 @@ namespace HopperGuidance
           solver.g = g.magnitude;
           solver.minDescentAngle = minDescentAngle;
           solver.maxThrustAngle = maxThrustAngle*(1-2*errMargin);
-          solver.maxLandingThrustAngle = maxLandingThrustAngle*(1-2*errMargin);
+          solver.maxLandingThrustAngle = 0.1f*maxThrustAngle*(1-2*errMargin); // 1/10 of max thrust angle
 
           int retval;
-          // Predict into future since solution makes 0.1-0.3 secs to compute
-          Vector3 att = new Vector3d(vessel.transform.up.x,vessel.transform.up.y,vessel.transform.up.z);
-          r0 = r0 + v0*predictTime + 0.5*g*predictTime*predictTime + 0.5f*(float)amin*att*predictTime*predictTime;
-          v0 = v0 + g*predictTime + (float)amin*att*predictTime;
 
           // Shut-off throttle
           FlightCtrlState ctrl = new FlightCtrlState();
@@ -583,6 +568,7 @@ namespace HopperGuidance
           double fuel;
           List<SolveTarget> targets = new List<SolveTarget>();
           Vector3d tr0 = _transform.InverseTransformPoint(r0);
+          tr0.y += 0.1f; // move up slightly to ensure above ground plane
           Vector3d tv0 = _transform.InverseTransformVector(v0);
 
           // Create list of solve targets
@@ -627,7 +613,7 @@ namespace HopperGuidance
           if ((retval>=1) && (retval<=5)) // solved for complete path?
           {
             // Enable autopilot
-            _pid3d.Init(corrFactor,ki1,0,accGain,ki2,0,maxV,(float)amax,yMult);
+            _pid3d.Init(corrFactor,ki1,0,corrFactor * kP2Scale,ki2,0,maxV,(float)amax,yMult);
             // TODO - Testing out using in solution co-ordinates
             DrawTargets(_tgts,_transform,targetcol,tgtSize);
             vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
@@ -873,17 +859,15 @@ namespace HopperGuidance
             setTgtSize = tgtSize;
             redrawTargets = true;
           }
-          if ((corrFactor != setCorrFactor) || (accGain != setAccGain))
+          if (corrFactor != setCorrFactor)
           {
             setCorrFactor = corrFactor;
-            setAccGain = accGain;
             resetPID = true;
           }
-          if ((minDescentAngle != setMinDescentAngle)||(maxThrustAngle != setMaxThrustAngle)||(maxLandingThrustAngle != setMaxLandingThrustAngle))
+          if ((minDescentAngle != setMinDescentAngle)||(maxThrustAngle != setMaxThrustAngle))
           {
             setMinDescentAngle = minDescentAngle;
             setMaxThrustAngle = maxThrustAngle;
-            setMaxLandingThrustAngle = maxLandingThrustAngle;
             recomputeTrajectory = true;
           }
           if (maxV != setMaxV)
@@ -941,7 +925,7 @@ namespace HopperGuidance
           {
             ComputeMinMaxThrust(out _minThrust,out _maxThrust); // This might be including RCS (i.e. non main Throttle)
             double amax = _maxThrust/vessel.totalMass;
-            _pid3d.Init(corrFactor,ki1,0,accGain,ki2,0,maxV,(float)amax,yMult);
+            _pid3d.Init(corrFactor,ki1,0,corrFactor*kP2Scale,ki2,0,maxV,(float)amax,yMult);
           }
           if ((!_logging) && (_vesselWriter != null))
           {
