@@ -94,7 +94,6 @@ def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
   ax5.set_xlim([0,tmax])
   ax5.set_ylim([zmin,zmax])
   ax5.grid()
-  ax5.legend()
 
   P.subplot2grid((3,5),(2,1), colspan=1, rowspan=1)
   ax6 = P.gca()
@@ -129,7 +128,6 @@ def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
   ax9.set_ylabel("y")
   ax9.set_xlim([xmin,xmax])
   ax9.set_ylim([ymin,ymax])
-  ax9.legend()
   ax9.grid()
 
 
@@ -156,7 +154,6 @@ def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
     if not showchecks:
       check_times = []
     if 'target' in info:
-      print(info['target'])
       for s in info['target']:
         t=Vector3()
         targets.append(t.fromStr(s))
@@ -226,6 +223,7 @@ def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
       yy = [d*s + fy,fy,d*s + fy]
       ax9.plot(xx,yy,color=colors[di],linestyle='--')
 
+  ax9.legend()
   P.show()
 
 def extract_items(line, lists=[]):
