@@ -148,16 +148,51 @@ mono ./Solve.exe r0=[-340,100,20] v0=[10,10,10] target=[-200,120,0] target=[150,
 for example and this produces a data file with a trajectory.
 This can be plotted (via matplotlib) by running
 
+```
 ./plotXYZ.py --square solution.dat
+
+usage: plotXYZ.py [-h] [--xmin XMIN] [--xmax XMAX] [--ymin YMIN] [--ymax YMAX]
+                  [--zmin ZMIN] [--zmax ZMAX] [--vxmin VXMIN] [--vxmax VXMAX]
+                  [--vymin VYMIN] [--vymax VYMAX] [--vzmin VZMIN]
+                  [--vzmax VZMAX] [--tmax TMAX] [--amult AMULT] [--square]
+                  [--showchecks]
+                  filename [filename ...]
+
+Plot vessel data logs (or solutions) with X,Y,Z,VX,VY,VZ and Throttle in
+multiple plots
+
+positional arguments:
+  filename       Filename of TAB-separated data file, first line contains
+                 column names. Should contain time,x,y,z,vx,vy,vz,ax,ay,ax
+
+optional arguments:
+  -h, --help     show this help message and exit
+  --xmin XMIN    Minimum x position
+  --xmax XMAX    Maximum x position
+  --ymin YMIN    Minimum y position
+  --ymax YMAX    Maximum y position
+  --zmin ZMIN    Minimum z position
+  --zmax ZMAX    Maximum z position
+  --vxmin VXMIN  Minimum vx position
+  --vxmax VXMAX  Maximum vx position
+  --vymin VYMIN  Minimum vy position
+  --vymax VYMAX  Maximum vy position
+  --vzmin VZMIN  Minimum vz position
+  --vzmax VZMAX  Maximum vz position
+  --tmax TMAX    Maximum time
+  --amult AMULT  Multiplier for scale up thrust acceleration lines
+  --square       Make XY plot square (roughly as depends on window size)
+  --showchecks   Show time checks for max vel. and min descent angle
+```
 
 ![](docs/plotXYZ.png)
 
 Note: The maximum acceleration is shown as the dotted line on the time vs mag(accel) plot and this is exceeded temporarily. The craft will not be able to produce this much acceleration and the craft with diverge from the trajectory. This is because the constraint is actually applied independently to each X, Y, Z axis so the total magnitude can be larger than the axis limit. This is a simplication to help speed up solving time but there is scope for improvement.
 
 You can also run all the tests by running
-
+```
 ./run_tests.sh
-
+```
 This is all designed to run on a Mac where you have a bash shell. It should be failing easy to convert though.
 
 Compilation
