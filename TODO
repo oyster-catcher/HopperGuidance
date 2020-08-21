@@ -1,7 +1,8 @@
-- Show path travelled by vessel?
+- Show path travelled by vessel? (when logging?)
 - Get a working Visual Studio Project file
-- Get align vector in the right place again (use _wtraj?)
 - Add License.txt and Changelog.txt to installed mod
-- Better solution for intermediate targets (i.e. hopHeight)
 - Fly craft relative to another craft, say in orbit? Basically autodock, but MJ does this
-- In multi-part trajectory reuse previous results for extra speed
+- Speed up calculation (tricky)
+- Stop trajectory disappearing after a period (body transform changed as planet rotates?)
+- Show the result of plotXYZ.py in the README
+- Give more details of algorithm in-particular the multi-part solution
