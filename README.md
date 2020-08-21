@@ -1,7 +1,7 @@
 HopperGuidance
 ==============
 
-A KSP mod which enables the calculation of a fuel efficient trajectory in-flight through a number of targets to make a soft landing at a designated location respecting the capabilities of the craft. The craft will be steered automonously to follow this trajectory. You can choose many parameters of the trajectory to make it safe or more exciting. This has been a culmination of years of effort on and off, particulary to give to the ability to find the optimum path to steer quickly through a sequence of targets.
+A KSP mod which enables the calculation of a fuel efficient trajectory in-flight through a number of targets to make a soft landing at a designated location respecting the capabilities of the craft. The craft will be steered automonosly to follow this trajectory. You can choose many parameters of the trajectory to make it safe or more exciting. This has been a culmination of years of effort on and off, particularly to give to the ability to find the optimum path to steer quickly through a sequence of targets.
 
 Features
 - Pick targets to pass through ending on a ground target
@@ -25,8 +25,8 @@ References
 
 - "Minimum-Landing-Error Powered-Descent Guidance for Mars Landing Using Convex Optimization" http://www.larsblackmore.com/BlackmoreEtAlJGCD10.pdf
 
-Prerequistes
-============
+Pre-requistes
+=============
 
 Works with KSP versions 1.8.1 to 1.10 and possibly beyond.
 If you want to run the solver outside of KSP you need python and matplotlib to show the trajectories.
@@ -43,7 +43,7 @@ The mod includes shiny cuboid HopperGuidanceCore part in the Command & Control c
 
 Setting the target position. Click "Pick target" to select a ground position with the mouse pointer.
 You can changes its height via the part dialog box which always sets the height of the last target.
-A yellow target, inspired a little by the spaceX drone ship markings will be shown. If the height is greater than zero then the centre cross is extended on a stick above the ground.
+A yellow target, inspired a little by the SpaceX drone ship markings will be shown. If the height is greater than zero then the centre cross is extended on a stick above the ground.
 
 Once in flight click "Enable guidance" to automatically calculate a trajectory to safely land at the target point. Its not recommended that you do this more than 10km from the target currently. A trajectory will be shown in green with the calculated thrust direction and magnitude in red. The craft will be steered to attempt to follow this trajectory. You may get the message "Failed: try again" in which case the craft is likely to be either: too far away, beyond max velocity or below the minimum descent angle. If you tweak these numbers the trajectory will be automatically recalculated. However, if the solution has failed because is the position of the craft, may be its too low than you will need to manually press click "Enable guidance" again.
 
@@ -62,7 +62,7 @@ Parameters for (1) are used to compute the trajectory and can be used to control
 
 Click "Pick Target" then click on the main view to select the target, and then sets if height on the part UI if you wish. You will need to increase the target size to see far away targets. Note that the target is horizontal so it will get hidden on slopes.
 
-Parameters for (2) describe what to do when the craft is off the trajectory. The nearest point on the trajectory is marked by a blue line from the craft to the trajectory. This nearest point takes into account and position and velocity with a little more weight for velocity. This makes the craft behave more smoothly rather than blindy aiming for the nearest point in position. So the craft tries to match the position and velocity of the nearest point. A correct to the thrust vector is calculated minimise the discrepancy. Six PID controllers are used to achieve this. 3 for the X,Y and Z positions and 3 for X, Y and Z velocities.
+Parameters for (2) describe what to do when the craft is off the trajectory. The nearest point on the trajectory is marked by a blue line from the craft to the trajectory. This nearest point takes into account and position and velocity with a little more weight for velocity. This makes the craft behave more smoothly rather than blindly aiming for the nearest point in position. So the craft tries to match the position and velocity of the nearest point. A correct to the thrust vector is calculated minimise the discrepancy. Six PID controllers are used to achieve this. 3 for the X,Y and Z positions and 3 for X, Y and Z velocities.
 
 - Idle attitude angle - If the craft is pointing more this angle away from the required direction of thrust then idle the engine at 1% thrust. This prevent the craft thrusting in the wrong direction and waits of it to point correctly
 - Correction factor - Sets the velocity to aim for to close the position error. If set of 1 then when 1m aware aim for a velocity of 1m/s towards the target. 0.1 to 0.2 are good values. Using 0.1 for large vessels that take longer to change their attitude. Lower this if the craft oscillates around the trajectory.
@@ -73,7 +73,7 @@ Finally there are a few toggle switches
 - Show track - Display track, align and steer vectors
 - Logging - If enabled the files vessel.dat, target.dat and solution.dat are logged to the same directory as KSP.log
 
-Heres a diagram to explain some of the parameters
+Here's a diagram to explain some of the parameters
 
 ![](docs/Diagram.png)
 
@@ -116,12 +116,12 @@ You can try and push of max velocity, max thrust angle, max thrust angle to high
 Dealing with Large Craft
 ========================
 
-Large craft are hard to maneoveure since they have high mass and will take time to change its attitude. This leads to it pointing is the wrong direction and either thrusting in that wrong direction or waiting to change its attitude. Both these mean it cannot following the track. Another problem is that atmospheric drag is not included when solving for the best trajectory. So heres some tips for dealing with large craft
+Large craft are hard to maneuver since they have high mass and will take time to change its attitude. This leads to it pointing is the wrong direction and either thrusting in that wrong direction or waiting to change its attitude. Both these mean it cannot following the track. Another problem is that atmospheric drag is not included when solving for the best trajectory. So here's some tips for dealing with large craft
 
-- Keep max thrust angle low, says <15 degress as this will keep the craft more upright and prevent the craft tipping too far and being unable to get upright quickly
-- Lower correctiion factor down to as low as 0.05. This will mean if the craft is off trajectory it will only move slowly towards the correct trajectory. If this value is too high it will overshoot. Observe whether the red steer attitude is far from the actual crafts attitude
+- Keep max thrust angle low, says <15 degrees as this will keep the craft more upright and prevent the craft tipping too far and being unable to get upright quickly
+- Lower correction factor down to as low as 0.05. This will mean if the craft is off trajectory it will only move slowly towards the correct trajectory. If this value is too high it will overshoot. Observe whether the red steer attitude is far from the actual crafts attitude
 - Raise the final descent angle above 45 degrees, may be as high as 80 degrees to give a more vertical landing
-- You can compensate for the lack of ability to steer the craft by adding more RCS thrusters or overly powerfull reaction wheels
+- You can compensate for the lack of ability to steer the craft by adding more RCS thrusters or overly powerful reaction wheels
 
 Dealing with Realism Overhaul:
 
@@ -187,7 +187,7 @@ optional arguments:
 
 ![](docs/plotXYZ.png)
 
-Note: The maximum acceleration is shown as the dotted line on the time vs mag(accel) plot and this is exceeded temporarily. The craft will not be able to produce this much acceleration and the craft with diverge from the trajectory. This is because the constraint is actually applied independently to each X, Y, Z axis so the total magnitude can be larger than the axis limit. This is a simplication to help speed up solving time but there is scope for improvement.
+Note: The maximum acceleration is shown as the dotted line on the time vs mag(accel) plot and this is exceeded temporarily. The craft will not be able to produce this much acceleration and the craft with diverge from the trajectory. This is because the constraint is actually applied independently to each X, Y, Z axis so the total magnitude can be larger than the axis limit. This is a simplification to help speed up solving time but there is scope for improvement.
 
 You can also run all the tests by running
 ```
@@ -210,7 +210,7 @@ But I include the Visual Studio project as it may be easy to get running on a Wi
 ALGLIB
 ======
 
-I make use of the free version of ALGLIB for convex optimisation. I use the free version provided until the GPL. Heres a description of ALGLIB from alglib.net
+I make use of the free version of ALGLIB for convex optimisation. I use the free version provided until the GPL. Here's a description of ALGLIB from alglib.net
 
 ALGLIB is a cross-platform numerical analysis and data processing library. It supports several programming languages (C++, C#, Delphi) and several operating systems (Windows and POSIX, including Linux). ALGLIB features include:
 
@@ -227,10 +227,10 @@ Details of the Algorithm
 My implementation is not quite the same as the 'proper' G-FOLD algorithm. I made some simplifications due to the convex solver code I had available and in some cases due to my lack of understanding.
 The full solution makes account of the consumption of fuel and the improved acceleration when mass drops due to this. Mine does not. If you run out of fuel then sorry.
 
-The proper G-FOLD uses a Second Order Cone Programming (SOCP) solver. This is fancy stuff, but bascially it means that various constraints such a thrust directions and minimum descent angle are all cones. You can see that they are since they are a maximum angle from the vertical in all directions.
+The proper G-FOLD uses a Second Order Cone Programming (SOCP) solver. This is fancy stuff, but basically it means that various constraints such a thrust directions and minimum descent angle are all cones. You can see that they are since they are a maximum angle from the vertical in all directions.
 I couldn't find a SOCP solver but I could find a Quadratic Programming (QP) solver in the shape of alglib. See alglib.net. This means I use 4 planes rather than a cone so its an approximation that you probably won't notice.
 
-To follow the trajectory I use 6 PID controllers. There are a pair of controller for each X, Y and Z. The controllers are very simple using only the proportial element, kP. The 1st controller say for the X axis sets a target (or setpoint) for the velocity, VX given the error in the X position. To start with we find the closest position on the trajectory by considering both position and velocity of the craft and trajectory and finding the nearest point. kP is given by "Correction factor". To this we add the actual desired velocity from the nearest point on the trajectory. So this says aim to move towards the X position at this speed while also moving along the trajectory. Then the second PID for X set the acceleration in the X direction given the mismatch between the velocity desired given the target velocity and the current velocity. kP in this controller is set from "Acceleration gain". This is done for the three dimensions and gives a desired correction thrust vector. This correction is added to the thrust vector already computed from the solution. Finally the thrust vector in limited by the max thrust angle from vertical which will prevent the craft leaning too much. The direction of this thrust vector is shown by the red bar drawn from the centre of the craft.
+To follow the trajectory I use 6 PID controllers. There are a pair of controller for each X, Y and Z. The controllers are very simple using only the proportional element, kP. The 1st controller say for the X axis sets a target (or setpoint) for the velocity, VX given the error in the X position. To start with we find the closest position on the trajectory by considering both position and velocity of the craft and trajectory and finding the nearest point. kP is given by "Correction factor". To this we add the actual desired velocity from the nearest point on the trajectory. So this says aim to move towards the X position at this speed while also moving along the trajectory. Then the second PID for X set the acceleration in the X direction given the mismatch between the velocity desired given the target velocity and the current velocity. kP in this controller is set from "Acceleration gain". This is done for the three dimensions and gives a desired correction thrust vector. This correction is added to the thrust vector already computed from the solution. Finally the thrust vector in limited by the max thrust angle from vertical which will prevent the craft leaning too much. The direction of this thrust vector is shown by the red bar drawn from the centre of the craft.
 
 Adrian Skilling
 
