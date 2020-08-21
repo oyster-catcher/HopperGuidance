@@ -143,12 +143,14 @@ Testing
 There is a way to run the algorithm outside of KSP via Solve.exe.
 I'm running on the Mac so I run
 ```
-mono ./Solve.exe r0=[40,500,20] v0=[10,10,10] rf=[0,0,0] vf=[0,0,0] g=9.8 > solution.dat
+mono ./Solve.exe r0=[-340,100,20] v0=[10,10,10] target=[-200,120,0] target=[150,50,0] rf=[0,0,0] vf=[0,0,0] g=9.8 maxThrustsBetweenTargets=2 > solution.dat; ./plotXYZ.py solution.dat
 ```
 for example and this produces a data file with a trajectory.
 This can be plotted (via matplotlib) by running
 
-./plotXYZ.py solution.dat
+./plotXYZ.py --square solution.dat
+
+![](docs/plotXYZ.png)
 
 You can also run all the tests by running
 
