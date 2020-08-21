@@ -28,6 +28,21 @@ def plot_checks(ax,data,fx,fy,times,color='black'):
         done = True
   ax.plot(cx,cy,color=color,marker='o',markersize=10,linestyle='')
 
+def plot_targets(ax,data,color='black'):
+  tx = [d[0] for d in data]
+  ty = [d[1] for d in data]
+  ax.plot(tx,ty,color=color,marker='s',markersize=10,linestyle='')
+
+class Vector3:
+  def fromStr(self, s=''):
+    s = s.strip("[]")
+    self.x,self.y,self.z = [float(a) for a in s.split(",")]
+    return self
+
+  def __init__(self, x=0, y=0, z=0):
+    self.x = x
+    self.y = y
+    self.z = z
 
 def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
          vxmin,vxmax,vymin,vymax,vzmin,vzmax,tmax=30,amult=1,askip=3,
@@ -123,6 +138,7 @@ def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
     data = read_data(filename,info)
     thrust_times = []
     check_times = []
+    targets = []
     if 'minDescentAngle' in info:
       minDescentAngle = float(info['minDescentAngle'])
     else:
@@ -139,6 +155,14 @@ def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
       check_times = [float(t) for t in info['check_times'].split(",")]
     if not showchecks:
       check_times = []
+    if 'target' in info:
+      print(info['target'])
+      for s in info['target']:
+        t=Vector3()
+        targets.append(t.fromStr(s))
+    if 'rf' in info:
+      t=Vector3()
+      targets.append(t.fromStr(info['rf']))
 
     plot_line(ax1,data,'time','x',color=col)
     plot_checks(ax1,data,'time','x',check_times,color=col)
@@ -187,6 +211,8 @@ def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
     plot_line(ax9,data,'x','y',color=colors[di],label=filenames[di])
     # Show checkpoints
     plot_checks(ax9,data,'x','y',check_times,color=colors[di])
+    print(targets)
+    plot_targets(ax9,[(t.x,t.y) for t in targets])
 
   # Draw min descent angle
     if minDescentAngle is not None:
@@ -203,12 +229,18 @@ def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
 
   P.show()
 
-def extract_items(line):
+def extract_items(line, lists=[]):
   d = {}
   for kv in line.split(" "):
     if '=' in kv:
       k,v = kv.split('=',1)
-      d[k] = v
+      if k not in lists:
+        d[k] = v
+      if k in lists:
+        try:
+          d[k].append(v)
+        except:
+          d[k] = [v]
   return d
 
 def read_data(fname, d):
@@ -219,7 +251,7 @@ def read_data(fname, d):
   for line in file(fname):
     line=line.strip("\n\r")
     if line.startswith("#"):
-      dd = extract_items(line[1:])
+      dd = extract_items(line[1:], lists=['target'])
       d.update(dd)
       continue
     if not fields:
