@@ -555,7 +555,7 @@ namespace HopperGuidance
           solver.g = g.magnitude;
           solver.minDescentAngle = minDescentAngle;
           solver.maxThrustAngle = maxThrustAngle*(1-2*errMargin);
-          solver.maxLandingThrustAngle = 0.1f*maxThrustAngle*(1-2*errMargin); // 1/10 of max thrust angle
+          solver.maxLandingThrustAngle = 0.25f*maxThrustAngle*(1-2*errMargin); // 1/10 of max thrust angle
 
           int retval;
 
@@ -598,14 +598,7 @@ namespace HopperGuidance
 
           solver.Tmax = -1; // Forces estimation given initial position, velocity and targets
 
-          // Find lowest point to define min. descent angle
-          solver.apex = rf;
-          foreach ( SolveTarget tgt in targets )
-          {
-            if (tgt.r.y < solver.apex.y)
-              solver.apex = tgt.r;
-          }
-
+          solver.apex = targets[targets.Count-1].r;
           _traj = new Trajectory();
           ThrustVectorTime [] local_thrusts = null;
           double bestT = MainProg.MultiPartSolve(ref solver, ref _traj, tr0, tv0, targets, (float)g.magnitude, extendTime, out local_thrusts, out fuel, out retval);
