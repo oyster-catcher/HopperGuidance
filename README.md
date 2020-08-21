@@ -152,6 +152,8 @@ This can be plotted (via matplotlib) by running
 
 ![](docs/plotXYZ.png)
 
+Note: The maximum acceleration is shown as the dotted line on the time vs mag(accel) plot and this is exceeded temporarily. The craft will not be able to produce this much acceleration and the craft with diverge from the trajectory. This is because the constraint is actually applied independently to each X, Y, Z axis so the total magnitude can be larger than the axis limit. This is a simplication to help speed up solving time but there is scope for improvement.
+
 You can also run all the tests by running
 
 ./run_tests.sh
