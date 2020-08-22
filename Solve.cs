@@ -862,7 +862,6 @@ namespace HopperGuidance
       last_d = d;
       while (Math.Abs(c - d) > tol)
       {
-        System.Console.Error.WriteLine("a="+a+" c="+c+" d="+d+" b="+b);
         last_c = c;
         last_d = d;
         // TODO - Adjust times on a_tr_t and a_tv_t for be fc and fd
