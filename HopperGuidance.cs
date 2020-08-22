@@ -55,7 +55,6 @@ namespace HopperGuidance
         float _minThrust, _maxThrust;
         Solve solver; // Stores solution inputs, output and trajectory
         Trajectory _traj; // trajectory of solution in local space
-        Trajectory _wtraj; // trajectory of solution in world space
         double _startTime = 0; // Start solution starts to normalize vessel times to start at 0
         Transform _transform = null;
         double last_t = -1; // last time data was logged
@@ -202,13 +201,12 @@ namespace HopperGuidance
           _tgt_objs.Add(o);
           MeshFilter meshf = o.AddComponent<MeshFilter>();
           MeshRenderer meshr = o.AddComponent<MeshRenderer>();
-          meshr.transform.parent = transform;
           meshr.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
           meshr.material.color = color;
 
           Mesh mesh = new Mesh();
-          Vector3[] vertices = new Vector3[36*4+4+4+4+8];
-          int[] triangles = new int[(36*2*2-8+2+2+2+4+4)*3]; // take away gaps
+          Vector3 [] vertices = new Vector3[36*4+4+4+4+8];
+          int [] triangles = new int[(36*2*2-8+2+2+2+4+4)*3]; // take away gaps
           int i,j;
           int v=0,t=0;
           for(j=0;j<4;j++) // four concentric rings
@@ -259,8 +257,8 @@ namespace HopperGuidance
 
           mesh.vertices = vertices;
           mesh.triangles = triangles;
-          mesh.RecalculateNormals();
           meshf.mesh = mesh;
+          mesh.RecalculateNormals();
         }
 
         public void DrawTargets(List<Target> tgts, Transform transform, Color color, double size)
@@ -293,49 +291,56 @@ namespace HopperGuidance
 
           // Track
           _track_obj = new GameObject("Track");
+          _track_obj.transform.position = transform.position;
+          _track_obj.transform.rotation = transform.rotation;
+          _track_obj.transform.localScale = transform.localScale;
           MeshFilter meshf = _track_obj.AddComponent<MeshFilter>();
           MeshRenderer meshr = _track_obj.AddComponent<MeshRenderer>();
-          meshr.transform.parent = transform;
+          //meshr.transform.parent = transform;
           meshr.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
           meshr.material.color = trackcol;
           Mesh mesh = new Mesh();
-          Vector3[] vertices = new Vector3[(traj.Length()-1)*4*2];
-          int[] triangles = new int[(traj.Length()-1)*4*2*3]; // number of vertices in tris
+          Vector3 [] vertices = new Vector3[(traj.Length()-1)*4*2];
+          int [] triangles = new int[(traj.Length()-1)*4*2*3]; // number of vertices in tris
           float lineWidth = 0.2f;
           int v=0,t=0;
           for (int i = 0; i < traj.Length()-1; i++)
           {
-            Vector3 p1 = transform.TransformPoint(traj.r[i]);
-            Vector3 p2 = transform.TransformPoint(traj.r[i+1]);
+            Vector3 p1 = traj.r[i];
+            Vector3 p2 = traj.r[i+1];
             AddLine(vertices,ref v,triangles,ref t,p1,p2,lineWidth,true);
           }
           mesh.vertices = vertices;
           mesh.triangles = triangles;
-          mesh.RecalculateNormals();
           meshf.mesh = mesh;
+          mesh.RecalculateNormals();
 
           // Thrust vectors
           _thrusts_obj = new GameObject("Thrusts");
-          MeshFilter meshf2 = _thrusts_obj.AddComponent<MeshFilter>();
-          MeshRenderer meshr2 = _thrusts_obj.AddComponent<MeshRenderer>();
-          meshr2.transform.parent = transform;
-          meshr2.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
-          meshr2.material.color = thrustcol;
-          Mesh mesh2 = new Mesh();
-          Vector3[] vertices2 = new Vector3[traj.Length()*4*2];
-          int[] triangles2 = new int[traj.Length()*4*2*3]; // number of vertices in tris
+          _thrusts_obj.transform.position = transform.position;
+          _thrusts_obj.transform.rotation = transform.rotation;
+          _thrusts_obj.transform.localScale = transform.localScale;
+          meshf = _thrusts_obj.AddComponent<MeshFilter>();
+          meshr = _thrusts_obj.AddComponent<MeshRenderer>();
+          mesh = new Mesh();
+          meshr.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
+          meshr.material.color = thrustcol;
+          vertices = new Vector3[traj.Length()*4*2];
+          triangles = new int[traj.Length()*4*2*3]; // number of vertices in tris
           v=0;
           t=0;
           for (int i = 0; i < traj.Length(); i++)
           {
-            Vector3 p1 = transform.TransformPoint(traj.r[i]);
-            Vector3 p2 = transform.TransformPoint(traj.r[i] + traj.a[i]*amult);
-            AddLine(vertices2,ref v,triangles2,ref t,p1,p2,lineWidth,true);
+            //Vector3 p1 = transform.TransformPoint(traj.r[i]);
+            //Vector3 p2 = transform.TransformPoint(traj.r[i] + traj.a[i]*amult);
+            Vector3 p1 = traj.r[i];
+            Vector3 p2 = traj.r[i] + traj.a[i]*amult;
+            AddLine(vertices,ref v,triangles,ref t,p1,p2,lineWidth,true);
           }
-          mesh2.vertices = vertices2;
-          mesh2.triangles = triangles2;
-          mesh2.RecalculateNormals();
-          meshf2.mesh = mesh2;
+          mesh.vertices = vertices;
+          mesh.triangles = triangles;
+          meshf.mesh = mesh;
+          mesh.RecalculateNormals();
         }
 
         public void DrawAlign(Vector3 r_from,Vector3 r_to, Transform transform, Color color)
@@ -641,7 +646,7 @@ namespace HopperGuidance
           solver.apex = targets[targets.Count-1].r;
           _traj = new Trajectory();
           ThrustVectorTime [] local_thrusts = null;
-          double bestT = MainProg.MultiPartSolve(ref solver, ref _traj, tr0, tv0, targets, (float)g.magnitude, extendTime, out local_thrusts, out fuel, out retval);
+          MainProg.MultiPartSolve(ref solver, ref _traj, tr0, tv0, targets, (float)g.magnitude, extendTime, out local_thrusts, out fuel, out retval);
           Debug.Log(solver.DumpString());
           if ((retval>=1) && (retval<=5)) // solved for complete path?
           {
@@ -677,21 +682,7 @@ namespace HopperGuidance
             autoMode = AutoMode.Failed;
           }
           if ((retval>=1) && (retval<=5)) // solved for complete path? - show partial?
-          {
-            _wtraj = new Trajectory();
-            ThrustVectorTime [] world_thrusts = new ThrustVectorTime[local_thrusts.Length];
-            for( int i=0; i<local_thrusts.Length; i++)
-            {
-              world_thrusts[i] = new ThrustVectorTime();
-              world_thrusts[i].v = _transform.TransformVector(local_thrusts[i].v);
-              world_thrusts[i].t = local_thrusts[i].t;
-              Debug.Log("thrust["+i+"]="+(Vector3)world_thrusts[i].v+" at "+world_thrusts[i].t);
-            }
-            _wtraj.Simulate(bestT, world_thrusts, r0, v0, g, solver.dt, extendTime);
-            _wtraj.CorrectFinal(wrf,wvf,true,false);
-            // Draw track computed in world space - even if partially completed
             DrawTrack(_traj, _transform);
-          }
         }
 
         public void DisableLand()
@@ -865,8 +856,25 @@ namespace HopperGuidance
         
         public override void OnUpdate()
         {
-          List<Target> tgts = new List<Target>(_tgts);
           base.OnUpdate();
+
+          List<Target> tgts = new List<Target>(_tgts);
+          // Hack, update transforms since I can't seem to get parenting transform to work!
+          if (_track_obj != null)
+          {
+            if (! _track_obj.activeSelf)
+              Debug.Log("Track object inactive!");
+            _track_obj.transform.position = _transform.position;
+            _track_obj.transform.rotation = _transform.rotation;
+            _track_obj.transform.localScale = _transform.localScale;
+          }
+//          if (_thrusts_obj != null)
+//          {
+//            _thrusts_obj.transform.position = _transform.position;
+//            _thrusts_obj.transform.rotation = _transform.rotation;
+//            _thrusts_obj.transform.localScale = _transform.localScale;
+//          }
+
           // Check for changes to slider. This can trigger one of many actions
           // - If autopilot enabled, recompute trajectory
           // - Reset PID controller
