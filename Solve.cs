@@ -41,7 +41,8 @@ namespace HopperGuidance
     public double minDurationPerThrust = 4; // Insert extra thrust vector between targets
     public int maxThrustsBetweenTargets = 1;
     public double checkGapFirst = 1; // duration between checks (none at T=0)
-    public double checkGapMult = 1.5; // increase time from ends by this proportion
+    public double checkGapMult = 1; // increase time from ends by this proportion
+    public double checkGapStep = 1;
     public double g = 9.8;
     public double amin = 0;
     public double amax = 30;
@@ -151,7 +152,7 @@ namespace HopperGuidance
       if (vfaxes != 0)
         stargets = stargets + " vf="+Vec2Str(vf,vfaxes);
       // TODO - Missing constraints?
-      return string.Format("HopperGuidance: "+msg+" tol="+tol+" minDurationPerThrust="+minDurationPerThrust+" maxThrustsBetweenTargets="+maxThrustsBetweenTargets+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle+" apex="+Vec2Str(apex)+" T="+T+" {0}",stargets);
+      return string.Format("HopperGuidance: "+msg+" tol="+tol+" minDurationPerThrust="+minDurationPerThrust+" maxThrustsBetweenTargets="+maxThrustsBetweenTargets+" N="+N+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle+" {0}",stargets);
     }
  
     public static double [] BasisWeights(double t, ThrustVectorTime [] thrusts)
@@ -346,10 +347,10 @@ namespace HopperGuidance
       if (minDescentAngle >= 0)
       {
         // from start
-        for( tX=checkGapFirst; tX<0.5*T; tX=tX*checkGapMult )
+        for( tX=checkGapFirst; tX<0.5*T; tX=tX+checkGapStep )
           o_checktimes.Add(tX);
         // from end
-        for( tX=T-checkGapFirst; tX>0.5*T; tX=T-(T-tX)*checkGapMult )
+        for( tX=T-checkGapFirst; tX>0.5*T; tX=tX-checkGapStep )
           o_checktimes.Add(tX);
       }
 
