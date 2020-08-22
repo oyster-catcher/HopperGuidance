@@ -41,12 +41,12 @@ namespace HopperGuidance
         static Color aligncol = new Color(0,0.1f,1.0f,0.3f); // blue
 
         static List<GameObject> _tgt_objs = new List<GameObject>(); // new GameObject("Target");
-        static GameObject _track_obj = null; // new GameObject("Track");
-        static GameObject _align_obj = null; // new GameObject("Track");
+        static GameObject _track_obj = null;
+        static GameObject _thrusts_obj = null;
+        static GameObject _align_obj = null;
         static GameObject _steer_obj = null;
         static LineRenderer _align_line = null; // so it can be updated
         static LineRenderer _steer_line = null; // so it can be updated
-        static LinkedList<GameObject> thrusts = new LinkedList<GameObject>();
         PID3d _pid3d = new PID3d();
         bool checkingLanded = false; // only check once in flight to avoid failure to start when already on ground
         AutoMode autoMode = AutoMode.Off;
@@ -164,6 +164,25 @@ namespace HopperGuidance
           vi += 4;
         }
 
+        public void AddLine(Vector3[] vertices, ref int vi, int[] triangles, ref int ti,
+                            Vector3d a, Vector3d b, float width,
+                            bool double_sided = false)
+        {
+          Vector3 Y = new Vector3(0,1,0);
+          Vector3 C = Vector3.Cross(b-a,Y);
+          Vector3 B = Vector3.Cross(b-a,C);
+          if (B.magnitude < 0.01f)
+          {
+            Vector3 X = new Vector3(1,0,0);
+            C = Vector3.Cross(b-a,X);
+            B = Vector3.Cross(b-a,C);
+          }
+          B = B/B.magnitude * width;
+          C = C/C.magnitude * width;
+          AddQuad(vertices,ref vi,triangles,ref ti,a-C,a+C,b+C,b-C,double_sided);
+          AddQuad(vertices,ref vi,triangles,ref ti,a-B,a+B,b+B,b-B,double_sided);
+        }
+
         // pos is ground position, but draw up to height
         public void DrawTarget(Vector3d pos, Transform transform, Color color, double size, float height)
         {
@@ -257,63 +276,66 @@ namespace HopperGuidance
           }
         }
 
-        public void DrawTrack(Trajectory traj, Transform transform, Color color, bool pretransform=true, float amult=1)
+        public void DrawTrack(Trajectory traj, Transform transform, float amult=1)
         {
-            if (_track_obj != null)
-            {
-              Destroy(_track_obj); // delete old track
-              _track_obj = null;
-              // delete old thrusts
-              LinkedListNode<GameObject> node = thrusts.First;
-              while(node != null)
-              {
-                Destroy(node.Value);
-                node = node.Next;
-              }
-              thrusts.Clear();
-            }
-            if (!showTrack)
-              return;
+          if (_track_obj != null)
+          {
+            Destroy(_track_obj); // delete old track
+            _track_obj = null;
+          }
+          if (_thrusts_obj != null)
+          {
+            Destroy(_thrusts_obj); // delete old track
+            _thrusts_obj = null;
+          }
+          if (!showTrack)
+            return;
 
-            _track_obj = new GameObject("Track");
-            LineRenderer line = _track_obj.AddComponent<LineRenderer>();
-            line.transform.parent = transform;
-            line.useWorldSpace = false;
-            line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
-            line.material.color = color;
-            line.startWidth = 0.4f;
-            line.endWidth = 0.4f;
-            line.positionCount = traj.Length();
-            int j = 0;
-            for (int i = 0; i < traj.Length(); i++)
-            {
-              if (pretransform)
-                line.SetPosition(j++,transform.TransformPoint(traj.r[i]));
-              else
-                line.SetPosition(j++,traj.r[i]);
-              // Draw accelerations
-              GameObject obj = new GameObject("Accel");
-              // TODO - Work out why only one LineRender per GameObject - it seems wrong!
-              thrusts.AddLast(obj);
-              LineRenderer line2 = obj.AddComponent<LineRenderer>();
-              line2.transform.parent = transform;
-              line2.useWorldSpace = false;
-              line2.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
-              line2.material.color = thrustcol;
-              line2.startWidth = 0.4f;
-              line2.endWidth = 0.4f;
-              line2.positionCount = 2;
-              if (pretransform)
-              {
-                line2.SetPosition(0,transform.TransformPoint(traj.r[i]));
-                line2.SetPosition(1,transform.TransformPoint(traj.r[i] + traj.a[i]*amult));
-              }
-              else
-              {
-                line2.SetPosition(0,traj.r[i]);
-                line2.SetPosition(1,traj.r[i] + traj.a[i]*amult);
-              }
-            }
+          // Track
+          _track_obj = new GameObject("Track");
+          MeshFilter meshf = _track_obj.AddComponent<MeshFilter>();
+          MeshRenderer meshr = _track_obj.AddComponent<MeshRenderer>();
+          meshr.transform.parent = transform;
+          meshr.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
+          meshr.material.color = trackcol;
+          Mesh mesh = new Mesh();
+          Vector3[] vertices = new Vector3[(traj.Length()-1)*4*2];
+          int[] triangles = new int[(traj.Length()-1)*4*2*3]; // number of vertices in tris
+          float lineWidth = 0.2f;
+          int v=0,t=0;
+          for (int i = 0; i < traj.Length()-1; i++)
+          {
+            Vector3 p1 = transform.TransformPoint(traj.r[i]);
+            Vector3 p2 = transform.TransformPoint(traj.r[i+1]);
+            AddLine(vertices,ref v,triangles,ref t,p1,p2,lineWidth,true);
+          }
+          mesh.vertices = vertices;
+          mesh.triangles = triangles;
+          mesh.RecalculateNormals();
+          meshf.mesh = mesh;
+
+          // Thrust vectors
+          _thrusts_obj = new GameObject("Thrusts");
+          MeshFilter meshf2 = _thrusts_obj.AddComponent<MeshFilter>();
+          MeshRenderer meshr2 = _thrusts_obj.AddComponent<MeshRenderer>();
+          meshr2.transform.parent = transform;
+          meshr2.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
+          meshr2.material.color = thrustcol;
+          Mesh mesh2 = new Mesh();
+          Vector3[] vertices2 = new Vector3[traj.Length()*4*2];
+          int[] triangles2 = new int[traj.Length()*4*2*3]; // number of vertices in tris
+          v=0;
+          t=0;
+          for (int i = 0; i < traj.Length(); i++)
+          {
+            Vector3 p1 = transform.TransformPoint(traj.r[i]);
+            Vector3 p2 = transform.TransformPoint(traj.r[i] + traj.a[i]*amult);
+            AddLine(vertices2,ref v,triangles2,ref t,p1,p2,lineWidth,true);
+          }
+          mesh2.vertices = vertices2;
+          mesh2.triangles = triangles2;
+          mesh2.RecalculateNormals();
+          meshf2.mesh = mesh2;
         }
 
         public void DrawAlign(Vector3 r_from,Vector3 r_to, Transform transform, Color color)
@@ -451,14 +473,14 @@ namespace HopperGuidance
           maxThrust = 0;
           foreach (Part part in vessel.GetActiveParts())
           {
-              Debug.Log("Part: "+part);
+              //Debug.Log("Part: "+part);
               part.isEngine(out List<ModuleEngines> engines);
               foreach (ModuleEngines engine in engines)
               {
-                  Debug.Log("Engine: "+engine);
+                  //Debug.Log("Engine: "+engine);
                   //engine.Activate(); // must be active to get thrusts or else realIsp=0
-                  for(float throttle=0; throttle<=1; throttle+=0.1f)
-                    Debug.Log("isp="+engine.realIsp+" throttle="+throttle+" Thrust="+engine.GetEngineThrust(engine.realIsp,throttle));
+                  //for(float throttle=0; throttle<=1; throttle+=0.1f)
+                  //  Debug.Log("isp="+engine.realIsp+" throttle="+throttle+" Thrust="+engine.GetEngineThrust(engine.realIsp,throttle));
                   // I think this will get the correct thrust given throttle in atmosphere (or wherever)
                   minThrust += engine.GetEngineThrust(engine.realIsp, 0);
                   maxThrust += engine.GetEngineThrust(engine.realIsp, 1);
@@ -668,7 +690,7 @@ namespace HopperGuidance
             _wtraj.Simulate(bestT, world_thrusts, r0, v0, g, solver.dt, extendTime);
             _wtraj.CorrectFinal(wrf,wvf,true,false);
             // Draw track computed in world space - even if partially completed
-            DrawTrack(_traj, _transform, trackcol, true);
+            DrawTrack(_traj, _transform);
           }
         }
 
@@ -676,15 +698,9 @@ namespace HopperGuidance
         {
           autoMode = AutoMode.Off;
           if (_track_obj != null) {Destroy(_track_obj); _track_obj=null;}
+          if (_thrusts_obj != null) {Destroy(_thrusts_obj); _thrusts_obj=null;}
           if (_align_obj != null) {Destroy(_align_obj); _align_obj=null;}
           if (_steer_obj != null) {Destroy(_steer_obj); _steer_obj=null;}
-          LinkedListNode<GameObject> node = thrusts.First;
-          while(node != null)
-          {
-            Destroy(node.Value);
-            node = node.Next;
-          }
-          thrusts.Clear();
           LogStop();
           vessel.OnFlyByWire -= new FlightInputCallback(Fly);
           Events["ToggleGuidance"].guiName = "Enable guidance";
@@ -889,7 +905,7 @@ namespace HopperGuidance
           }  
           if (showTrack != setShowTrack)
           {
-            DrawTrack(_traj, _transform, trackcol, true);
+            DrawTrack(_traj, _transform);
             setShowTrack = showTrack;
           }
           if (pickingPositionTarget)
