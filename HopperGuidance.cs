@@ -540,9 +540,27 @@ namespace HopperGuidance
           Vector3d rf = new Vector3d(0,-lowestY,0);
           Vector3d vf = new Vector3d(0,-touchDownSpeed,0);
           ComputeMinMaxThrust(out _minThrust,out _maxThrust); // This might be including RCS (i.e. non main Throttle)
+          if( _maxThrust == 0 )
+          {
+            ScreenMessages.PostScreenMessage("Max thrust of engine is zero. In Realism Overhaul startup the engine manually first", 3.0f, ScreenMessageStyle.UPPER_CENTER);
+            autoMode = AutoMode.Off;
+            return;
+          }
           _startTime = Time.time;
           double amin = _minThrust/vessel.totalMass;
           double amax = _maxThrust/vessel.totalMass;
+          if( amin > g.magnitude )
+          {
+            ScreenMessages.PostScreenMessage("Min thrust of engine is greater than gravity. Use less thrust of a heavier vessel", 3.0f, ScreenMessageStyle.UPPER_CENTER);
+            autoMode = AutoMode.Off;
+            return;
+          }
+          if( amin > amax*0.95 )
+          {
+            ScreenMessages.PostScreenMessage("Engine doesn't appear to be throttleable. This makes precision guidance impossible", 3.0f, ScreenMessageStyle.UPPER_CENTER);
+            autoMode = AutoMode.Off;
+            return;
+          }
 
           solver = new Solve();
           solver.Tmin = 1;
@@ -650,7 +668,7 @@ namespace HopperGuidance
             _wtraj.Simulate(bestT, world_thrusts, r0, v0, g, solver.dt, extendTime);
             _wtraj.CorrectFinal(wrf,wvf,true,false);
             // Draw track computed in world space - even if partially completed
-            DrawTrack(_wtraj, _transform, trackcol, false);
+            DrawTrack(_traj, _transform, trackcol, true);
           }
         }
 
@@ -871,7 +889,7 @@ namespace HopperGuidance
           }  
           if (showTrack != setShowTrack)
           {
-            DrawTrack(_wtraj, _transform, trackcol, false);
+            DrawTrack(_traj, _transform, trackcol, true);
             setShowTrack = showTrack;
           }
           if (pickingPositionTarget)
