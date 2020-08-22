@@ -4,12 +4,13 @@ v0.2.2
 - Removed max landing thrust angle, it is set to 25% of max thrust angle
 - Removed acceleration gain, it is set to 4x correction factor
 - Removed idle angle, it is now always 90 degrees
-- Remove  max thrust, this is 10% less than the vessels maximum
+- Removed max thrust, this is set to 10% less than the vessels maximum
 - Max thrust angle in the solution is 20% less than max thrust angle
 - Min descent angle only applies to the final trajectory before the final target and not to intermediate targets
-- Ground intersect constrain always applies where the ground is the lowest of all the ground targets
+- Ground intersect constraint always applies where the ground is the lowest of all the ground targets
 - The solution velocity isn't modified by the PID, which results in better following of the trajectory
 - Can enable guidance from a landed vessel if there are intermediate targets
+- Switch to using mesh rather than LineRenderer for track and thrust vectors to attempt to removing disappearing track bug. This still happens though, but a mesh should be much more efficient
 
 v0.2.1
 - Added TestCraft and TestCraftHeavy
