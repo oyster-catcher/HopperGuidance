@@ -202,14 +202,28 @@ namespace HopperGuidance
       }
     }
 
-    static float AxisTime(float dist, float amin, float amax)
+    // Assumes starting from stationary, acceleration by amin(negative) or amax(positive) for half way
+    // and then deacceleration. amin is -v.e and amax is +v.e
+    static float AxisTime(float d, float amin, float amax, float vmax)
     {
-      float t;
-      if (dist > 0)
-        t = Mathf.Sqrt(dist/amax);
-      else
-        t = Mathf.Sqrt(dist/amin);
-      return 2*t;
+      float t1,t2;
+
+      amin = Mathf.Abs(amin);
+      d = Mathf.Abs(d);
+      t1 = Mathf.Sqrt(d/(0.5f*amax+0.5f*(amax*amax)/amin));
+      t2 = t1*(amax/amin);
+
+      float t1max = vmax/amax;
+      float t = t1 + t2;
+      if( t1 > t1max )  // can accerate to max. vel
+      {
+        // remaining distance at vmax
+        float rd = d - 0.5f*vmax*(vmax/amax) - 0.5f*vmax*(vmax/amin);
+        t = vmax/amax + vmax/amin + rd/vmax;
+      }
+
+      System.Console.Error.WriteLine("t1="+t1+" t2="+t2+" d="+d+" amin="+amin+" amax="+amax+" vmax="+vmax+" t1max="+t1max);
+      return t;
     }
 
     public static float EstimateTimeBetweenTargets(Vector3d r0, Vector3d v0, List<SolveTarget> tgts, float amax, float g, float vmax)
@@ -220,12 +234,12 @@ namespace HopperGuidance
       // Estimate time to go from stationary at one target to stationary at next, to provide
       // an upper estimate on the solution time
       // TODO: Adjust with maxThrustAngle
+      float xmin = -(amax - g);
       float xmax = amax - g;
-      float xmin = -(amax-g);
-      float ymin = -g;
-      float ymax = amax - g;
+      float ymin = Math.Abs(g);
+      float ymax = Math.Abs(amax-g);
+      float zmin = -(amax - g);
       float zmax = amax - g;
-      float zmin = -(amax-g);
 
       // Compute position with zero velocity
       if (v0.magnitude > 1)
@@ -242,10 +256,10 @@ namespace HopperGuidance
         float dy = (float)(tgt.r.y - r0.y);
         float dz = (float)(tgt.r.z - r0.z);
         // Compute time to move in each orthogonal axes
-        float tx = AxisTime(dx, xmin, xmax);
-        float ty = AxisTime(dy, ymin, ymax);
-        float tz = AxisTime(dz, zmin, zmax);
-        t = t + tx + ty + tz;
+        float tx = AxisTime(dx, xmin*0.5f, xmax*0.5f, vmax);
+        float ty = AxisTime(dy, ymin, ymax, vmax);
+        float tz = AxisTime(dz, zmin*0.5f, zmax*0.5f, vmax);
+        t = t + Mathf.Max(tx,Mathf.Max(ty,tz))*1.5f;
       }
       return t;
     }
@@ -314,18 +328,41 @@ namespace HopperGuidance
           int num = (int)((tgt_t - last_t)/minDurationPerThrust); // rounds down
           num = Math.Min(num, maxThrustsBetweenTargets);
           float dt = (tgt_t - last_t)/(num+1);
-          // if num=1
-          // t=last_t, 0.5*(tgt.t+last_t), tgt.t
           for(int i=0 ; i<num ; i++)
             thrust_times.Add(last_t + dt*(1+i));
         }
         thrust_times.Add(tgt_t);
         last_t = tgt_t;
       }
-      // Final targets isn't a landing point so this is a multi-part solution, don't restrict
+      // Final target isn't a landing point so this is a multi-part solution, don't restrict
       // this part to the minDescentAngle
       if ((a_targets[a_targets.Count-1].raxes == 0)||(a_targets[a_targets.Count-1].vaxes == 0))
         last_target_t = (float)T;
+
+      // Final target as position and velocity constrained (i.e. land target)
+      if( minDescentAngle > 0)
+      {
+        if ((a_targets[a_targets.Count-1].raxes != 0)&&(a_targets[a_targets.Count-1].vaxes != 0))
+        {
+          Vector3 rl = r0;
+          Vector3 rf = a_targets[a_targets.Count-1].r;
+          if( a_targets.Count > 1 )
+            rl = a_targets[a_targets.Count-2].r; // target before final
+          // Find descent angle from this point to final target
+          float fx = rf.x - rl.x;
+          float fz = rf.z - rl.z;
+          float adj = Mathf.Sqrt(fx*fx+fz*fz);
+          float hyp = (rf-rl).magnitude;
+          float ang = (float)(Mathf.Acos(adj/hyp)*180/Math.PI);
+          if (ang < minDescentAngle)
+          {
+            System.Console.Error.WriteLine("Minimum descent possible is "+ang);
+            minDescentAngle = ang;
+          }
+        }
+      }
+         
+        
 
       N = thrust_times.Count;
       o_thrusts = new ThrustVectorTime[N];
@@ -611,9 +648,6 @@ namespace HopperGuidance
         }
         else
         {
-#if (DEBUG)
-          System.Console.Error.WriteLine("minDescent angle="+ang+" t="+mdt+" k="+k+"/"+constraints);
-#endif
           double vx = Math.Sin(minDescentAngle*Math.PI/180.0);
           double vy = Math.Cos(minDescentAngle*Math.PI/180.0);
           double [] V1 = new double [] {vx,vy,0}; // Normal vector of plane to be above
@@ -941,11 +975,6 @@ namespace HopperGuidance
       Debug.Log("local_v="+(Vector3)local_v);
 #endif
 
-      if (solver.Tmax < 0)
-      {
-        solver.Tmax = Solve.EstimateTimeBetweenTargets(local_r, local_v, a_targets, (float)solver.amax, (float)solver.g, (float)solver.vmax);
-        System.Console.Error.WriteLine("Estimated Tmax="+solver.Tmax);
-      }
       solver.apex = a_targets[a_targets.Count-1].r;
 
       // Compute trajectory to landing spot
@@ -954,12 +983,16 @@ namespace HopperGuidance
       // Solve for best time adding each intermediate constraint at a time
       bool done = false;
       double tol = solver.tol;
+      // Current last position in trajectory
+      Vector3d lr = local_r;
+      Vector3d lv = local_v;
       while(!done)
       {
         List<SolveTarget> partial_targets = new List<SolveTarget>();
 
         int last = 0;
         // Create list of targets up to final undefined target
+        List<SolveTarget> next_targets = new List<SolveTarget>();
         foreach( SolveTarget tgt in a_targets )
         {
 #if (UNITYDEBUG)
@@ -967,16 +1000,24 @@ namespace HopperGuidance
 #endif
           partial_targets.Add(tgt);
           if (tgt.t < 0)
+          {
+            next_targets.Add(tgt);
             break; // Make this last
+          }
           last++;
         }
-
+   
+        float estT = Solve.EstimateTimeBetweenTargets(lr, lv, next_targets, (float)solver.amax, (float)solver.g, (float)solver.vmax);
+        solver.Tmin = bestT;
+        solver.Tmax = bestT + estT;
+        System.Console.Error.WriteLine("Estimated Tmin="+solver.Tmin+" Tmax="+solver.Tmax);
 
         // Currently uses intermediate positions, ir[]
         // use rough tolerance for intermediate targets and reduce to actual set value for
         // last target when complete final trajectory is computed
         solver.tol = (a_targets.Count == partial_targets.Count)?tol:1;
         bestT = solver.GoldenSearchGFold(local_r, local_v, partial_targets, out o_thrusts, out fuel, out retval);
+        solver.Tmin = bestT;
         System.Console.Error.WriteLine(solver.DumpString());
 
         if ((retval>=1) && (retval<=5))
@@ -996,6 +1037,7 @@ namespace HopperGuidance
           local_traj.Simulate(bestT, o_thrusts, local_r, local_v, new Vector3d(0,-g,0), solver.dt, 0);
           return 0; // failed part way
         }
+        lr = partial_targets[partial_targets.Count-1].r; // assume got to last target
       }
       local_traj = new Trajectory();
       local_traj.Simulate(bestT, o_thrusts, local_r, local_v, new Vector3d(0,-g,0), solver.dt, extendTime);
