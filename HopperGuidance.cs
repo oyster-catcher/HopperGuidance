@@ -54,7 +54,7 @@ namespace HopperGuidance
         double lowestY = 0; // Y position of bottom of craft relative to centre
         float _minThrust, _maxThrust;
         Solve solver; // Stores solution inputs, output and trajectory
-        Trajectory _traj; // trajectory of solution in local space
+        Trajectory _traj = null; // trajectory of solution in local space
         double _startTime = 0; // Start solution starts to normalize vessel times to start at 0
         Transform _transform = null;
         double last_t = -1; // last time data was logged
@@ -276,6 +276,8 @@ namespace HopperGuidance
 
         public void DrawTrack(Trajectory traj, Transform transform, float amult=1)
         {
+          if (traj == null)
+            return;
           if (_track_obj != null)
           {
             Destroy(_track_obj); // delete old track
@@ -291,12 +293,9 @@ namespace HopperGuidance
 
           // Track
           _track_obj = new GameObject("Track");
-          _track_obj.transform.position = transform.position;
-          _track_obj.transform.rotation = transform.rotation;
-          _track_obj.transform.localScale = transform.localScale;
+          _track_obj.transform.SetParent(transform, false);
           MeshFilter meshf = _track_obj.AddComponent<MeshFilter>();
           MeshRenderer meshr = _track_obj.AddComponent<MeshRenderer>();
-          //meshr.transform.parent = transform;
           meshr.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
           meshr.material.color = trackcol;
           Mesh mesh = new Mesh();
@@ -317,9 +316,7 @@ namespace HopperGuidance
 
           // Thrust vectors
           _thrusts_obj = new GameObject("Thrusts");
-          _thrusts_obj.transform.position = transform.position;
-          _thrusts_obj.transform.rotation = transform.rotation;
-          _thrusts_obj.transform.localScale = transform.localScale;
+          _thrusts_obj.transform.SetParent(transform, false);
           meshf = _thrusts_obj.AddComponent<MeshFilter>();
           meshr = _thrusts_obj.AddComponent<MeshRenderer>();
           mesh = new Mesh();
@@ -331,8 +328,6 @@ namespace HopperGuidance
           t=0;
           for (int i = 0; i < traj.Length(); i++)
           {
-            //Vector3 p1 = transform.TransformPoint(traj.r[i]);
-            //Vector3 p2 = transform.TransformPoint(traj.r[i] + traj.a[i]*amult);
             Vector3 p1 = traj.r[i];
             Vector3 p2 = traj.r[i] + traj.a[i]*amult;
             AddLine(vertices,ref v,triangles,ref t,p1,p2,lineWidth,true);
@@ -600,7 +595,8 @@ namespace HopperGuidance
           solver.g = g.magnitude;
           solver.minDescentAngle = minDescentAngle;
           solver.maxThrustAngle = maxThrustAngle*(1-2*errMargin);
-          solver.maxLandingThrustAngle = 0.25f*maxThrustAngle*(1-2*errMargin); // 1/10 of max thrust angle
+          solver.maxLandingThrustAngle = 0.5f*maxThrustAngle; // 1/2 of max thrust angle
+          solver.full = true; // full search rather than Golden Search
 
           int retval;
 
@@ -667,14 +663,14 @@ namespace HopperGuidance
             Events["ToggleGuidance"].guiName = "Failed! - Cancel guidance";
             string msg = "HopperGuidance: Failure to find solution because ";
             Vector3d r = tr0 - rf;
-            double cos_descentAng = Math.Sqrt(r.x*r.x + r.z*r.z) / r.magnitude;
+            //double cos_descentAng = Math.Sqrt(r.x*r.x + r.z*r.z) / r.magnitude;
             // Do some checks
             if (v0.magnitude > maxV)
               msg = msg + " velocity over "+maxV+" m/s";
-            else if (cos_descentAng > Math.Cos(Math.PI*minDescentAngle))
-              msg = msg + "below min. descent angle "+minDescentAngle+"°";
             else if (amax < g.magnitude)
               msg = msg + "engine has insufficient thrust, no engines active or no fuel";
+            else if (amin > g.magnitude)
+              msg = msg + "can't throttle engine low enough to descent";
             else
               msg = msg + "impossible to reach target within constraints";
             Debug.Log(msg);
@@ -859,21 +855,12 @@ namespace HopperGuidance
           base.OnUpdate();
 
           List<Target> tgts = new List<Target>(_tgts);
-          // Hack, update transforms since I can't seem to get parenting transform to work!
-          if (_track_obj != null)
-          {
-            if (! _track_obj.activeSelf)
-              Debug.Log("Track object inactive!");
-            _track_obj.transform.position = _transform.position;
-            _track_obj.transform.rotation = _transform.rotation;
-            _track_obj.transform.localScale = _transform.localScale;
-          }
-//          if (_thrusts_obj != null)
-//          {
-//            _thrusts_obj.transform.position = _transform.position;
-//            _thrusts_obj.transform.rotation = _transform.rotation;
-//            _thrusts_obj.transform.localScale = _transform.localScale;
-//          }
+          // Hack, update transforms since I can't seem to get parenting to update properly
+          // Doesn't work :-(
+          //if (_track_obj != null)
+          //  _track_obj.transform.SetParent(_transform,true);
+          //if (_thrusts_obj != null)
+          //  _thrusts_obj.transform.SetParent(_transform,true);
 
           // Check for changes to slider. This can trigger one of many actions
           // - If autopilot enabled, recompute trajectory
