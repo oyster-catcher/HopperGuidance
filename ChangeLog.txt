@@ -11,6 +11,7 @@ v0.2.2
 - The solution velocity isn't modified by the PID, which results in better following of the trajectory
 - Can enable guidance from a landed vessel if there are intermediate targets
 - Switch to using mesh rather than LineRenderer for track and thrust vectors to attempt to removing disappearing track bug. This still happens though, but a mesh should be much more efficient
+- Golden search over time now falls back to simpler search stepping through 10 intervals between Tmin and Tmax then continues golden search, as golden search fails when probe points are non-solutions. This results in much better and faster solutions
 
 v0.2.1
 - Added TestCraft and TestCraftHeavy
