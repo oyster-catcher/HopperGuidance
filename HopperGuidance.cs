@@ -559,7 +559,6 @@ namespace HopperGuidance
           Vector3d v0 = vessel.GetSrfVelocity();
           Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
           //TODO: Add this back in. An extra target?
-          Vector3d rf = new Vector3d(0,-lowestY,0);
           Vector3d vf = new Vector3d(0,-touchDownSpeed,0);
           ComputeMinMaxThrust(out _minThrust,out _maxThrust); // This might be including RCS (i.e. non main Throttle)
           if( _maxThrust == 0 )
@@ -598,15 +597,12 @@ namespace HopperGuidance
           solver.maxLandingThrustAngle = 0.5f*maxThrustAngle; // 1/2 of max thrust angle
           solver.full = true; // full search rather than Golden Search
 
-          int retval;
-
           // Shut-off throttle
           FlightCtrlState ctrl = new FlightCtrlState();
           vessel.GetControlState(ctrl);
           ctrl.mainThrottle = (_keepIgnited)?0.01f:0;
 
           // Compute trajectory to landing spot
-          double fuel;
           List<SolveTarget> targets = new List<SolveTarget>();
           Vector3d tr0 = _transform.InverseTransformPoint(r0);
           tr0.y += 0.1f; // move up slightly to ensure above ground plane
@@ -641,11 +637,13 @@ namespace HopperGuidance
 
           solver.apex = targets[targets.Count-1].r;
           _traj = new Trajectory();
-          ThrustVectorTime [] local_thrusts = null;
-          MainProg.MultiPartSolve(ref solver, ref _traj, tr0, tv0, targets, (float)g.magnitude, extendTime, out local_thrusts, out fuel, out retval);
-          Debug.Log(solver.DumpString());
-          if ((retval>=1) && (retval<=5)) // solved for complete path?
+          SolveResult result = MainProg.MultiPartSolve(ref solver, ref _traj, tr0, tv0, ref targets, (float)g.magnitude, extendTime);
+          Debug.Log("HopperGuidance: "+solver.DumpString()+" "+result.DumpString());
+          if (result.isSolved()) // solved for complete path?
           {
+            string msg = "Found solution T="+result.T+" Fuel="+result.fuel;
+            Debug.Log(msg);
+            ScreenMessages.PostScreenMessage("HopperGuidance "+msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
             // Enable autopilot
             _pid3d.Init(corrFactor,ki1,0,corrFactor * kP2Scale,ki2,0,maxV,(float)amax,yMult);
             // TODO - Testing out using in solution co-ordinates
@@ -661,9 +659,7 @@ namespace HopperGuidance
           {
             DisableLand();
             Events["ToggleGuidance"].guiName = "Failed! - Cancel guidance";
-            string msg = "HopperGuidance: Failure to find solution because ";
-            Vector3d r = tr0 - rf;
-            //double cos_descentAng = Math.Sqrt(r.x*r.x + r.z*r.z) / r.magnitude;
+            string msg = "Failure to find solution as ";
             // Do some checks
             if (v0.magnitude > maxV)
               msg = msg + " velocity over "+maxV+" m/s";
@@ -673,11 +669,11 @@ namespace HopperGuidance
               msg = msg + "can't throttle engine low enough to descent";
             else
               msg = msg + "impossible to reach target within constraints";
-            Debug.Log(msg);
+            Debug.Log("HopperGuidance: "+msg);
             ScreenMessages.PostScreenMessage(msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
             autoMode = AutoMode.Failed;
           }
-          if ((retval>=1) && (retval<=5)) // solved for complete path? - show partial?
+          if (result.isSolved()) // solved for complete path? - show partial?
             DrawTrack(_traj, _transform);
         }
 

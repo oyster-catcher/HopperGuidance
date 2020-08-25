@@ -18,6 +18,12 @@ namespace HopperGuidance
     // at intervals of simdt
     public void Simulate(double T, ThrustVectorTime [] thrusts, Vector3d r0, Vector3d v0, Vector3d g, double a_dt, double extendTime)
     {
+      if (thrusts == null)
+        return;
+      List<float> thrust_times = new List<float>();
+      for(int i=0; i<thrusts.Length; i++)
+        thrust_times.Add(thrusts[i].t);
+
       // Simulate
       dt = a_dt;
       Vector3d cr = r0;
@@ -51,8 +57,8 @@ namespace HopperGuidance
         double [] wv;
         // TODO: This is slow and expensive in RVWeightsToTime but accurate and
         // avoid accumulation of error when computing forwards only
-        Solve.RVWeightsToTime(t, dt, thrusts, out wr, out wv);
-        double [] w = Solve.BasisWeights(t, thrusts);
+        Solve.RVWeightsToTime(t, dt, thrust_times, out wr, out wv);
+        double [] w = Solve.BasisWeights(t, thrust_times);
         for(int i = 0 ; i < N ; i++)
         {
           ca += w[i]  * thrusts[i].v;
