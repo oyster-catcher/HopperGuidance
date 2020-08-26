@@ -61,7 +61,7 @@ namespace HopperGuidance
         double log_interval = 0.05f; // Interval between logging
         System.IO.StreamWriter _tgtWriter = null; // Actual vessel
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
-        float extendTime = 0; // duration to extend trajectory to slowly descent to touch down and below at touchDownSpeed
+        float extendTime = 5; // duration to extend trajectory to slowly descent to touch down and below at touchDownSpeed
         double touchDownSpeed = 1.4f;
         bool pickingPositionTarget = false;
         string _vesselLogFilename = "vessel.dat";
