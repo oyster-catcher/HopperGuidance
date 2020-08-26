@@ -1,7 +1,6 @@
 # Standard Mac KSP install dir
 KSP=/Users/adrian/Library/Application\ Support/Steam/steamapps/common/Kerbal\ Space\ Program
 # Cutdown KSP for development
-KSP=/Users/adrian/KSP_Cutdown
 
 ASSEMBLYOPTS=-reference:${KSP}/KSP.app/Contents/Resources/Data/Managed/UnityEngine.CoreModule.dll -reference:${KSP}/KSP.app/Contents/Resources/Data/Managed/Assembly-CSharp.dll -reference:${KSP}/KSP.app/Contents/Resources/Data/Managed/UnityEngine.UI.dll -reference:${KSP}/KSP.app/Contents/Resources/Data/Managed/KSPAssets.dll -reference:${KSP}/KSP.app/Contents/Resources/Data/Managed/UnityEngine.PhysicsModule.dll -reference:${KSP}/KSP.app/Contents/Resources/Data/Managed/UnityEngine.InputLegacyModule.dll
 SDKOPTS=-sdk:4.0
@@ -15,7 +14,8 @@ all: install Solve.exe
 
 install: GameData/HopperGuidance/Plugins/HopperGuidance.dll
 	cp -r GameData ${KSP}
-	cp -r GameData ~/KSP
+	cp License.txt GameData/HopperGuidance
+	cp ChangeLog.txt GameData/HopperGuidance
 
 clean:
 	rm -f HopperGuidance.dll *.exe
