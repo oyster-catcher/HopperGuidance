@@ -181,7 +181,7 @@ namespace HopperGuidance
       if (vfaxes != 0)
         stargets = stargets + " vf="+Vec2Str(vf,vfaxes)+":"+ft;
       // TODO - Missing constraints?
-      return string.Format("tol="+tol+" minDurationPerThrust="+minDurationPerThrust+" maxThrustsBetweenTargets="+maxThrustsBetweenTargets+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle+" {0}",stargets);
+      return string.Format("tol="+tol+" minDurationPerThrust="+minDurationPerThrust+" maxThrustsBetweenTargets="+maxThrustsBetweenTargets+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle+" extraTime="+extraTime+" {0}",stargets);
     }
  
     public static double [] BasisWeights(double t, List<float> times)
@@ -346,6 +346,11 @@ namespace HopperGuidance
       }
       if( apex.y < ground.y)
         ground = apex;
+      // Hack to ensure starting position is off ground by moving starting
+      // position up by 1m
+      if (ground.y > r0.y - 1)
+        r0.y = r0.y + 1;
+
       // TODO: Ignoring Nmin and Nmax
       List<float> thrust_times = new List<float>();
       // Put a thrust vector at every target
@@ -501,7 +506,8 @@ namespace HopperGuidance
           constraints++;
       }
 
-      constraints++; // For hit the ground in future constraint
+      if (a_targets[a_targets.Count-1].vaxes == 0)
+        constraints++; // For hit the ground in future constraint
 
       // for minDescentAngle, N points for 4 planes to make square 'cones'
 #if (MINDESCENTANGLE)
@@ -642,24 +648,21 @@ namespace HopperGuidance
         }
       }
 
-      // Use lowest Y position as ground - not true but this only to avoid
-      // making partial trajectories don't allow time to not hit ground
-      // TODO: Calculate final position
-      Vector3d tgt_r = a_targets[a_targets.Count-1].r;
-      float height = (float)tgt_r.y - (float)ground.y;
-      float maxv = Mathf.Sqrt((float)(amax-g)*height*0.1f); // should really be 2.0
-      if (a_targets[a_targets.Count-1].vaxes != 0)
+      if (a_targets[a_targets.Count-1].vaxes == 0)
       {
-        // limit maxvertical velocity to final vertical velocity (no constraint)
-        // TODO: Remove entirely!
-        maxv = (float)a_targets[a_targets.Count-1].v.magnitude;
+        // Use lowest Y position as ground - not true but this only to avoid
+        // making partial trajectories don't allow time to not hit ground
+        // TODO: Calculate final position
+        Vector3d tgt_r = a_targets[a_targets.Count-1].r;
+        float height = (float)tgt_r.y - (float)ground.y;
+        float maxv = Mathf.Sqrt((float)(amax-g)*height*2);
+        RVWeightsToTime(T,dt,thrust_times,out double[] wr2,out double[] wv2);
+        for(int i = 0 ; i < N ; i++)
+          c[k,i*3+1] = wv2[i]; // Y
+        c[k,rhs] = -maxv - (v0.y - T*g);
+        ct[k] = 1; // LHS > RHS
+        k++;
       }
-      RVWeightsToTime(T,dt,thrust_times,out double[] wr2,out double[] wv2);
-      for(int i = 0 ; i < N ; i++)
-        c[k,i*3+1] = wv2[i]; // Y
-      c[k,rhs] = -maxv - (v0.y - T*g);
-      ct[k] = 1; // LHS > RHS
-      k++;
 
 #if (MINDESCENTANGLE)
       // Constrain N intermediate positions to be within minimumDescentAngle
@@ -1089,7 +1092,7 @@ namespace HopperGuidance
       Vector3d rf = a_targets[a_targets.Count-1].r;
       Vector3d vf = a_targets[a_targets.Count-1].v;
       rf = rf + vf*extendTime*0.5f; // So final position is below ground
-      local_traj.CorrectFinal(rf,vf,true,true);
+      local_traj.CorrectFinal(rf,vf,true,false);
       return result;
     }
 
@@ -1107,20 +1110,33 @@ namespace HopperGuidance
       List<SolveTarget> targets = new List<SolveTarget>();
       Vector3d c;
       double d;
+      float t = -1;
       for(int i=0;i<args.Length;i++)
       {
         char [] delim={'='};
+        char [] colon={':'};
         if (args[i].Split(delim,2).Length != 2)
           continue;
         string k = args[i].Split(delim,2)[0];
         string v = args[i].Split(delim,2)[1];
         if (v.StartsWith("[")) {
-          v = v.Replace("[","").Replace("]","");
+          string v1,v2;
+          t = -1;
+          if (v.Contains(":"))
+          {
+            v1 = v.Replace("[","").Replace("]","").Split(colon,1)[0];
+            v2 = v.Replace("[","").Replace("]","").Split(colon,1)[1];
+            t = (float)Convert.ToDouble(v2);
+          }
+          else
+          {
+            v1 = v.Replace("[","").Replace("]","");
+          }
           double x=0,y=0,z=0;
           int axes = 0;
-          string sx = v.Split(',')[0];
-          string sy = v.Split(',')[1];
-          string sz = v.Split(',')[2];
+          string sx = v1.Split(',')[0];
+          string sy = v1.Split(',')[1];
+          string sz = v1.Split(',')[2];
           if ((sx != "")&&(sx != "*"))
           {
             axes = axes | SolveTarget.X;
@@ -1157,7 +1173,7 @@ namespace HopperGuidance
             tgt.r = c;
             tgt.raxes = axes;
             tgt.vaxes = 0;
-            tgt.t = -1;
+            tgt.t = t;
             targets.Add(tgt);
           }
           else
@@ -1251,6 +1267,7 @@ namespace HopperGuidance
       if (result.isSolved())
       {
         List<string> comments = new List<string>();
+        comments.Add(solver.DumpString());
         comments.Add(result.DumpString());
         // Thrusts
         List<float> thrust_times = new List<float>();
