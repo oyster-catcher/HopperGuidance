@@ -61,7 +61,7 @@ namespace HopperGuidance
         double log_interval = 0.05f; // Interval between logging
         System.IO.StreamWriter _tgtWriter = null; // Actual vessel
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
-        float extendTime = 1; // duration to extend trajectory to slowly descent to touch down and below at touchDownSpeed
+        float extendTime = 0; // duration to extend trajectory to slowly descent to touch down and below at touchDownSpeed
         double touchDownSpeed = 1.4f;
         bool pickingPositionTarget = false;
         string _vesselLogFilename = "vessel.dat";
@@ -594,7 +594,11 @@ namespace HopperGuidance
           solver.g = g.magnitude;
           solver.minDescentAngle = minDescentAngle;
           solver.maxThrustAngle = maxThrustAngle*(1-2*errMargin);
-          solver.maxLandingThrustAngle = 0.5f*maxThrustAngle; // 1/2 of max thrust angle
+          solver.maxLandingThrustAngle = 0.1f*maxThrustAngle; // 10% of max thrust angle
+          // hack for large craft to allow extra slowdown time at target to prepare for next target
+          // where thrust is just over gravity give 5 seconds extra time
+          // where thrust is double gravity than use 0.5 secs extra time
+          solver.extraTime = (float)(2.5 - 2 * Math.Min(0.5*(amax/g.magnitude),1));
 
           // Shut-off throttle
           FlightCtrlState ctrl = new FlightCtrlState();
@@ -636,6 +640,7 @@ namespace HopperGuidance
 
           solver.apex = targets[targets.Count-1].r;
           _traj = new Trajectory();
+
           SolveResult result = MainProg.MultiPartSolve(ref solver, ref _traj, tr0, tv0, ref targets, (float)g.magnitude, extendTime);
           Debug.Log("HopperGuidance: "+solver.DumpString()+" "+result.DumpString());
           if (result.isSolved()) // solved for complete path?
