@@ -91,6 +91,7 @@ namespace HopperGuidance
     public float extraTime = 0.5f; // Add this on to minimum fuel solution (helps larger craft?)
     public Vector3d apex = Vector3d.zero; // min descent relative to this point
     public bool full = false;
+    public float extendTime = 0;
 
     // Stored input values
     Vector3d r0;
@@ -158,6 +159,7 @@ namespace HopperGuidance
       Vector3d vf = Vector3d.zero;
       int rfaxes = 0;
       int vfaxes = 0;
+      float ft = -1;
       for(int i=0; i<targets.Count; i++)
       {
         SolveTarget tgt = targets[i];
@@ -167,16 +169,17 @@ namespace HopperGuidance
           rfaxes = tgt.raxes;
           vf = tgt.v;
           vfaxes = tgt.vaxes;
+          ft = tgt.t;
         }
         else
         {
-          stargets = stargets + String.Format("target="+Vec2Str(tgt.r,tgt.raxes)) + " ";
+          stargets = stargets + String.Format("target="+Vec2Str(tgt.r,tgt.raxes)) + ":" + tgt.t + " ";
         }
       }
       if (rfaxes != 0)
-        stargets = stargets + " rf="+Vec2Str(rf,rfaxes);
+        stargets = stargets + " rf="+Vec2Str(rf,rfaxes)+":"+ft;
       if (vfaxes != 0)
-        stargets = stargets + " vf="+Vec2Str(vf,vfaxes);
+        stargets = stargets + " vf="+Vec2Str(vf,vfaxes)+":"+ft;
       // TODO - Missing constraints?
       return string.Format("tol="+tol+" minDurationPerThrust="+minDurationPerThrust+" maxThrustsBetweenTargets="+maxThrustsBetweenTargets+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle+" {0}",stargets);
     }
@@ -639,20 +642,18 @@ namespace HopperGuidance
         }
       }
 
-      // Find time to hit ground with just gravity
-      // 0 = a*x*x + b*x + c;
-      // height = 0.5*amax*t*t + v*t;
-
-      // distance = (init vel) * (time) * 0.5
-
       // Use lowest Y position as ground - not true but this only to avoid
       // making partial trajectories don't allow time to not hit ground
       // TODO: Calculate final position
       Vector3d tgt_r = a_targets[a_targets.Count-1].r;
       float height = (float)tgt_r.y - (float)ground.y;
-      // Crude height above descent angle
-      float maxv = 0;
-      maxv = Mathf.Sqrt((float)(amax-g)*height); // should really be 2.0
+      float maxv = Mathf.Sqrt((float)(amax-g)*height*0.1f); // should really be 2.0
+      if (a_targets[a_targets.Count-1].vaxes != 0)
+      {
+        // limit maxvertical velocity to final vertical velocity (no constraint)
+        // TODO: Remove entirely!
+        maxv = (float)a_targets[a_targets.Count-1].v.magnitude;
+      }
       RVWeightsToTime(T,dt,thrust_times,out double[] wr2,out double[] wv2);
       for(int i = 0 ; i < N ; i++)
         c[k,i*3+1] = wv2[i]; // Y
@@ -994,22 +995,20 @@ namespace HopperGuidance
         // Fall back to c or d positions for 0.5*(a+b) failed
         if ((resc.fuel < resd.fuel) && (resc.isSolved()))
         {
-          a_targets[a_targets.Count-1].t = (float)last_c + extraTime;
+          a_targets[a_targets.Count-1].t = (float)resc.T + extraTime;
           return resc;
         }
         if ((resd.fuel < resc.fuel) && (resd.isSolved()))
         {
-          a_targets[a_targets.Count-1].t = (float)last_d + extraTime;;
+          a_targets[a_targets.Count-1].t = (float)resd.T + extraTime;
           return resd;
         }
         System.Console.Error.WriteLine("FAILED AT T={0}",0.5*(a+b));
         return result;
       }
-      a_targets[a_targets.Count-1].t = (float)bestT + extraTime;
+      a_targets[a_targets.Count-1].t = (float)result.T + extraTime;
       return result;
     }
-
-
   }
   public class MainProg
   {
@@ -1074,8 +1073,6 @@ namespace HopperGuidance
 
         if (result.isSolved())
         {
-          // Fill in T for position target
-          a_targets[last].t = (float)result.T + solver.extraTime;
           // All targets added?
           done = (a_targets.Count == partial_targets.Count);
         }
@@ -1089,7 +1086,10 @@ namespace HopperGuidance
       }
       local_traj = new Trajectory();
       local_traj.Simulate(result.T, result.thrusts, local_r, local_v, new Vector3d(0,-g,0), result.dt, extendTime);
-      local_traj.CorrectFinal(a_targets[a_targets.Count-1].r,a_targets[a_targets.Count-1].v,true,false);
+      Vector3d rf = a_targets[a_targets.Count-1].r;
+      Vector3d vf = a_targets[a_targets.Count-1].v;
+      rf = rf + vf*extendTime*0.5f; // So final position is below ground
+      local_traj.CorrectFinal(rf,vf,true,true);
       return result;
     }
 
@@ -1211,6 +1211,10 @@ namespace HopperGuidance
             solver.checkGapFirst = d;
           else if (k=="checkGapMult")
             solver.checkGapMult = d;
+          else if (k=="checkGapStep")
+            solver.checkGapStep = d;
+          else if (k=="extendTime")
+            solver.extendTime = (float)d;
           else
           {
             System.Console.Error.WriteLine("No such parameter name: "+k);
@@ -1242,7 +1246,7 @@ namespace HopperGuidance
 
       Trajectory traj = new Trajectory();
       // targets gets times filled in if set to -1
-      SolveResult result = MultiPartSolve(ref solver, ref traj, r0, v0, ref targets, (float)solver.g, 0);
+      SolveResult result = MultiPartSolve(ref solver, ref traj, r0, v0, ref targets, (float)solver.g, solver.extendTime);
 
       if (result.isSolved())
       {

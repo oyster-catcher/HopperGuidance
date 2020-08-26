@@ -595,7 +595,6 @@ namespace HopperGuidance
           solver.minDescentAngle = minDescentAngle;
           solver.maxThrustAngle = maxThrustAngle*(1-2*errMargin);
           solver.maxLandingThrustAngle = 0.5f*maxThrustAngle; // 1/2 of max thrust angle
-          solver.full = true; // full search rather than Golden Search
 
           // Shut-off throttle
           FlightCtrlState ctrl = new FlightCtrlState();
@@ -651,7 +650,19 @@ namespace HopperGuidance
             vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
             vessel.OnFlyByWire += new FlightInputCallback(Fly);
             // Write solution
-            if (_logging) {_traj.Write(_solutionLogFilename);}
+            if (_logging)
+            {
+              List<string> comments = new List<string>();
+              comments.Add(result.DumpString());
+              // Thrusts
+              List<float> thrust_times = new List<float>();
+              for( int i=0; i<result.thrusts.Length; i++)
+                thrust_times.Add(result.thrusts[i].t);
+              comments.Add("thrust_times="+String.Join(",",thrust_times));
+              if( result.checktimes != null )
+                comments.Add("check_times="+String.Join(",",result.checktimes));
+              _traj.Write(_solutionLogFilename, comments);
+            }
             autoMode = AutoMode.LandAtTarget;
             Events["ToggleGuidance"].guiName = "Cancel guidance";
           }
