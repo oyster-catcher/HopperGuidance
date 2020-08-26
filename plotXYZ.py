@@ -33,16 +33,22 @@ def plot_targets(ax,data,color='black'):
   ty = [d[1] for d in data]
   ax.plot(tx,ty,color=color,marker='s',markersize=10,linestyle='')
 
-class Vector3:
+class Vector3Time:
   def fromStr(self, s=''):
-    s = s.strip("[]")
-    self.x,self.y,self.z = [float(a) for a in s.split(",")]
+    v = s.split(":")[0]
+    v = v.strip("[]")
+    try:
+      self.t = float(s.split(":")[1])
+    except:
+      self.t = -1
+    self.x,self.y,self.z = [float(a) for a in v.split(",")]
     return self
 
-  def __init__(self, x=0, y=0, z=0):
+  def __init__(self, x=0, y=0, z=0, t=-1):
     self.x = x
     self.y = y
     self.z = z
+    self.t = t
 
 def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
          vxmin,vxmax,vymin,vymax,vzmin,vzmax,tmax=30,amult=1,askip=3,
@@ -155,26 +161,29 @@ def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
       check_times = []
     if 'target' in info:
       for s in info['target']:
-        t=Vector3()
+        t=Vector3Time()
         targets.append(t.fromStr(s))
     if 'rf' in info:
-      t=Vector3()
+      t=Vector3Time()
       targets.append(t.fromStr(info['rf']))
 
     plot_line(ax1,data,'time','x',color=col)
     plot_checks(ax1,data,'time','x',check_times,color=col)
+    plot_targets(ax1,[(t.t,t.x) for t in targets])
 
     plot_line(ax2,data,'time','vx',color=col)
     plot_checks(ax2,data,'time','vx',check_times,color=col)
 
     plot_line(ax3,data,'time','y',color=col)
     plot_checks(ax3,data,'time','y',check_times,color=col)
+    plot_targets(ax3,[(t.t,t.y) for t in targets])
 
     plot_line(ax4,data,'time','vy',color=col)
     plot_checks(ax4,data,'time','vy',check_times,color=col)
 
     plot_line(ax5,data,'time','z',color=col)
     plot_checks(ax5,data,'time','z',check_times,color=col)
+    plot_targets(ax5,[(t.t,t.z) for t in targets])
 
     plot_line(ax6,data,'time','vz',color=col)
     plot_checks(ax6,data,'time','vz',check_times,color=col)
