@@ -1030,6 +1030,7 @@ namespace HopperGuidance
       Debug.Log("local_v="+(Vector3)local_v);
 #endif
       solver.apex = a_targets[a_targets.Count-1].r;
+      solver.apex -= a_targets[a_targets.Count-1].v * extendTime * 0.5f;
 
       // Solve for best time adding each intermediate constraint at a time
       bool done = false;
@@ -1057,6 +1058,12 @@ namespace HopperGuidance
           }
           last++;
         }
+
+        // Move final target off ground a little as extend time was extend trajectory vertically downloads
+        if (a_targets.Count == partial_targets.Count)
+        {
+          partial_targets[partial_targets.Count-1].r -= partial_targets[partial_targets.Count-1].v * extendTime * 0.5f;
+        }
    
         float estT = Solve.EstimateTimeBetweenTargets(lr, lv, next_targets, (float)solver.amax, (float)solver.g, (float)solver.vmax, (float)solver.maxThrustAngle);
         solver.Tmin = result.T;
@@ -1082,17 +1089,16 @@ namespace HopperGuidance
         else
         {
           local_traj = new Trajectory();
-          local_traj.Simulate(result.T, result.thrusts, local_r, local_v, new Vector3d(0,-g,0), result.dt, 0);
+          local_traj.Simulate(result.T, result.thrusts, local_r, local_v, new Vector3d(0,-g,0), result.dt);
           return result; // failed part way through
         }
         lr = partial_targets[partial_targets.Count-1].r; // assume got to last target
       }
       local_traj = new Trajectory();
-      local_traj.Simulate(result.T, result.thrusts, local_r, local_v, new Vector3d(0,-g,0), result.dt, extendTime);
-      Vector3d rf = a_targets[a_targets.Count-1].r;
+      local_traj.Simulate(result.T, result.thrusts, local_r, local_v, new Vector3d(0,-g,0), result.dt);
       Vector3d vf = a_targets[a_targets.Count-1].v;
-      rf = rf + vf*extendTime*0.5f; // So final position is below ground
-      local_traj.CorrectFinal(rf,vf,true,false);
+      local_traj.CorrectForTargets(a_targets);
+      local_traj.Extend(vf, new Vector3d(0,-g,0), extendTime);
       return result;
     }
 

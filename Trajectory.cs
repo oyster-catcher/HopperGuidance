@@ -12,14 +12,16 @@ namespace HopperGuidance
     public Vector3d [] r = null;
     public Vector3d [] v = null;
     public Vector3d [] a = null;
+    public double T = 0;
 
     // Take a set of thrust vectors at positions 0, dt, 2*dt, etc...
     // and return a higher fidelity track of positions and thrust directions: r, rrr
     // at intervals of simdt
-    public void Simulate(double T, ThrustVectorTime [] thrusts, Vector3d r0, Vector3d v0, Vector3d g, double a_dt, double extendTime)
+    public void Simulate(double a_T, ThrustVectorTime [] thrusts, Vector3d r0, Vector3d v0, Vector3d g, double a_dt)
     {
       if (thrusts == null)
         return;
+      T = a_T;
       List<float> thrust_times = new List<float>();
       for(int i=0; i<thrusts.Length; i++)
         thrust_times.Add(thrusts[i].t);
@@ -34,19 +36,18 @@ namespace HopperGuidance
       int j = start;
       int N = thrusts.Length;
       int M = (int)(T/dt+1);
-      int extendM = (int)((T+extendTime)/dt+1);
       double t=0;
       if (r == null)
       {
-        r = new Vector3d[extendM];
-        v = new Vector3d[extendM];
-        a = new Vector3d[extendM];
+        r = new Vector3d[M];
+        v = new Vector3d[M];
+        a = new Vector3d[M];
       }
       else
       {
-        Array.Resize(ref r, start+extendM);
-        Array.Resize(ref v, start+extendM);
-        Array.Resize(ref a, start+extendM);
+        Array.Resize(ref r, start+M);
+        Array.Resize(ref v, start+M);
+        Array.Resize(ref a, start+M);
       }
       while(j < start+M)
       {
@@ -73,16 +74,24 @@ namespace HopperGuidance
         j++;
         t += dt;
       }
-      // Continue with same position and velocity and acceleration
-      // to equal gravity
-      while(j < start+extendM)
+    }
+
+    // Extend the trajectory at the same velocity for a period of time
+    // compute the thrust vector to cancel gravity
+    public void Extend(Vector3d a_v, Vector3d a_g, double a_extendTime)
+    {
+      int oldsize = r.Length;
+      int newsize = r.Length + (int)(a_extendTime/dt);
+      Array.Resize<Vector3d>(ref r, newsize);
+      Array.Resize<Vector3d>(ref v, newsize);
+      Array.Resize<Vector3d>(ref a, newsize); 
+      Vector3d cr = r[oldsize-1];
+      for( int i=oldsize; i<newsize; i++ )
       {
-        r[j] = cr;
-        v[j] = cv;
-        a[j] = -g;
-        cr += cv*dt;
-        t += dt;
-        j++;
+        r[i] = cr;
+        v[i] = a_v;
+        a[i] = -a_g;
+        cr = cr + a_v*dt;
       }
     }
 
@@ -132,8 +141,6 @@ namespace HopperGuidance
     }
 
     // Correct final position in trajectory to cover up numeric errors
-
-    // Correct final position in trajectory to cover up numeric errors
     public void CorrectFinal(Vector3d rf, Vector3d vf, bool correct_r, bool correct_v)
     {
       Vector3d r_err = r[Length()-1] - rf;
@@ -144,6 +151,28 @@ namespace HopperGuidance
           r[i] = r[i] - r_err*((double)i/Length());
         if (correct_v)
           v[i] = v[i] - v_err*((double)i/Length());
+      }
+    }
+
+    // Correct to go exactly through the targets
+    public void CorrectForTargets(List<SolveTarget> targets)
+    {
+      int start=0, j=0;
+      Vector3d start_r_err = Vector3d.zero;
+      //System.Console.Error.WriteLine("length="+Length());
+      for( int i = 0 ; i < targets.Count ; i++ )
+      {
+        int end = (int)((targets[i].t/T) * Length() + 0.5f);
+        end = Math.Min(Length()-1,end); // inclusive
+        Vector3d end_r_err = r[end] - targets[i].r;
+        for ( j=start; j<=end ; j++)
+        {
+          double p = (j-start)/(double)(end-start);
+          r[j] = r[j]  - start_r_err * (1-p) - end_r_err * p;
+          //System.Console.Error.WriteLine("Correcting "+j+" by "+(start_r_err * (1-p))+" and "+(end_r_err * p)+" to "+r[j]+" p="+p);
+        }
+        start = j;
+        start_r_err = end_r_err;
       }
     }
 
