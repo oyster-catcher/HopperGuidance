@@ -1,7 +1,7 @@
 v0.2.2
 - Added ability to pick multiple intermediate targets
 - Removed latitude and longitude
-- Removed max landing thrust angle, it is set to 25% of max thrust angle
+- Removed max landing thrust angle, it is set to 10% of max thrust angle
 - Removed acceleration gain, it is set to 4x correction factor
 - Removed idle angle, it is now always 90 degrees
 - Removed max thrust, this is set to 10% less than the vessels maximum
