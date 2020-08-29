@@ -1130,8 +1130,8 @@ namespace HopperGuidance
           t = -1;
           if (v.Contains(":"))
           {
-            v1 = v.Replace("[","").Replace("]","").Split(colon,1)[0];
-            v2 = v.Replace("[","").Replace("]","").Split(colon,1)[1];
+            v1 = v.Replace("[","").Replace("]","").Split(colon,2)[0];
+            v2 = v.Replace("[","").Replace("]","").Split(colon,2)[1];
             t = (float)Convert.ToDouble(v2);
           }
           else
