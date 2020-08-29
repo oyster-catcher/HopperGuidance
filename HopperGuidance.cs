@@ -131,6 +131,7 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = false, guiName = "Show track", isPersistant = false)]
         bool showTrack = true;
         bool setShowTrack = true;
+        float lastShowTrackTime = 0;
 
         [UI_Toggle(disabledText = "Off", enabledText = "On")]
         [KSPField(guiActive = true, guiActiveEditor = false, guiName = "Logging", isPersistant = false)]
@@ -203,6 +204,7 @@ namespace HopperGuidance
           MeshRenderer meshr = o.AddComponent<MeshRenderer>();
           meshr.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
           meshr.material.color = color;
+          meshr.receiveShadows = false;
 
           Mesh mesh = new Mesh();
           Vector3 [] vertices = new Vector3[36*4+4+4+4+8];
@@ -264,7 +266,10 @@ namespace HopperGuidance
         public void DrawTargets(List<Target> tgts, Transform transform, Color color, double size)
         {
           foreach (GameObject obj in _tgt_objs)
-            Destroy(obj);
+          {
+            if (obj != null )
+              Destroy(obj);
+          }
           _tgt_objs.Clear();
           foreach (Target t in tgts)
           {
@@ -298,6 +303,8 @@ namespace HopperGuidance
           MeshRenderer meshr = _track_obj.AddComponent<MeshRenderer>();
           meshr.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
           meshr.material.color = trackcol;
+          meshr.receiveShadows = false;
+          meshr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
           Mesh mesh = new Mesh();
           Vector3 [] vertices = new Vector3[(traj.Length()-1)*4*2];
           int [] triangles = new int[(traj.Length()-1)*4*2*3]; // number of vertices in tris
@@ -322,6 +329,8 @@ namespace HopperGuidance
           mesh = new Mesh();
           meshr.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
           meshr.material.color = thrustcol;
+          meshr.receiveShadows = false;
+          meshr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
           vertices = new Vector3[traj.Length()*4*2];
           triangles = new int[traj.Length()*4*2*3]; // number of vertices in tris
           v=0;
@@ -400,7 +409,10 @@ namespace HopperGuidance
           DisableLand();
           // Remove targets as they are not removed on DisableLand()
           foreach (GameObject obj in _tgt_objs)
-            Destroy(obj);
+          {
+            if (obj)
+              Destroy(obj);
+          }
         }
 
         public void SetUpTransform(Target final)
@@ -479,8 +491,8 @@ namespace HopperGuidance
               {
                   //Debug.Log("Engine: "+engine);
                   //engine.Activate(); // must be active to get thrusts or else realIsp=0
-                  //for(float throttle=0; throttle<=1; throttle+=0.1f)
-                  //  Debug.Log("isp="+engine.realIsp+" throttle="+throttle+" Thrust="+engine.GetEngineThrust(engine.realIsp,throttle));
+                  //Debug.Log("isp="+engine.realIsp+" throttle=0 Thrust="+engine.GetEngineThrust(engine.realIsp,0));
+                  //Debug.Log("isp="+engine.realIsp+" throttle=1 Thrust="+engine.GetEngineThrust(engine.realIsp,1));
                   // I think this will get the correct thrust given throttle in atmosphere (or wherever)
                   minThrust += engine.GetEngineThrust(engine.realIsp, 0);
                   maxThrust += engine.GetEngineThrust(engine.realIsp, 1);
@@ -560,7 +572,7 @@ namespace HopperGuidance
           Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
           //TODO: Add this back in. An extra target?
           Vector3d vf = new Vector3d(0,-touchDownSpeed,0);
-          ComputeMinMaxThrust(out _minThrust,out _maxThrust); // This might be including RCS (i.e. non main Throttle)
+          ComputeMinMaxThrust(out _minThrust,out _maxThrust);
           if( _maxThrust == 0 )
           {
             ScreenMessages.PostScreenMessage("Max thrust of engine is zero. In Realism Overhaul startup the engine manually first", 3.0f, ScreenMessageStyle.UPPER_CENTER);
@@ -572,8 +584,8 @@ namespace HopperGuidance
           double amax = _maxThrust/vessel.totalMass;
           if( amin > g.magnitude )
           {
-            ScreenMessages.PostScreenMessage("Min thrust of engine is greater than gravity. Use less thrust of a heavier vessel", 3.0f, ScreenMessageStyle.UPPER_CENTER);
-            autoMode = AutoMode.Off;
+            ScreenMessages.PostScreenMessage("Min thrust of engine is greater than gravity. Use less thrust or a heavier vessel", 3.0f, ScreenMessageStyle.UPPER_CENTER);
+            //autoMode = AutoMode.Off;
             return;
           }
           if( amin > amax*0.95 )
@@ -645,7 +657,7 @@ namespace HopperGuidance
           Debug.Log("HopperGuidance: "+solver.DumpString()+" "+result.DumpString());
           if (result.isSolved()) // solved for complete path?
           {
-            string msg = "Found solution T="+result.T+" Fuel="+result.fuel;
+            string msg = String.Format("Found solution T={0:F1} Fuel={1:F1}",result.T,result.fuel);
             Debug.Log(msg);
             ScreenMessages.PostScreenMessage("HopperGuidance "+msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
             // Enable autopilot
@@ -695,11 +707,13 @@ namespace HopperGuidance
 
         public void DisableLand()
         {
+          Debug.Log("Called DisableLand()");
           autoMode = AutoMode.Off;
-          if (_track_obj != null) {Destroy(_track_obj); _track_obj=null;}
+          if (_track_obj != null)   {Destroy(_track_obj); _track_obj=null;}
           if (_thrusts_obj != null) {Destroy(_thrusts_obj); _thrusts_obj=null;}
-          if (_align_obj != null) {Destroy(_align_obj); _align_obj=null;}
-          if (_steer_obj != null) {Destroy(_steer_obj); _steer_obj=null;}
+          if (_align_obj != null)   {Destroy(_align_obj); _align_obj=null;}
+          if (_steer_obj != null)   {Destroy(_steer_obj); _steer_obj=null;}
+          _traj = null;
           LogStop();
           vessel.OnFlyByWire -= new FlightInputCallback(Fly);
           Events["ToggleGuidance"].guiName = "Enable guidance";
@@ -757,7 +771,7 @@ namespace HopperGuidance
 
           Vector3d att = new Vector3d(vessel.transform.up.x,vessel.transform.up.y,vessel.transform.up.z);
           Vector3d tatt = _transform.InverseTransformVector(att);
-          ComputeMinMaxThrust(out _minThrust,out _maxThrust);
+          ComputeMinMaxThrust(out _minThrust,out _maxThrust); // TODO: Don't do this ALL the time
           float amax = (float)(_maxThrust/vessel.totalMass);
           float amin = (float)(_minThrust/vessel.totalMass);
 
@@ -866,13 +880,31 @@ namespace HopperGuidance
         {
           base.OnUpdate();
 
+          // Checking
+          if ((_track_obj==null) && (showTrack) && (_traj!=null)) // Should track be redrawn?
+          {
+            //Debug.Log("No track object! - redrawing");
+            setShowTrack = false; // forces redraw is setShow=true
+          }
+          if (_tgts.Count>0) // Show targets be redrawn?
+          {
+            bool deleted = false; // Did target GameObjects get deleted?
+            foreach (GameObject obj in _tgt_objs)
+            {
+              if (obj==null)
+              {
+                deleted = true;
+                break;
+              }
+            }
+            if (deleted)
+            {
+              //Debug.Log("No target object! - redrawing");
+              DrawTargets(_tgts,_transform,targetcol,tgtSize);
+            }
+          }
+
           List<Target> tgts = new List<Target>(_tgts);
-          // Hack, update transforms since I can't seem to get parenting to update properly
-          // Doesn't work :-(
-          //if (_track_obj != null)
-          //  _track_obj.transform.SetParent(_transform,true);
-          //if (_thrusts_obj != null)
-          //  _thrusts_obj.transform.SetParent(_transform,true);
 
           // Check for changes to slider. This can trigger one of many actions
           // - If autopilot enabled, recompute trajectory
@@ -909,7 +941,9 @@ namespace HopperGuidance
             setMaxV = maxV;
             resetPID = true;
             recomputeTrajectory = true;
-          }  
+          }
+
+          // Hack to redraw track regularly - I can find no otherway around this hack right now
           if (showTrack != setShowTrack)
           {
             DrawTrack(_traj, _transform);
