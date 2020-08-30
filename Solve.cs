@@ -71,8 +71,8 @@ namespace HopperGuidance
   public class Solve
   {
     // Parameters to control solution
-    public double Tmin = 0;
-    public double Tmax = 300;
+    public double Tmin = -1;
+    public double Tmax = -1;
     public double minDurationPerThrust = 4; // Insert extra thrust vector between targets
     public int maxThrustsBetweenTargets = 1;
     public double checkGapFirst = 1; // duration between checks (none at T=0)
@@ -273,8 +273,8 @@ namespace HopperGuidance
 
       float xmin = -maxt_sideamax;
       float xmax = +maxt_sideamax; 
-      float ymin = Math.Abs(g);
-      float ymax = Math.Abs(amax-g);
+      float ymin = -g;
+      float ymax = amax-g;
       float zmin = -maxt_sideamax;
       float zmax = +maxt_sideamax;
 
@@ -964,8 +964,12 @@ namespace HopperGuidance
             System.Console.Error.WriteLine("STEPPING: T="+c+" fuel="+resc.fuel+" retval="+resc.retval);
             if (resc.isSolved())
             {
-              if ((resc.fuel < resd.fuel) || (resc.fuel > resd.fuel)) // best or getting worse
+              //if ((resc.fuel < resd.fuel) || (resc.fuel > resd.fuel)) // best or getting worse
+              if (resc.fuel < resd.fuel) // best so far
+              {
+                d = c; // best time
                 resd = resc; // keep best
+              }
             }
             c = c + step;
           }
@@ -1031,6 +1035,8 @@ namespace HopperGuidance
 #endif
       solver.apex = a_targets[a_targets.Count-1].r;
       solver.apex -= a_targets[a_targets.Count-1].v * extendTime * 0.5f;
+      double Tmin = solver.Tmin;
+      double Tmax = solver.Tmax;
 
       // Solve for best time adding each intermediate constraint at a time
       bool done = false;
@@ -1064,11 +1070,16 @@ namespace HopperGuidance
         {
           partial_targets[partial_targets.Count-1].r -= partial_targets[partial_targets.Count-1].v * extendTime * 0.5f;
         }
-   
-        float estT = Solve.EstimateTimeBetweenTargets(lr, lv, next_targets, (float)solver.amax, (float)solver.g, (float)solver.vmax, (float)solver.maxThrustAngle);
-        solver.Tmin = result.T;
-        solver.Tmax = result.T + estT*2;
-        System.Console.Error.WriteLine("Estimated Tmin="+solver.Tmin+" Tmax="+solver.Tmax);
+ 
+        solver.Tmin = (Tmin>=0) ? Tmin : result.T;
+        if (Tmax < 0)
+        { 
+          float estT = Solve.EstimateTimeBetweenTargets(lr, lv, next_targets, (float)solver.amax, (float)solver.g, (float)solver.vmax, (float)solver.maxThrustAngle);
+          solver.Tmax = result.T + estT*3; // 2 is good on Kerbin, 3 for lower gravity: TODO - Improve
+          System.Console.Error.WriteLine("Estimated Tmax="+solver.Tmax);
+        }
+        else
+          solver.Tmax = Tmax;
 
         // Currently uses intermediate positions, ir[]
         // use rough tolerance for intermediate targets and reduce to actual set value for
