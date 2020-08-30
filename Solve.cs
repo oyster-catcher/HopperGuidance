@@ -12,8 +12,10 @@ using System.Collections.Generic;
 using KSPAssets;
 using UnityEngine;
 
+
 namespace HopperGuidance
 {
+
   public class SolveTarget
   {
     public const int X = 1;
@@ -70,6 +72,9 @@ namespace HopperGuidance
 
   public class Solve
   {
+    public const double toDegrees = 180/Math.PI;
+    public const double toRadians = Math.PI/180;
+
     // Parameters to control solution
     public double Tmin = -1;
     public double Tmax = -1;
@@ -261,29 +266,50 @@ namespace HopperGuidance
       float t=0;
       // Estimate time to go from stationary at one target to stationary at next, to provide
       // an upper estimate on the solution time
-      // TODO: Adjust with maxThrustAngle
-      float ang = (maxThrustAngle<90)?maxThrustAngle:90;
-      float maxt_sideamax = amax * Mathf.Sin(ang*Mathf.PI/180);
-      float maxt_upamax = amax * Mathf.Cos(ang*Mathf.PI/180f);
-      if (maxt_upamax < g) // Would drop if at max angle so reduce
+      // Find angle at which vertical acceleration equals gravity
+      float ang = (float)(Math.Acos(g/amax) * toDegrees);
+      float maxt_sideamax = (float)(Math.Sin(ang * toRadians) * amax);
+      System.Console.Error.WriteLine("Estimate: angle (g=vert.accel) = "+ang+" sideamax="+maxt_sideamax+" amax="+amax);
+      // Use maxAngle at a lower throttle where vertical accel = g
+      if (ang > maxThrustAngle)
       {
-        ang = Mathf.Acos(g/amax);
-        maxt_sideamax = amax * Mathf.Sin(ang);
+        maxt_sideamax = (float)(g*Math.Tan(maxThrustAngle * toRadians));
+        System.Console.Error.WriteLine("Estimate: angle>maxThrustAngle ang="+maxThrustAngle+" sideamax="+maxt_sideamax);
       }
 
-      float xmin = -maxt_sideamax;
-      float xmax = +maxt_sideamax; 
-      float ymin = -g;
-      float ymax = amax-g;
-      float zmin = -maxt_sideamax;
-      float zmax = +maxt_sideamax;
+      float hor_min = -maxt_sideamax;
+      float hor_max = +maxt_sideamax; 
+      float ver_min = -g;
+      float ver_max = amax-g;
 
       // Compute position with zero velocity
-      if (v0.magnitude > 1)
+      if (v0.magnitude > 0.1f)
       {
-        t = (float)v0.magnitude / (amax-g);
         Vector3d ca = -(amax-g) * v0/v0.magnitude;
         r0 = r0 + v0*t + 0.5*ca*t*t;
+        float stop_hor_t = 0;
+        float stop_ver_t = 0;
+        if (v0.y > 0)
+        {
+          // move up to stop
+          stop_ver_t = (float)(v0.y/g);
+          r0.y = r0.y + v0.y*stop_ver_t - 0.5f*g*stop_ver_t*stop_ver_t;
+        }
+        else
+        {
+          // move down to stop
+          stop_ver_t = (float)(-v0.y/ver_max);
+          r0.y = r0.y + v0.y*stop_ver_t + 0.5f*ver_max*stop_ver_t*stop_ver_t;
+        }
+        // move sideways to stop
+        v0.y = 0;
+        if (v0.magnitude > 0.1f)
+        {
+          stop_hor_t = Mathf.Sqrt((float)(v0.x*v0.x + v0.z*v0.z))/maxt_sideamax;
+          r0 = r0 + v0*stop_hor_t - 0.5f*maxt_sideamax*stop_hor_t*stop_hor_t*(v0/v0.magnitude); 
+        }
+        t = stop_hor_t + stop_ver_t;
+        System.Console.Error.WriteLine("Position with zero velocity "+r0+" hor_stop_t="+stop_hor_t+" ver_top_t="+stop_ver_t);
       }
       // r0 represents stationary position after velocity cancelled out
 
@@ -292,11 +318,11 @@ namespace HopperGuidance
         float dx = (float)(tgt.r.x - r0.x);
         float dy = (float)(tgt.r.y - r0.y);
         float dz = (float)(tgt.r.z - r0.z);
-        // Compute time to move in each orthogonal axes
-        float tx = AxisTime(dx, xmin*0.5f, xmax*0.5f, vmax);
-        float ty = AxisTime(dy, ymin, ymax, vmax);
-        float tz = AxisTime(dz, zmin*0.5f, zmax*0.5f, vmax);
-        t = t + Mathf.Max(tx,Mathf.Max(ty,tz))*1.5f;
+        float d = Mathf.Sqrt(dx*dx+dz*dz);
+        // Compute time to move in each orthogonal axes: horizontally or vertically
+        float hor_t = AxisTime(d, hor_min*0.5f, hor_max*0.5f, vmax);
+        float ver_t = AxisTime(dy, ver_min, ver_max, vmax);
+        t = t + hor_t + ver_t;
       }
       return t;
     }
@@ -958,7 +984,7 @@ namespace HopperGuidance
           double step = (b-a)*0.1f;
           c = a;
           System.Console.Error.WriteLine("STEPPING a="+a+" b="+b);
-          while(c < b)
+          while(c <= b+0.01f)
           {
             resc = GFold(a_r0,a_v0,a_targets,c);
             System.Console.Error.WriteLine("STEPPING: T="+c+" fuel="+resc.fuel+" retval="+resc.retval);
@@ -1075,7 +1101,7 @@ namespace HopperGuidance
         if (Tmax < 0)
         { 
           float estT = Solve.EstimateTimeBetweenTargets(lr, lv, next_targets, (float)solver.amax, (float)solver.g, (float)solver.vmax, (float)solver.maxThrustAngle);
-          solver.Tmax = result.T + estT*3; // 2 is good on Kerbin, 3 for lower gravity: TODO - Improve
+          solver.Tmax = result.T + estT;
           System.Console.Error.WriteLine("Estimated Tmax="+solver.Tmax);
         }
         else
@@ -1259,7 +1285,6 @@ namespace HopperGuidance
       // Add final target if set
       if ((rfaxes != 0)||(vfaxes != 0))
       {
-        System.Console.Error.WriteLine(rfaxes+" "+vfaxes);
         SolveTarget final = new SolveTarget();
         final.r = rf;
         final.raxes = rfaxes;
