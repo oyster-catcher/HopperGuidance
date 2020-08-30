@@ -184,21 +184,24 @@ namespace HopperGuidance
         }
 
         // pos is ground position, but draw up to height
-        public void DrawTarget(Vector3d pos, Transform transform, Color color, double size, float height)
+        public void DrawTarget(Vector3d pos, Transform a_transform, Color color, double size, float height)
         {
           double[] r = new double[]{size*0.5,size*0.55,size*0.95,size};
-          Vector3d gpos = transform.TransformPoint(pos); // convert to World Pos
-          Vector3d tpos = transform.TransformPoint(pos + new Vector3d(0,height,0));
+          //Vector3d gpos = a_transform.TransformPoint(pos); // convert to World Pos
+          //Vector3d tpos = a_transform.TransformPoint(pos + new Vector3d(0,height,0));
+          Vector3d gpos = pos;
+          Vector3d tpos = pos + new Vector3d(0,height,0);
 
           Vector3d vx = new Vector3d(1,0,0);
           Vector3d vy = new Vector3d(0,1,0);
           Vector3d vz = new Vector3d(0,0,1);
 
-          vx = transform.TransformVector(vx);
-          vy = transform.TransformVector(vy);
-          vz = transform.TransformVector(vz);
+          //vx = a_transform.TransformVector(vx);
+          //vy = a_transform.TransformVector(vy);
+          //vz = a_transform.TransformVector(vz);
 
           GameObject o = new GameObject();
+          o.transform.SetParent(a_transform, false);
           _tgt_objs.Add(o);
           MeshFilter meshf = o.AddComponent<MeshFilter>();
           MeshRenderer meshr = o.AddComponent<MeshRenderer>();
@@ -263,7 +266,7 @@ namespace HopperGuidance
           mesh.RecalculateNormals();
         }
 
-        public void DrawTargets(List<Target> tgts, Transform transform, Color color, double size)
+        public void DrawTargets(List<Target> tgts, Transform a_transform, Color color, double size)
         {
           foreach (GameObject obj in _tgt_objs)
           {
@@ -274,12 +277,13 @@ namespace HopperGuidance
           foreach (Target t in tgts)
           {
             Vector3d pos = vessel.mainBody.GetWorldSurfacePosition(t.lat, t.lon, t.alt);
-            pos = transform.InverseTransformPoint(pos); // convert to local (for orientation)
-            DrawTarget(pos,transform,color,size,t.height);
+            // TODO: Transform without parent?
+            pos = a_transform.InverseTransformPoint(pos); // convert to local (for orientation)
+            DrawTarget(pos,a_transform,color,size,t.height);
           }
         }
 
-        public void DrawTrack(Trajectory traj, Transform transform, float amult=1)
+        public void DrawTrack(Trajectory traj, Transform a_transform, float amult=1)
         {
           if (traj == null)
             return;
@@ -298,7 +302,7 @@ namespace HopperGuidance
 
           // Track
           _track_obj = new GameObject("Track");
-          _track_obj.transform.SetParent(transform, false);
+          _track_obj.transform.SetParent(a_transform, false);
           MeshFilter meshf = _track_obj.AddComponent<MeshFilter>();
           MeshRenderer meshr = _track_obj.AddComponent<MeshRenderer>();
           meshr.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
@@ -323,7 +327,7 @@ namespace HopperGuidance
 
           // Thrust vectors
           _thrusts_obj = new GameObject("Thrusts");
-          _thrusts_obj.transform.SetParent(transform, false);
+          _thrusts_obj.transform.SetParent(a_transform, false);
           meshf = _thrusts_obj.AddComponent<MeshFilter>();
           meshr = _thrusts_obj.AddComponent<MeshRenderer>();
           mesh = new Mesh();
@@ -347,7 +351,7 @@ namespace HopperGuidance
           mesh.RecalculateNormals();
         }
 
-        public void DrawAlign(Vector3 r_from,Vector3 r_to, Transform transform, Color color)
+        public void DrawAlign(Vector3 r_from,Vector3 r_to, Transform a_transform, Color color)
         {
             if (!showTrack)
             {
@@ -364,18 +368,18 @@ namespace HopperGuidance
               _align_obj = new GameObject("Align");
               _align_line= _align_obj.AddComponent<LineRenderer>();
             }
-            _align_line.transform.parent = transform;
+            _align_line.transform.parent = a_transform;
             _align_line.useWorldSpace = true;
             _align_line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
             _align_line.material.color = color;
             _align_line.startWidth = 0.3f;
             _align_line.endWidth = 0.3f;
             _align_line.positionCount = 2;
-            _align_line.SetPosition(0,transform.TransformPoint(r_from));
-            _align_line.SetPosition(1,transform.TransformPoint(r_to));
+            _align_line.SetPosition(0,a_transform.TransformPoint(r_from));
+            _align_line.SetPosition(1,a_transform.TransformPoint(r_to));
         }
 
-        public void DrawSteer(Vector3 r_from,Vector3 r_to, Transform transform, Color color)
+        public void DrawSteer(Vector3 r_from,Vector3 r_to, Transform a_transform, Color color)
         {
             if (!showTrack)
             {
@@ -393,15 +397,15 @@ namespace HopperGuidance
               _steer_obj = new GameObject("Steer");
               _steer_line= _steer_obj.AddComponent<LineRenderer>();
             }
-            _steer_line.transform.parent = transform;
+            _steer_line.transform.parent = a_transform;
             _steer_line.useWorldSpace = true;
             _steer_line.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
             _steer_line.material.color = color;
             _steer_line.startWidth = 0.3f;
             _steer_line.endWidth = 0.3f;
             _steer_line.positionCount = 2;
-            _steer_line.SetPosition(0,transform.TransformPoint(r_from));
-            _steer_line.SetPosition(1,transform.TransformPoint(r_to));
+            _steer_line.SetPosition(0,a_transform.TransformPoint(r_from));
+            _steer_line.SetPosition(1,a_transform.TransformPoint(r_to));
         }
 
         public void OnDestroy()
@@ -415,7 +419,7 @@ namespace HopperGuidance
           }
         }
 
-        public void SetUpTransform(Target final)
+        public Transform SetUpTransform(Target final)
         {
           // Set up transform so Y is up and (0,0,0) is target position
           CelestialBody body = vessel.mainBody;
@@ -431,9 +435,10 @@ namespace HopperGuidance
           // Need to rotation that converts (0,1,0) to vUp in the body transform
           Quaternion quat = Quaternion.FromToRotation(new Vector3(0,1,0),vUp);
 
-          _transform = go.transform;
-          _transform.SetPositionAndRotation(origin,quat);
-          _transform.SetParent(body.transform,false);
+          Transform o_transform = go.transform;
+          o_transform.SetPositionAndRotation(origin,quat);
+          o_transform.SetParent(body.transform,false);
+          return o_transform;
         }
 
         public void LogStop()
@@ -899,7 +904,7 @@ namespace HopperGuidance
             }
             if (deleted)
             {
-              //Debug.Log("No target object! - redrawing");
+              Debug.Log("No target object! - redrawing");
               DrawTargets(_tgts,_transform,targetcol,tgtSize);
             }
           }
@@ -943,7 +948,6 @@ namespace HopperGuidance
             recomputeTrajectory = true;
           }
 
-          // Hack to redraw track regularly - I can find no otherway around this hack right now
           if (showTrack != setShowTrack)
           {
             DrawTrack(_traj, _transform);
@@ -970,6 +974,7 @@ namespace HopperGuidance
               if (Input.GetMouseButtonDown(0))
               {
                 _tgts = new List<Target>(tgts); // Copy to final list of targets
+                _transform = SetUpTransform(_tgts[_tgts.Count-1]);
                 Debug.Log("HopperGuidance: Targets="+_tgts.Count);
                 recomputeTrajectory = true;
                 pickingPositionTarget = false;
@@ -979,13 +984,15 @@ namespace HopperGuidance
           // Activate the required updates
           if (redrawTargets)
           {
-            // Reset height of last target
-            if (_tgts.Count > 0)
-              _tgts[_tgts.Count-1].height = tgtHeight;
             setTgtSize = tgtSize;
             if (tgts.Count > 0)
-              SetUpTransform(tgts[tgts.Count-1]);
-            DrawTargets(tgts,_transform,targetcol,tgtSize);
+            {
+              // Reset height of last target
+              tgts[tgts.Count-1].height = tgtHeight;
+              _transform = SetUpTransform(tgts[tgts.Count-1]);
+              DrawTargets(tgts,_transform,targetcol,tgtSize);
+            }
+            Debug.Log("HopperGuidance: Re-DrawTargets");
           }
           if ((recomputeTrajectory)&&((autoMode == AutoMode.LandAtTarget)||(autoMode == AutoMode.Failed)))
             EnableLandAtTarget();
