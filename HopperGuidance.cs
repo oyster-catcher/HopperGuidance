@@ -40,13 +40,13 @@ namespace HopperGuidance
         static Color idlecol = new Color(1,0.2f,0.2f,0.9f); // right red (idling as off attitude target)
         static Color aligncol = new Color(0,0.1f,1.0f,0.3f); // blue
 
-        static List<GameObject> _tgt_objs = new List<GameObject>(); // new GameObject("Target");
-        static GameObject _track_obj = null;
-        static GameObject _thrusts_obj = null;
-        static GameObject _align_obj = null;
-        static GameObject _steer_obj = null;
-        static LineRenderer _align_line = null; // so it can be updated
-        static LineRenderer _steer_line = null; // so it can be updated
+        List<GameObject> _tgt_objs = new List<GameObject>(); // new GameObject("Target");
+        GameObject _track_obj = null;
+        GameObject _thrusts_obj = null;
+        GameObject _align_obj = null;
+        GameObject _steer_obj = null;
+        LineRenderer _align_line = null; // so it can be updated
+        LineRenderer _steer_line = null; // so it can be updated
         PID3d _pid3d = new PID3d();
         bool checkingLanded = false; // only check once in flight to avoid failure to start when already on ground
         AutoMode autoMode = AutoMode.Off;
@@ -187,18 +187,11 @@ namespace HopperGuidance
         public void DrawTarget(Vector3d pos, Transform a_transform, Color color, double size, float height)
         {
           double[] r = new double[]{size*0.5,size*0.55,size*0.95,size};
-          //Vector3d gpos = a_transform.TransformPoint(pos); // convert to World Pos
-          //Vector3d tpos = a_transform.TransformPoint(pos + new Vector3d(0,height,0));
           Vector3d gpos = pos;
           Vector3d tpos = pos + new Vector3d(0,height,0);
 
           Vector3d vx = new Vector3d(1,0,0);
-          Vector3d vy = new Vector3d(0,1,0);
           Vector3d vz = new Vector3d(0,0,1);
-
-          //vx = a_transform.TransformVector(vx);
-          //vy = a_transform.TransformVector(vy);
-          //vz = a_transform.TransformVector(vz);
 
           GameObject o = new GameObject();
           o.transform.SetParent(a_transform, false);
@@ -277,7 +270,6 @@ namespace HopperGuidance
           foreach (Target t in tgts)
           {
             Vector3d pos = vessel.mainBody.GetWorldSurfacePosition(t.lat, t.lon, t.alt);
-            // TODO: Transform without parent?
             pos = a_transform.InverseTransformPoint(pos); // convert to local (for orientation)
             DrawTarget(pos,a_transform,color,size,t.height);
           }
@@ -575,7 +567,6 @@ namespace HopperGuidance
           Vector3d r0 = vessel.GetWorldPos3D();
           Vector3d v0 = vessel.GetSrfVelocity();
           Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
-          //TODO: Add this back in. An extra target?
           Vector3d vf = new Vector3d(0,-touchDownSpeed,0);
           ComputeMinMaxThrust(out _minThrust,out _maxThrust);
           if( _maxThrust == 0 )
@@ -663,8 +654,7 @@ namespace HopperGuidance
           if (result.isSolved()) // solved for complete path?
           {
             string msg = String.Format("Found solution T={0:F1} Fuel={1:F1}",result.T,result.fuel);
-            Debug.Log(msg);
-            ScreenMessages.PostScreenMessage("HopperGuidance "+msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
+            ScreenMessages.PostScreenMessage(msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
             // Enable autopilot
             _pid3d.Init(corrFactor,ki1,0,corrFactor * kP2Scale,ki2,0,maxV,(float)amax,yMult);
             // TODO - Testing out using in solution co-ordinates
@@ -712,7 +702,6 @@ namespace HopperGuidance
 
         public void DisableLand()
         {
-          Debug.Log("Called DisableLand()");
           autoMode = AutoMode.Off;
           if (_track_obj != null)   {Destroy(_track_obj); _track_obj=null;}
           if (_thrusts_obj != null) {Destroy(_thrusts_obj); _thrusts_obj=null;}
@@ -838,13 +827,6 @@ namespace HopperGuidance
           return ConeUtils.ClosestThrustInsideCone((float)maxThrustAngle,(float)amin,(float)amax,unlimF);
         }
 
-        public void DesiredPosVelAccForLandAtTarget(Vector3d tr, Vector3d tv, float g, out Vector3d dr, out Vector3d dv, out Vector3d da)
-        {
-          double desired_t; // closest time in trajectory (desired)
-          // TODO - Transform with _transform
-          _traj.FindClosest(tr, tv, out dr, out dv, out da, out desired_t, 0.5f, 0.5f);
-        }
-
         public void Fly(FlightCtrlState state)
         {
           if ((vessel == null) || (vessel.checkLanded() && checkingLanded) )
@@ -873,7 +855,8 @@ namespace HopperGuidance
           float g = (float)FlightGlobals.getGeeForceAtPosition(r).magnitude;
 
           Vector3d dr,dv,da;
-          DesiredPosVelAccForLandAtTarget(tr,tv,g,out dr,out dv,out da);
+          double desired_t; // closest time in trajectory (desired)
+          _traj.FindClosest(tr, tv, out dr, out dv, out da, out desired_t, 0.5f, 0.5f);
 
           // Uses transformed positions and vectors
           // sets throttle and desired attitude based on targets
@@ -884,31 +867,6 @@ namespace HopperGuidance
         public override void OnUpdate()
         {
           base.OnUpdate();
-
-          // Checking
-          if ((_track_obj==null) && (showTrack) && (_traj!=null)) // Should track be redrawn?
-          {
-            //Debug.Log("No track object! - redrawing");
-            setShowTrack = false; // forces redraw is setShow=true
-          }
-          if (_tgts.Count>0) // Show targets be redrawn?
-          {
-            bool deleted = false; // Did target GameObjects get deleted?
-            foreach (GameObject obj in _tgt_objs)
-            {
-              if (obj==null)
-              {
-                deleted = true;
-                break;
-              }
-            }
-            if (deleted)
-            {
-              Debug.Log("No target object! - redrawing");
-              DrawTargets(_tgts,_transform,targetcol,tgtSize);
-            }
-          }
-
           List<Target> tgts = new List<Target>(_tgts);
 
           // Check for changes to slider. This can trigger one of many actions
@@ -975,7 +933,6 @@ namespace HopperGuidance
               {
                 _tgts = new List<Target>(tgts); // Copy to final list of targets
                 _transform = SetUpTransform(_tgts[_tgts.Count-1]);
-                Debug.Log("HopperGuidance: Targets="+_tgts.Count);
                 recomputeTrajectory = true;
                 pickingPositionTarget = false;
               }
@@ -992,7 +949,6 @@ namespace HopperGuidance
               _transform = SetUpTransform(tgts[tgts.Count-1]);
               DrawTargets(tgts,_transform,targetcol,tgtSize);
             }
-            Debug.Log("HopperGuidance: Re-DrawTargets");
           }
           if ((recomputeTrajectory)&&((autoMode == AutoMode.LandAtTarget)||(autoMode == AutoMode.Failed)))
             EnableLandAtTarget();
