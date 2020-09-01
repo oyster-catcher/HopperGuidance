@@ -75,18 +75,6 @@ namespace HopperGuidance
 
         List<Target> _tgts = new List<Target>();
 
-        //[UI_FloatRange(minValue = -90.0f, maxValue = 90.0f, stepIncrement = 0.0001f)]
-        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Latitude", guiFormat = "F7", isPersistant = true, guiUnits="°")]
-        //float setTgtLatitude;
-
-        //[UI_FloatRange(minValue = -180.0f, maxValue = 180.0f, stepIncrement = 0.0001f)]
-        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Longitude", guiFormat = "F7", isPersistant = true, guiUnits = "°")]
-        //float setTgtLongitude;
-
-        //[UI_FloatRange(minValue = 0.1f, maxValue = 10000.0f, stepIncrement = 0.001f)]
-        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target Altitude", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
-        //float setTgtAltitude;
-
         [UI_FloatRange(minValue = 0, maxValue = 1000, stepIncrement = 1)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target height", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
         float tgtHeight;
@@ -116,7 +104,6 @@ namespace HopperGuidance
 
         // Let accGain be 4x corrFactor
         float kP2Scale=4 ; // Makes kP2 = corrFactor * kP2Scale;
-
         float yMult = 2; // Extra weight for Y to try and minimise height error over other errors
 
         // Can't get any improvement by raising these coeffs from zero
@@ -131,11 +118,18 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = false, guiName = "Show track", isPersistant = false)]
         bool showTrack = true;
         bool setShowTrack = true;
-        float lastShowTrackTime = 0;
 
         [UI_Toggle(disabledText = "Off", enabledText = "On")]
         [KSPField(guiActive = true, guiActiveEditor = false, guiName = "Logging", isPersistant = false)]
         bool _logging = false;
+
+
+        public void Log(string msg, bool onScreen=false)
+        {
+          Debug.Log("[HopperGuidance] "+msg);
+          if (onScreen)
+            ScreenMessages.PostScreenMessage(msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
+        }
 
         // Quad should be described a,b,c,d in anti-clockwise order when looking at it
         public void AddQuad(Vector3[] vertices, ref int vi, int[] triangles, ref int ti,
@@ -406,9 +400,10 @@ namespace HopperGuidance
           // Remove targets as they are not removed on DisableLand()
           foreach (GameObject obj in _tgt_objs)
           {
-            if (obj)
+            if (obj != null)
               Destroy(obj);
           }
+          _tgt_objs.Clear();
         }
 
         public Transform SetUpTransform(Target final)
@@ -482,14 +477,14 @@ namespace HopperGuidance
           maxThrust = 0;
           foreach (Part part in vessel.GetActiveParts())
           {
-              //Debug.Log("Part: "+part);
+              //Log("Part: "+part);
               part.isEngine(out List<ModuleEngines> engines);
               foreach (ModuleEngines engine in engines)
               {
-                  //Debug.Log("Engine: "+engine);
+                  //Log("Engine: "+engine);
                   //engine.Activate(); // must be active to get thrusts or else realIsp=0
-                  //Debug.Log("isp="+engine.realIsp+" throttle=0 Thrust="+engine.GetEngineThrust(engine.realIsp,0));
-                  //Debug.Log("isp="+engine.realIsp+" throttle=1 Thrust="+engine.GetEngineThrust(engine.realIsp,1));
+                  //Log("isp="+engine.realIsp+" throttle=0 Thrust="+engine.GetEngineThrust(engine.realIsp,0));
+                  //Log("isp="+engine.realIsp+" throttle=1 Thrust="+engine.GetEngineThrust(engine.realIsp,1));
                   // I think this will get the correct thrust given throttle in atmosphere (or wherever)
                   minThrust += engine.GetEngineThrust(engine.realIsp, 0);
                   maxThrust += engine.GetEngineThrust(engine.realIsp, 1);
@@ -571,7 +566,7 @@ namespace HopperGuidance
           ComputeMinMaxThrust(out _minThrust,out _maxThrust);
           if( _maxThrust == 0 )
           {
-            ScreenMessages.PostScreenMessage("Max thrust of engine is zero. In Realism Overhaul startup the engine manually first", 3.0f, ScreenMessageStyle.UPPER_CENTER);
+            ScreenMessages.PostScreenMessage("No engine thrust (activate engines)", 3.0f, ScreenMessageStyle.UPPER_CENTER);
             autoMode = AutoMode.Off;
             return;
           }
@@ -580,9 +575,7 @@ namespace HopperGuidance
           double amax = _maxThrust/vessel.totalMass;
           if( amin > g.magnitude )
           {
-            ScreenMessages.PostScreenMessage("Min thrust of engine is greater than gravity. Use less thrust or a heavier vessel", 3.0f, ScreenMessageStyle.UPPER_CENTER);
-            //autoMode = AutoMode.Off;
-            return;
+            ScreenMessages.PostScreenMessage("Difficult to land as thrust of engine is greater than gravity", 3.0f, ScreenMessageStyle.UPPER_CENTER);
           }
           if( amin > amax*0.95 )
           {
@@ -650,11 +643,11 @@ namespace HopperGuidance
           _traj = new Trajectory();
 
           SolveResult result = MainProg.MultiPartSolve(ref solver, ref _traj, tr0, tv0, ref targets, (float)g.magnitude, extendTime);
-          Debug.Log("HopperGuidance: "+solver.DumpString()+" "+result.DumpString());
+          Log(solver.DumpString()+" "+result.DumpString());
           if (result.isSolved()) // solved for complete path?
           {
             string msg = String.Format("Found solution T={0:F1} Fuel={1:F1}",result.T,result.fuel);
-            ScreenMessages.PostScreenMessage(msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
+            Log(msg, true);
             // Enable autopilot
             _pid3d.Init(corrFactor,ki1,0,corrFactor * kP2Scale,ki2,0,maxV,(float)amax,yMult);
             // TODO - Testing out using in solution co-ordinates
@@ -692,8 +685,7 @@ namespace HopperGuidance
               msg = msg + "can't throttle engine low enough to descent";
             else
               msg = msg + "impossible to reach target within constraints";
-            Debug.Log("HopperGuidance: "+msg);
-            ScreenMessages.PostScreenMessage(msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
+            Log(msg, true);
             autoMode = AutoMode.Failed;
           }
           if (result.isSolved()) // solved for complete path? - show partial?
@@ -709,9 +701,14 @@ namespace HopperGuidance
           if (_steer_obj != null)   {Destroy(_steer_obj); _steer_obj=null;}
           _traj = null;
           LogStop();
-          vessel.OnFlyByWire -= new FlightInputCallback(Fly);
+          if (vessel != null)
+          {
+            if (vessel.OnFlyByWire != null)
+              vessel.OnFlyByWire -= new FlightInputCallback(Fly);
+            if (vessel.Autopilot != null)
+              vessel.Autopilot.Disable();
+          }
           Events["ToggleGuidance"].guiName = "Enable guidance";
-          vessel.Autopilot.Disable();
         }
 
         ~HopperGuidance()
@@ -721,7 +718,6 @@ namespace HopperGuidance
 
         public override void OnInactive()
         {
-          Debug.Log("OnInactive()");
           base.OnInactive();
           DisableLand();
         }
@@ -765,7 +761,7 @@ namespace HopperGuidance
 
           Vector3d att = new Vector3d(vessel.transform.up.x,vessel.transform.up.y,vessel.transform.up.z);
           Vector3d tatt = _transform.InverseTransformVector(att);
-          ComputeMinMaxThrust(out _minThrust,out _maxThrust); // TODO: Don't do this ALL the time
+          ComputeMinMaxThrust(out _minThrust,out _maxThrust);
           float amax = (float)(_maxThrust/vessel.totalMass);
           float amin = (float)(_minThrust/vessel.totalMass);
 
