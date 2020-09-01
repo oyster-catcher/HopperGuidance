@@ -80,7 +80,7 @@ namespace HopperGuidance
     public double Tmax = -1;
     public double minDurationPerThrust = 4; // Insert extra thrust vector between targets
     public int maxThrustsBetweenTargets = 1;
-    public double checkGapStep = 2; // seconds between each height check
+    public double checkGapStep = 1; // seconds between each height check
     public int maxChecks = 100; // Maximum number of height checks
     public double g = 9.8;
     public double amin = 0;
