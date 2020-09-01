@@ -1,17 +1,17 @@
 v0.2.2
 - Added ability to pick multiple intermediate targets
-- Removed latitude and longitude
+- Removed latitude, longitude and altitude target (set target via pick target only)
 - Removed max landing thrust angle, it is set to 10% of max thrust angle
 - Removed acceleration gain, it is set to 4x correction factor
 - Removed idle angle, it is now always 90 degrees
-- Removed max thrust, this is set to 10% less than the vessels maximum
-- Max thrust angle in the solution is 20% less than max thrust angle
+- Removed max thrust, this is set to 90% of the vessels maximum
+- Max thrust angle in the solution is 80% of max thrust angle (allowing 20% extra for corrections)
 - Min descent angle only applies to the final trajectory before the final target and not to intermediate targets
 - Ground intersect constraint always applies where the ground is the lowest of all the ground targets
 - The solution velocity isn't modified by the PID, which results in better following of the trajectory
-- Can enable guidance from a landed vessel if there are intermediate targets
-- Switch to using mesh rather than LineRenderer for track and thrust vectors to attempt to removing disappearing track bug. This still happens though, but a mesh should be much more efficient
+- Switch to using mesh rather than LineRenderer for track and thrust vectors as transformations work better
 - Golden search over time now falls back to simpler search stepping through 10 intervals between Tmin and Tmax then continues golden search, as golden search fails when probe points are non-solutions. This results in much better and faster solutions
+- Fixed disappearing track bug when active for a long time
 
 v0.2.1
 - Added TestCraft and TestCraftHeavy
