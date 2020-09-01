@@ -14,8 +14,8 @@ The algorithm used is aimed to be an implementation of the G-FOLD algorithm for 
 reputably used by Lars Blackmore for landing the SpaceX Falcon-9 rocket. However my algorithm is many ways a simplified version of it, though I've changed the constraints quite a bit and have extended it to compute trajectories though intermediate targets which involved some compromises, but it works pretty well.
 
 Please see the videos from earlier versions here https://www.youtube.com/watch?v=Ekywp-P6EBQ&t=301
-and https://www.youtube.com/watch?v=ouIQUfHsZac&t=101s.
-For the latest version, which is much improved, see  
+and https://www.youtube.com/watch?v=ouIQUfHsZac&t=101s
+For the latest version, which is much improved, see https://www.youtube.com/watch?v=VJ_4bBZ_jT4
 
 References
 
