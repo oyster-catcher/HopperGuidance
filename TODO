@@ -1,8 +1,3 @@
 - Show path travelled by vessel? (when logging?)
 - Get a working Visual Studio Project file
-- Add License.txt and Changelog.txt to installed mod
 - Fly craft relative to another craft, say in orbit? Basically autodock, but MJ does this
-- Speed up calculation (tricky)
-- Stop trajectory disappearing after a period (body transform changed as planet rotates?)
-- Show the result of plotXYZ.py in the README
-- Give more details of algorithm in-particular the multi-part solution
