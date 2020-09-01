@@ -80,9 +80,8 @@ namespace HopperGuidance
     public double Tmax = -1;
     public double minDurationPerThrust = 4; // Insert extra thrust vector between targets
     public int maxThrustsBetweenTargets = 1;
-    public double checkGapFirst = 1; // duration between checks (none at T=0)
-    public double checkGapMult = 1; // increase time from ends by this proportion
-    public double checkGapStep = 2;
+    public double checkGapStep = 2; // seconds between each height check
+    public int maxChecks = 100; // Maximum number of height checks
     public double g = 9.8;
     public double amin = 0;
     public double amax = 30;
@@ -451,11 +450,13 @@ namespace HopperGuidance
       double tX;
       if (minDescentAngle >= 0)
       {
-        // from start
-        for( tX=checkGapFirst; tX<0.5*T; tX=tX+checkGapStep )
-          checktimes.Add(tX);
-        // from end
-        for( tX=T-checkGapFirst; tX>0.5*T; tX=tX-checkGapStep )
+        // check time (for below ground and min descent angle)
+        // every checkGapStep seconds, but limit number of checks
+        // to checkMax
+        double step = checkGapStep;
+        if ((T/step) > maxChecks)
+          step = (double)T/maxChecks;
+        for( tX=step; tX<=T-step; tX=tX+step )
           checktimes.Add(tX);
       }
 
@@ -894,6 +895,7 @@ namespace HopperGuidance
       //CheckSolution(c,ct,x);
       result.T = T;
       result.retval = rep.terminationtype;
+      result.checktimes = checktimes;
       if (result.isSolved()) // uses retval
       {
         for(int i=0;i<N;i++)
@@ -983,9 +985,10 @@ namespace HopperGuidance
           // Where to go - nowhere is good!
           double step = (b-a)*0.1f;
           c = a;
-          System.Console.Error.WriteLine("STEPPING a="+a+" b="+b);
+          System.Console.Error.WriteLine("STEPPING a="+a+" b="+b+" step="+step);
           while(c <= b+0.01f)
           {
+            System.Console.Error.WriteLine("GFold() T="+c);
             resc = GFold(a_r0,a_v0,a_targets,c);
             System.Console.Error.WriteLine("STEPPING: T="+c+" fuel="+resc.fuel+" retval="+resc.retval);
             if (resc.isSolved())
@@ -1002,8 +1005,8 @@ namespace HopperGuidance
           if (!resd.isSolved()) // no solutions found
             return resd;
           // New search interval
-          a = d - step;
-          b = d + step;
+          a = Math.Max(d - step,Tmin);
+          b = Math.Min(d + step,Tmax);
           System.Console.Error.WriteLine("DONE STEPPING a="+a+" b="+b);
         }
         else
@@ -1266,10 +1269,8 @@ namespace HopperGuidance
             solver.timePenalty = d;
           else if (k=="extraTime")
             solver.extraTime = (float)d;
-          else if (k=="checkGapFirst")
-            solver.checkGapFirst = d;
-          else if (k=="checkGapMult")
-            solver.checkGapMult = d;
+          else if (k=="maxChecks")
+            solver.maxChecks = (int)d;
           else if (k=="checkGapStep")
             solver.checkGapStep = d;
           else if (k=="extendTime")
