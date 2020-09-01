@@ -1,4 +1,4 @@
-v0.2.2
+v0.2.3
 - Added ability to pick multiple intermediate targets
 - Removed latitude, longitude and altitude target (set target via pick target only)
 - Removed max landing thrust angle, it is set to 10% of max thrust angle
@@ -12,6 +12,9 @@ v0.2.2
 - Switch to using mesh rather than LineRenderer for track and thrust vectors as transformations work better
 - Golden search over time now falls back to simpler search stepping through 10 intervals between Tmin and Tmax then continues golden search, as golden search fails when probe points are non-solutions. This results in much better and faster solutions
 - Fixed disappearing track bug when active for a long time
+
+v0.2.2
+- Changes to work with Realism Overhaul
 
 v0.2.1
 - Added TestCraft and TestCraftHeavy
