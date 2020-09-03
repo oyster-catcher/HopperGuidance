@@ -16,7 +16,7 @@ install: GameData/HopperGuidance/Plugins/HopperGuidance.dll
 	cp -r GameData ${KSP}
 #	cp -r GameData ~/KSP_Cutdown
 
-HopperGuidance-${VER}.zip:
+HopperGuidance-${VER}.zip: GameData/HopperGuidance/Plugins/HopperGuidance.dll
 	rm HopperGuidance-${VER}.zip
 	cd GameData; find HopperGuidance | zip -@ ../HopperGuidance-${VER}.zip
 
