@@ -34,7 +34,7 @@ If you want to run the solver outside of KSP you need python and matplotlib to s
 Installing
 ==========
 
-Copy GameData on top of the existing GameData folder in your KSP installation.
+Unpack HopperGuidance-v0.2.3.zip (from releases) into your GameData folder inside your KSP installation.
 
 Using HopperGuidance
 ====================
