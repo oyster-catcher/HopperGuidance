@@ -27,7 +27,6 @@ namespace HopperGuidance
         alt = a_alt;
         height = a_height;
       }
-
       public float lat,lon,alt,height;
     }
 
@@ -111,7 +110,7 @@ namespace HopperGuidance
         float ki2 = 0;
 
         [UI_Toggle(disabledText = "Off", enabledText = "On")]
-        [KSPField(guiActive = true, guiActiveEditor = false, guiName = "Keep engine ignited", isPersistant = false)]
+        [KSPField(guiActive = true, guiActiveEditor = false, guiName = "RO throttling", isPersistant = false)]
         bool _keepIgnited = false;
 
         [UI_Toggle(disabledText = "Off", enabledText = "On")]
@@ -471,8 +470,9 @@ namespace HopperGuidance
           return miny;
         }
 
-        public void ComputeMinMaxThrust(out float minThrust, out float maxThrust)
+        public int ComputeMinMaxThrust(out float minThrust, out float maxThrust)
         {
+          int numEngines = 0;
           minThrust = 0;
           maxThrust = 0;
           foreach (Part part in vessel.GetActiveParts())
@@ -481,15 +481,18 @@ namespace HopperGuidance
               part.isEngine(out List<ModuleEngines> engines);
               foreach (ModuleEngines engine in engines)
               {
-                  //Log("Engine: "+engine);
+                  Vector3 relpos = vessel.transform.InverseTransformPoint(part.transform.position);
+                  //Log("Engine: "+engine+" pos="+(part.transform.localPosition)+" relpos="+relpos);
                   //engine.Activate(); // must be active to get thrusts or else realIsp=0
                   //Log("isp="+engine.realIsp+" throttle=0 Thrust="+engine.GetEngineThrust(engine.realIsp,0));
                   //Log("isp="+engine.realIsp+" throttle=1 Thrust="+engine.GetEngineThrust(engine.realIsp,1));
                   // I think this will get the correct thrust given throttle in atmosphere (or wherever)
                   minThrust += engine.GetEngineThrust(engine.realIsp, 0);
                   maxThrust += engine.GetEngineThrust(engine.realIsp, 1);
+                  numEngines++;
               }
           }
+          return numEngines;
         }
 
         public void ShutdownAllEngines()
@@ -500,6 +503,49 @@ namespace HopperGuidance
             foreach (ModuleEngines engine in engines)
               engine.Shutdown();
           }
+        }
+
+        // Shutdown outer engines, that is all engines as the same maximum distance from the centre
+        // Only the engines required to achieve a thrust of desiredThrust within minThrust to maxThrust
+        public int ShutdownOuterEngines(double desiredThrust)
+        {
+          int numShutdown = 0;
+          // Find engine parts and sort by closest to centre first
+          List<Tuple<double,ModuleEngines>> allEngines = new List<Tuple<double,ModuleEngines>>();
+          foreach (Part part in vessel.GetActiveParts())
+          {
+            Vector3 relpos = vessel.transform.InverseTransformPoint(part.transform.position);
+            part.isEngine(out List<ModuleEngines> engines);
+            double dist = Math.Sqrt(relpos.x*relpos.x+relpos.z*relpos.z);
+            foreach (ModuleEngines engine in engines)
+              allEngines.Add(new Tuple<double,ModuleEngines>(dist,engine));
+          }
+          allEngines.Sort();
+
+          float minThrust = 0;
+          float maxThrust = 0;
+          double shutdown_dist = float.MaxValue;
+          foreach (var engDist in allEngines)
+          {
+            ModuleEngines engine = engDist.Item2;
+            double dist = engDist.Item1;
+            minThrust += engine.GetEngineThrust(engine.realIsp, 0);
+            maxThrust += engine.GetEngineThrust(engine.realIsp, 1);
+            //Debug.Log("[HopperGuidance] minThrust="+minThrust+" maxThrust="+maxThrust+" desiredThrust="+desiredThrust+" dist="+dist);
+            if (dist > shutdown_dist) // shutdown engines outside of last necessary engine once maxThrust > desiredThrust
+            {
+              //Debug.Log("[HopperGuidance] Shutting down engine "+engine+" centredist="+dist);
+              engine.Shutdown();
+              numShutdown++;
+            }
+            else
+            {
+              //Debug.Log("[HopperGuidance] Keeping engine "+engine+" centredist="+dist);
+              if (maxThrust > desiredThrust)
+                shutdown_dist = dist + 0.1f; // add a little to cover arithmetic error
+            }
+          }
+          return numShutdown;
         }
 
         float AxisTime(float dist, float amin, float amax)
@@ -563,10 +609,11 @@ namespace HopperGuidance
           Vector3d v0 = vessel.GetSrfVelocity();
           Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
           Vector3d vf = new Vector3d(0,-touchDownSpeed,0);
+
           ComputeMinMaxThrust(out _minThrust,out _maxThrust);
           if( _maxThrust == 0 )
           {
-            ScreenMessages.PostScreenMessage("No engine thrust (activate engines)", 3.0f, ScreenMessageStyle.UPPER_CENTER);
+            Log("No engine thrust (activate engines)", true);
             autoMode = AutoMode.Off;
             return;
           }
@@ -575,11 +622,11 @@ namespace HopperGuidance
           double amax = _maxThrust/vessel.totalMass;
           if( amin > g.magnitude )
           {
-            ScreenMessages.PostScreenMessage("Difficult to land as thrust of engine is greater than gravity", 3.0f, ScreenMessageStyle.UPPER_CENTER);
+            Log("Difficult to land as thrust of engine is greater than gravity", true);
           }
           if( amin > amax*0.95 )
           {
-            ScreenMessages.PostScreenMessage("Engine doesn't appear to be throttleable. This makes precision guidance impossible", 3.0f, ScreenMessageStyle.UPPER_CENTER);
+            Log("Engine doesn't appear to be throttleable. This makes precision guidance impossible", true);
             autoMode = AutoMode.Off;
             return;
           }
@@ -765,11 +812,28 @@ namespace HopperGuidance
           float amax = (float)(_maxThrust/vessel.totalMass);
           float amin = (float)(_minThrust/vessel.totalMass);
 
+          // Decide to shutdown engines for final touch down?
+          // vertical accel is less than minThrust?
+          // height above ground is <10m
+          if ((tr.y < 5) && (_keepIgnited))
+          {
+            int numShutdown = ShutdownOuterEngines(da.y*vessel.totalMass); // set thrust in range for desired accel
+            if (numShutdown > 0)
+            {
+              Log("Shutting down "+numShutdown+" for controlled touchdown");
+              ComputeMinMaxThrust(out _minThrust,out _maxThrust);
+              amax = (float)(_maxThrust/vessel.totalMass);
+              amin = (float)(_minThrust/vessel.totalMass);
+            }
+          }
+
           Vector3d da2 = GetThrustVector(tr,tv,dr,dv,amin,amax,maxThrustAngle,da, out Vector3d unlimda);
           if (_keepIgnited)
             throttle = Mathf.Clamp((float)(da2.magnitude-amin)/(amax-amin),0.01f,1);
           else
             throttle = Mathf.Clamp((float)(da2.magnitude-amin)/(amax-amin),0,1);
+
+
 
           // Shutoff throttle if pointing in wrong direction
           float ddot = (float)Vector3d.Dot(Vector3d.Normalize(tatt),Vector3d.Normalize(da2));
