@@ -1,6 +1,6 @@
 # Standard Mac KSP install dir
 KSP=/Users/${USER}/Library/Application\ Support/Steam/steamapps/common/Kerbal\ Space\ Program
-VER=v0.2.3
+VER=v0.2.4alpha
 
 ASSEMBLYOPTS=-reference:${KSP}/KSP.app/Contents/Resources/Data/Managed/UnityEngine.CoreModule.dll -reference:${KSP}/KSP.app/Contents/Resources/Data/Managed/Assembly-CSharp.dll -reference:${KSP}/KSP.app/Contents/Resources/Data/Managed/UnityEngine.UI.dll -reference:${KSP}/KSP.app/Contents/Resources/Data/Managed/KSPAssets.dll -reference:${KSP}/KSP.app/Contents/Resources/Data/Managed/UnityEngine.PhysicsModule.dll -reference:${KSP}/KSP.app/Contents/Resources/Data/Managed/UnityEngine.InputLegacyModule.dll
 SDKOPTS=-sdk:4.0
@@ -17,11 +17,11 @@ install: GameData/HopperGuidance/Plugins/HopperGuidance.dll
 #	cp -r GameData ~/KSP_Cutdown
 
 HopperGuidance-${VER}.zip: GameData/HopperGuidance/Plugins/HopperGuidance.dll
-	rm HopperGuidance-${VER}.zip
+	rm -f HopperGuidance-${VER}.zip
 	cd GameData; find HopperGuidance | zip -@ ../HopperGuidance-${VER}.zip
 
 clean:
-	rm -f HopperGuidance.dll *.exe
+	rm -f HopperGuidance.dll *.exe *.zip
 
 GameData/HopperGuidance/Plugins/HopperGuidance.dll: HopperGuidance.cs Solve.cs Trajectory.cs PID3d.cs GuiUtils.cs ConeUtils.cs
 	mcs -define:UNITY ${ASSEMBLYOPTS} ${SDKOPTS} -target:library $^ ${ALGLIB_SRCS} -out:$@
