@@ -1,6 +1,4 @@
-﻿#define LIMIT_ATTITUDE
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 using UnityEngine;
@@ -109,9 +107,9 @@ namespace HopperGuidance
         float ki1 = 0;
         float ki2 = 0;
 
-        [UI_Toggle(disabledText = "Off", enabledText = "On")]
-        [KSPField(guiActive = true, guiActiveEditor = false, guiName = "RO throttling", isPersistant = false)]
-        bool _keepIgnited = false;
+        //[UI_Toggle(disabledText = "Off", enabledText = "On")]
+        //[KSPField(guiActive = true, guiActiveEditor = false, guiName = "RO throttling", isPersistant = false)]
+        //bool _keepIgnited = false;
 
         [UI_Toggle(disabledText = "Off", enabledText = "On")]
         [KSPField(guiActive = true, guiActiveEditor = false, guiName = "Show track", isPersistant = false)]
@@ -470,46 +468,37 @@ namespace HopperGuidance
           return miny;
         }
 
-        public int ComputeMinMaxThrust(out float minThrust, out float maxThrust)
+        public int ComputeMinMaxThrust(out float minThrust, out float maxThrust, bool log=false)
         {
           int numEngines = 0;
           minThrust = 0;
           maxThrust = 0;
-          foreach (Part part in vessel.GetActiveParts())
+          foreach (Part part in vessel.parts)
           {
-              //Log("Part: "+part);
               part.isEngine(out List<ModuleEngines> engines);
               foreach (ModuleEngines engine in engines)
               {
                   Vector3 relpos = vessel.transform.InverseTransformPoint(part.transform.position);
-                  //Log("Engine: "+engine+" pos="+(part.transform.localPosition)+" relpos="+relpos);
-                  //engine.Activate(); // must be active to get thrusts or else realIsp=0
-                  //Log("isp="+engine.realIsp+" throttle=0 Thrust="+engine.GetEngineThrust(engine.realIsp,0));
-                  //Log("isp="+engine.realIsp+" throttle=1 Thrust="+engine.GetEngineThrust(engine.realIsp,1));
+                  float isp = (engine.realIsp>0)? engine.realIsp : 280; // guess!
+                  if (log)
+                    Log("  engine="+engine+" relpos="+relpos+" isp="+isp+" MinThrust="+engine.GetEngineThrust(isp,0)+" MaxThrust="+engine.GetEngineThrust(isp,1)+" operational="+engine.isOperational+" staged="+engine.staged);
                   // I think this will get the correct thrust given throttle in atmosphere (or wherever)
-                  minThrust += engine.GetEngineThrust(engine.realIsp, 0);
-                  maxThrust += engine.GetEngineThrust(engine.realIsp, 1);
-                  numEngines++;
+                  if (engine.isOperational)
+                  {
+                      minThrust += engine.GetEngineThrust(isp, 0);
+                      maxThrust += engine.GetEngineThrust(isp, 1);
+                      numEngines++;
+                  }
               }
           }
           return numEngines;
-        }
-
-        public void ShutdownAllEngines()
-        {
-          foreach (Part part in vessel.GetActiveParts())
-          {
-            part.isEngine(out List<ModuleEngines> engines);
-            foreach (ModuleEngines engine in engines)
-              engine.Shutdown();
-          }
         }
 
         // Shutdown outer engines, that is all engines as the same maximum distance from the centre
         // Only the engines required to achieve a thrust of desiredThrust within minThrust to maxThrust
         public int ShutdownOuterEngines(double desiredThrust)
         {
-          int numShutdown = 0;
+          int n = 0;
           // Find engine parts and sort by closest to centre first
           List<Tuple<double,ModuleEngines>> allEngines = new List<Tuple<double,ModuleEngines>>();
           foreach (Part part in vessel.GetActiveParts())
@@ -531,21 +520,21 @@ namespace HopperGuidance
             double dist = engDist.Item1;
             minThrust += engine.GetEngineThrust(engine.realIsp, 0);
             maxThrust += engine.GetEngineThrust(engine.realIsp, 1);
-            //Debug.Log("[HopperGuidance] minThrust="+minThrust+" maxThrust="+maxThrust+" desiredThrust="+desiredThrust+" dist="+dist);
+            Debug.Log("[HopperGuidance] minThrust="+minThrust+" maxThrust="+maxThrust+" desiredThrust="+desiredThrust+" dist="+dist);
             if (dist > shutdown_dist) // shutdown engines outside of last necessary engine once maxThrust > desiredThrust
             {
-              //Debug.Log("[HopperGuidance] Shutting down engine "+engine+" centredist="+dist);
+              Debug.Log("[HopperGuidance] Shutting down engine "+engine+" centredist="+dist);
               engine.Shutdown();
-              numShutdown++;
+              n++;
             }
             else
             {
-              //Debug.Log("[HopperGuidance] Keeping engine "+engine+" centredist="+dist);
+              Debug.Log("[HopperGuidance] Keeping engine "+engine+" centredist="+dist);
               if (maxThrust > desiredThrust)
                 shutdown_dist = dist + 0.1f; // add a little to cover arithmetic error
             }
           }
-          return numShutdown;
+          return n;
         }
 
         float AxisTime(float dist, float amin, float amax)
@@ -610,7 +599,7 @@ namespace HopperGuidance
           Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
           Vector3d vf = new Vector3d(0,-touchDownSpeed,0);
 
-          ComputeMinMaxThrust(out _minThrust,out _maxThrust);
+          ComputeMinMaxThrust(out _minThrust,out _maxThrust, true);
           if( _maxThrust == 0 )
           {
             Log("No engine thrust (activate engines)", true);
@@ -651,7 +640,7 @@ namespace HopperGuidance
           // Shut-off throttle
           FlightCtrlState ctrl = new FlightCtrlState();
           vessel.GetControlState(ctrl);
-          ctrl.mainThrottle = (_keepIgnited)?0.01f:0;
+          ctrl.mainThrottle = (_minThrust>0)?0.01f:0;
 
           // Compute trajectory to landing spot
           List<SolveTarget> targets = new List<SolveTarget>();
@@ -729,7 +718,7 @@ namespace HopperGuidance
             else if (amax < g.magnitude)
               msg = msg + "engine has insufficient thrust, no engines active or no fuel";
             else if (amin > g.magnitude)
-              msg = msg + "can't throttle engine low enough to descent";
+              msg = msg + "can't throttle engine low enough to descend";
             else
               msg = msg + "impossible to reach target within constraints";
             Log(msg, true);
@@ -814,21 +803,22 @@ namespace HopperGuidance
 
           // Decide to shutdown engines for final touch down?
           // vertical accel is less than minThrust?
-          // height above ground is <10m
-          if ((tr.y < 5) && (_keepIgnited))
+          // height above ground is <100m
+          Log("Shutdown engines? height="+(tr.y)+"<100m speed="+(tv.magnitude)+" mag(da)="+(da.magnitude)+" amin="+amin);
+          if ((tr.y < 100) && (da.y < amin) && (_minThrust>0))
           {
             int numShutdown = ShutdownOuterEngines(da.y*vessel.totalMass); // set thrust in range for desired accel
             if (numShutdown > 0)
             {
-              Log("Shutting down "+numShutdown+" for controlled touchdown");
-              ComputeMinMaxThrust(out _minThrust,out _maxThrust);
+              Log("Shutdown "+numShutdown+" engines for controlled touchdown", true);
+              ComputeMinMaxThrust(out _minThrust,out _maxThrust,true);
               amax = (float)(_maxThrust/vessel.totalMass);
               amin = (float)(_minThrust/vessel.totalMass);
             }
           }
 
           Vector3d da2 = GetThrustVector(tr,tv,dr,dv,amin,amax,maxThrustAngle,da, out Vector3d unlimda);
-          if (_keepIgnited)
+          if (_minThrust > 0)
             throttle = Mathf.Clamp((float)(da2.magnitude-amin)/(amax-amin),0.01f,1);
           else
             throttle = Mathf.Clamp((float)(da2.magnitude-amin)/(amax-amin),0,1);
@@ -899,8 +889,6 @@ namespace HopperGuidance
             ctrl.mainThrottle = 0;
             // Necessary on Realism Overhaul to shutdown engine as at throttle=0 the engine may still have
             // a lot of thrust
-            if (_keepIgnited)
-              ShutdownAllEngines();
             autoMode = AutoMode.Off;
             return;
           }
