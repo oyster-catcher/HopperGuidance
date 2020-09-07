@@ -26,7 +26,7 @@ def plot_checks(ax,data,fx,fy,times,color='black'):
         cx.append(data[i][fx])
         cy.append(data[i][fy])
         done = True
-  ax.plot(cx,cy,color=color,marker='o',markersize=10,linestyle='')
+  ax.plot(cx,cy,color=color,marker='o',markersize=4,linestyle='')
 
 def plot_targets(ax,data,color='black'):
   tx = [d[0] for d in data]
@@ -51,7 +51,7 @@ class Vector3Time:
     self.t = t
 
 def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
-         vxmin,vxmax,vymin,vymax,vzmin,vzmax,tmax=30,amult=1,askip=3,
+         vxmin,vxmax,vymin,vymax,vzmin,vzmax,accelmax,tmax=30,amult=1,askip=3,
          filenames=[],showchecks=False):
 
   # Set up figures
@@ -59,7 +59,6 @@ def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
   fig = P.figure(1)
 
   colors=['red','blue','green','black','pink','grey','purple','salmon']
-  alim = [0,40]
 
   P.subplot2grid((3,5),(0,0), colspan=1, rowspan=1)
   ax1 = P.gca()
@@ -115,7 +114,7 @@ def plot(labels,xmin,xmax,ymin,ymax,zmin,zmax,
   ax7.set_xlabel("time")
   ax7.set_ylabel("mag(accel)")
   ax7.set_xlim([0,tmax])
-  ax7.set_ylim(alim)
+  ax7.set_ylim([0,accelmax])
   ax7.grid()
 
   # Attitude error
@@ -286,6 +285,7 @@ parser.add_argument('--vymin', type=float, help='Minimum vy position', default=N
 parser.add_argument('--vymax', type=float, help='Maximum vy position', default=None)
 parser.add_argument('--vzmin', type=float, help='Minimum vz position', default=None)
 parser.add_argument('--vzmax', type=float, help='Maximum vz position', default=None)
+parser.add_argument('--accelmax', type=float, help='Maximum acceleration', default=None)
 parser.add_argument('--tmax', type=float, help='Maximum time', default=None)
 parser.add_argument('--amult', type=float, help='Multiplier for scale up thrust acceleration lines', default=1)
 parser.add_argument('--square', action='store_true', help='Make XY plot square (roughly as depends on window size)', default=False)
@@ -337,6 +337,11 @@ if not args.vzmin:
   args.vzmin = min([d['vz'] for d in alldata])
 if not args.vzmax:
   args.vzmax = max([d['vz'] for d in alldata])
+if not args.accelmax:
+  args.accelmax = 0
+  for d in alldata:
+    T=np.array([d['ax'],d['ay'],d['az']])
+    args.accelmax = max(np.linalg.norm(T),args.accelmax)
 
 if not args.tmax:
   args.tmax = max([d['time'] for d in alldata])
@@ -354,4 +359,4 @@ if args.square:
 
 plot(args.filename,xmin=args.xmin,xmax=args.xmax,ymin=args.ymin,ymax=args.ymax,zmin=args.zmin,zmax=args.zmax,
      vxmin=args.vxmin,vxmax=args.vxmax,vymin=args.vymin,vymax=args.vymax,vzmin=args.vzmin,vzmax=args.vzmax,tmax=args.tmax,
-     amult=args.amult,filenames=args.filename,showchecks=args.showchecks)
+     amult=args.amult,filenames=args.filename,showchecks=args.showchecks,accelmax=args.accelmax)
