@@ -405,13 +405,13 @@ namespace HopperGuidance
       }
       // Final target isn't a landing point so this is a multi-part solution, don't restrict
       // this part to the minDescentAngle
-      if ((a_targets[a_targets.Count-1].raxes == 0)||(a_targets[a_targets.Count-1].vaxes == 0))
+      if ((a_targets[a_targets.Count-1].raxes == 0) || (a_targets[a_targets.Count-1].vaxes == 0))
         last_target_t = (float)T;
 
       // Final target as position and velocity constrained (i.e. land target)
       if( minDescentAngle > 0)
       {
-        if ((a_targets[a_targets.Count-1].raxes != 0)&&(a_targets[a_targets.Count-1].vaxes != 0))
+        if ((a_targets[a_targets.Count-1].raxes != 0) && (a_targets[a_targets.Count-1].vaxes != 0))
         {
           Vector3 rl = r0;
           Vector3 rf = a_targets[a_targets.Count-1].r;
@@ -430,7 +430,7 @@ namespace HopperGuidance
           }
         }
       }
-         
+
       int N = thrust_times.Count;
       result.thrusts = new ThrustVectorTime[N];
       for(int i=0; i<thrust_times.Count; i++)
@@ -985,12 +985,11 @@ namespace HopperGuidance
           // Where to go - nowhere is good!
           double step = (b-a)*0.1f;
           c = a;
-          System.Console.Error.WriteLine("STEPPING a="+a+" b="+b+" step="+step);
+          //System.Console.Error.WriteLine("STEPPING a="+a+" b="+b+" step="+step);
           while(c <= b+0.01f)
           {
-            System.Console.Error.WriteLine("GFold() T="+c);
             resc = GFold(a_r0,a_v0,a_targets,c);
-            System.Console.Error.WriteLine("STEPPING: T="+c+" fuel="+resc.fuel+" retval="+resc.retval);
+            //System.Console.Error.WriteLine("STEPPING: T="+c+" fuel="+resc.fuel+" retval="+resc.retval);
             if (resc.isSolved())
             {
               //if ((resc.fuel < resd.fuel) || (resc.fuel > resd.fuel)) // best or getting worse
@@ -1007,7 +1006,6 @@ namespace HopperGuidance
           // New search interval
           a = Math.Max(d - step,Tmin);
           b = Math.Min(d + step,Tmax);
-          System.Console.Error.WriteLine("DONE STEPPING a="+a+" b="+b);
         }
         else
         {
@@ -1118,11 +1116,11 @@ namespace HopperGuidance
           result = solver.FullSearchGFold(local_r, local_v, partial_targets);
         else
           result = solver.GoldenSearchGFold(local_r, local_v, partial_targets);
-        solver.Tmin = result.T;
         System.Console.Error.WriteLine(solver.DumpString()+" "+result.DumpString());
 
         if (result.isSolved())
         {
+          solver.Tmin = result.T;
           // All targets added?
           done = (a_targets.Count == partial_targets.Count);
         }
