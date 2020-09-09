@@ -45,11 +45,7 @@ namespace HopperGuidance
     public static Vector2 FindClosestPointOnConvexPolygon(Vector2 P, Vector2 [] shape)
     {
       if (InsideConvexPolygon(P,shape))
-      {
-        //Console.WriteLine("inside");
         return P;
-      }
-      //Console.WriteLine("outside");
       // Find closest point on boundary 
       float dmin = 1.0e+10f;
       Vector2 pmin = Vector2.zero;
@@ -93,8 +89,6 @@ namespace HopperGuidance
       Vector3 N = new Vector3(F.x,0,F.z); // plane of vector F
       N = Vector3.Normalize(N);
 
-      //Console.WriteLine("N="+N);
-
       maxAngle = maxAngle*Mathf.PI/180;
       // Define boundaries of allow thrusts in a truncated approximate cone (without min thrust cone)
       //    ..---- P3 ----..
@@ -124,14 +118,14 @@ namespace HopperGuidance
       Console.WriteLine("pmin="+pmin);
 
       // Now consider thrust cone 0 to amin. This is better check than polygon
-      // cos we will be on edge which causes problems
+      // cos we will be on an edge which causes problems
       bool inside_min = (pmin.magnitude < amin);
       Console.WriteLine("inside_min="+inside_min);
 
       // Find closest point on boundary with at amin
       if (inside_min)
       {
-        // The central point is lower than it should be. This is a hack to that when
+        // The central point is lower than it should be. This is a hack so that when
         // the desired thrust in strongly downwards we don't use a nearest point on the
         // edge of the min thrust cone which is lower in Y but highly positive in X
         //Vector2 [] bound = {new Vector2(Mathf.Sin(-maxAngle)*amin,Mathf.Cos(-maxAngle)*amin),
@@ -142,7 +136,12 @@ namespace HopperGuidance
         // but with greater magnitude
         Console.WriteLine("mag="+pmin.magnitude);
         if (pmin.magnitude > 0)
-          pmin = amin*(pmin/pmin.magnitude);
+        {
+          // Aim to keep horizonal component as desired
+          // but fix vertical component to that magnitude = amin
+          pmin.x = F2.x;
+          pmin.y = Mathf.Sqrt(amin*amin - F2.x*F2.x);
+        }
         else
         {
           pmin.x = 0;
