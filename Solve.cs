@@ -38,6 +38,7 @@ namespace HopperGuidance
   public class SolveResult
   {
     public double T;
+    public double Tstart;
     public double dt;
     public double fuel;
     public List<double> checktimes;
@@ -48,6 +49,7 @@ namespace HopperGuidance
     public SolveResult()
     {
       T=0;
+      Tstart=0;
       dt=0;
       fuel=float.MaxValue;
       thrusts=null;
@@ -66,7 +68,7 @@ namespace HopperGuidance
         msg = "N="+thrusts.Length;
       else
         msg = "N=0";
-      return string.Format(msg+" fuel="+fuel+" T="+T+" retval="+retval);
+      return string.Format(msg+" fuel="+fuel+" Tstart="+Tstart+" T="+T+" retval="+retval);
     }
   }
 
@@ -78,10 +80,13 @@ namespace HopperGuidance
     // Parameters to control solution
     public double Tmin = -1;
     public double Tmax = -1;
+    public double TstartMin = 0;
+    public double TstartMax = 0;
+    public int TstartIntervals = 5;
     public double minDurationPerThrust = 4; // Insert extra thrust vector between targets
     public int maxThrustsBetweenTargets = 1;
     public double checkGapStep = 1; // seconds between each height check
-    public int maxChecks = 100; // Maximum number of height checks
+    public int maxChecks = 50; // Maximum number of height checks
     public double g = 9.8;
     public double amin = 0;
     public double amax = 30;
@@ -185,7 +190,7 @@ namespace HopperGuidance
       if (vfaxes != 0)
         stargets = stargets + " vf="+Vec2Str(vf,vfaxes)+":"+ft;
       // TODO - Missing constraints?
-      return string.Format("tol="+tol+" minDurationPerThrust="+minDurationPerThrust+" maxThrustsBetweenTargets="+maxThrustsBetweenTargets+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle+" extraTime="+extraTime+" {0}",stargets);
+      return string.Format("tol="+tol+" minDurationPerThrust="+minDurationPerThrust+" maxThrustsBetweenTargets="+maxThrustsBetweenTargets+" r0="+Vec2Str(r0)+" v0="+Vec2Str(v0)+" g="+g+" Tmin="+Tmin+" Tmax="+Tmax+" amin="+amin+" amax="+amax+" vmax="+vmax+" minDescentAngle="+minDescentAngle+" maxThrustAngle="+maxThrustAngle+" maxLandingThrustAngle="+maxLandingThrustAngle+" extraTime="+extraTime+" TstartMin="+TstartMin+" TstartMax="+TstartMax+" {0}",stargets);
     }
  
     public static double [] BasisWeights(double t, List<float> times)
@@ -353,13 +358,14 @@ namespace HopperGuidance
     // It is expected that g is position and acts in the direction Y downwards
     // returns fuel used or float.MaxFloat is no solution
     public SolveResult GFold(Vector3d a_r0, Vector3d a_v0,
-                             List<SolveTarget> a_targets, double T)
+                             List<SolveTarget> a_targets, double T, double Tstart)
     {
       // Save inputs
       r0 = a_r0;
       v0 = a_v0;
       targets = a_targets;
       SolveResult result = new SolveResult();
+
       result.inputs = this;
       // Apex is for the final target for min descent angle
       // If not in min descent region use ground and min descent angle=0 to keep above ground
@@ -376,11 +382,16 @@ namespace HopperGuidance
       if (ground.y > r0.y - 1)
         r0.y = r0.y + 1;
 
+      // Quick check if Tstart is large than time to hit ground
+      double tHit = -(r0.y-ground.y)/(a_v0.y-0.5*g*g);
+      if (tHit < Tstart)
+        return result;
+
       // TODO: Ignoring Nmin and Nmax
       List<float> thrust_times = new List<float>();
       // Put a thrust vector at every target
-      thrust_times.Add(0);
-      float last_t = 0;
+      thrust_times.Add((float)Tstart);
+      float last_t = (float)Tstart;
       float last_target_t = 0;
       foreach( SolveTarget tgt in a_targets )
       {
@@ -398,9 +409,14 @@ namespace HopperGuidance
            num = Math.Min(num, maxThrustsBetweenTargets);
            float gap = (tgt_t - last_t)/(num+1);
            for(int i=0 ; i<num ; i++)
-             thrust_times.Add(last_t + gap*(1+i));
+           {
+             float t = last_t + gap*(1+i);
+             if (t > Tstart)
+               thrust_times.Add(t);
+           }
         }
-        thrust_times.Add(tgt_t);
+        if (tgt_t > Tstart)
+          thrust_times.Add(tgt_t);
         last_t = tgt_t;
       }
       // Final target isn't a landing point so this is a multi-part solution, don't restrict
@@ -904,13 +920,14 @@ namespace HopperGuidance
           result.thrusts[i].v.y = x[i*3+1];
           result.thrusts[i].v.z = x[i*3+2];
         }
-        System.Console.Error.WriteLine("PASS: T={0:F4} FUEL={1:F2} retval={2:F0}", T, result.fuel, result.retval);
+        System.Console.Error.WriteLine("PASS: T={0:F2} Tstart={1:F2} FUEL={2:F2} retval={3:F0}", T, Tstart, result.fuel, result.retval);
       }
       else
       {
-        System.Console.Error.WriteLine("FAIL: T={0:F4} FUEL=inf retval={1}", T, result.retval);
+        System.Console.Error.WriteLine("FAIL: T={0:F2} Tstart={1:F2} FUEL=inf retval={2}", T, Tstart, result.retval);
         result.fuel = 9e+20;
       }
+      result.Tstart = Tstart;
       return result;
   }
 
@@ -920,14 +937,14 @@ namespace HopperGuidance
    }
 
    public SolveResult FullSearchGFold(Vector3d a_r0, Vector3d a_v0,
-                                     List<SolveTarget> a_targets)
+                                     List<SolveTarget> a_targets, double Tstart)
    {
      SolveResult result = new SolveResult();
      double t = Tmin;
 
      while(t<Tmax)
      {
-       SolveResult res = GFold(a_r0,a_v0,a_targets,t);
+       SolveResult res = GFold(a_r0,a_v0,a_targets,t,Tstart);
        System.Console.Error.WriteLine("best_T="+res.T+" best_fuel="+res.fuel+" retval="+res.retval);
        if (res.isSolved())
        {
@@ -949,7 +966,7 @@ namespace HopperGuidance
    // Note that time of the final position constraint a_tr_t and a_tv_t
    // will be adjusted to the end of the time period tested, T
    public SolveResult GoldenSearchGFold(Vector3d a_r0, Vector3d a_v0,
-                                   List<SolveTarget> a_targets)
+                                   List<SolveTarget> a_targets, double Tstart)
    {
       SolveResult result = null;
       // golden section search
@@ -978,8 +995,8 @@ namespace HopperGuidance
         last_c = c;
         last_d = d;
         // TODO - Adjust times on a_tr_t and a_tv_t for be fc and fd
-        resc = GFold(a_r0,a_v0,a_targets,c);
-        resd = GFold(a_r0,a_v0,a_targets,d);
+        resc = GFold(a_r0,a_v0,a_targets,c,Tstart);
+        resd = GFold(a_r0,a_v0,a_targets,d,Tstart);
         if ((!resc.isSolved()) && (!resd.isSolved()))
         {
           // Where to go - nowhere is good!
@@ -988,7 +1005,7 @@ namespace HopperGuidance
           //System.Console.Error.WriteLine("STEPPING a="+a+" b="+b+" step="+step);
           while(c <= b+0.01f)
           {
-            resc = GFold(a_r0,a_v0,a_targets,c);
+            resc = GFold(a_r0,a_v0,a_targets,c,Tstart);
             //System.Console.Error.WriteLine("STEPPING: T="+c+" fuel="+resc.fuel+" retval="+resc.retval);
             if (resc.isSolved())
             {
@@ -1022,7 +1039,7 @@ namespace HopperGuidance
 
       double bestT = 0.5*(a+b);
       // TODO - Adjust times on a_tr_t and a_tv_t for be fc and fd
-      result = GFold(a_r0,a_v0,a_targets,bestT);
+      result = GFold(a_r0,a_v0,a_targets,bestT,Tstart);
       if (!result.isSolved())
       {
         System.Console.Error.WriteLine("Fallback "+last_c+" "+last_d+" "+resc.fuel+","+resd.fuel+","+resc.retval+","+resd.retval);
@@ -1046,14 +1063,42 @@ namespace HopperGuidance
   }
   public class MainProg
   {
-    // All positions and velocities supplied in local space relative to landing target at (0,0,0)
-    // but the trajectory, world_traj, is also computed using the transform, given in transform
+    // Loop over start times. No thrust below start times
     static public SolveResult MultiPartSolve(ref Solve solver,
                                             ref Trajectory local_traj,
                                             Vector3d local_r, Vector3d local_v,
                                             ref List<SolveTarget> a_targets,
                                             float g,
-                                            float extendTime) // extend trajectory on same vel
+                                            float extendTime)
+    {
+      double tStart = solver.TstartMin;
+      double Tmin = solver.Tmin;
+      double Tmax = solver.Tmax;
+      SolveResult result = new SolveResult();
+      while(tStart <= solver.TstartMax)
+      {
+        List<SolveTarget> tTargets = new List<SolveTarget>(a_targets);
+        solver.Tmin = Tmin;
+        solver.Tmax = Tmax;
+        result = MultiPartSolve2(ref solver,ref local_traj,local_r,local_v,ref tTargets,g,extendTime,tStart);
+        if (result.isSolved())
+        {
+          a_targets = tTargets;
+          return result;
+        }
+        tStart = tStart + solver.minDurationPerThrust;
+      }
+      return result;
+    }
+
+    // All positions and velocities supplied in local space relative to landing target at (0,0,0)
+    // but the trajectory, world_traj, is also computed using the transform, given in transform
+    static public SolveResult MultiPartSolve2(ref Solve solver,
+                                              ref Trajectory local_traj,
+                                              Vector3d local_r, Vector3d local_v,
+                                              ref List<SolveTarget> a_targets,
+                                              float g,
+                                              float extendTime, double Tstart)
     {
       SolveResult result = new SolveResult();
 #if (UNITYDEBBUG)
@@ -1102,7 +1147,7 @@ namespace HopperGuidance
         if (Tmax < 0)
         { 
           float estT = Solve.EstimateTimeBetweenTargets(lr, lv, next_targets, (float)solver.amax, (float)solver.g, (float)solver.vmax, (float)solver.maxThrustAngle);
-          solver.Tmax = result.T + estT;
+          solver.Tmax = result.T + estT*1.2f;
           System.Console.Error.WriteLine("Estimated Tmax="+solver.Tmax);
         }
         else
@@ -1113,9 +1158,9 @@ namespace HopperGuidance
         // last target when complete final trajectory is computed
         solver.tol = (a_targets.Count == partial_targets.Count)?tol:tol*4;
         if (solver.full)
-          result = solver.FullSearchGFold(local_r, local_v, partial_targets);
+          result = solver.FullSearchGFold(local_r, local_v, partial_targets, Tstart);
         else
-          result = solver.GoldenSearchGFold(local_r, local_v, partial_targets);
+          result = solver.GoldenSearchGFold(local_r, local_v, partial_targets, Tstart);
         System.Console.Error.WriteLine(solver.DumpString()+" "+result.DumpString());
 
         if (result.isSolved())
@@ -1259,6 +1304,10 @@ namespace HopperGuidance
             solver.Tmin = d;
           else if (k=="Tmax")
             solver.Tmax = d;
+          else if (k=="TstartMin")
+            solver.TstartMin = d;
+          else if (k=="TstartMax")
+            solver.TstartMax = d;
           else if (k=="maxLandingThrustAngle")
             solver.maxLandingThrustAngle = d;
           else if (k=="maxThrustAngle")
