@@ -1,3 +1,19 @@
 - Show path travelled by vessel? (when logging?)
 - Get a working Visual Studio Project file
 - Fly craft relative to another craft, say in orbit? Basically autodock, but MJ does this
+- Get hyperspace jump. Divide by zero somewhere?
+- Make target always show above ground. Especially random on RO
+
+Thinking of the interface to this mod from another mod. Want
+- make sure target is always visible (especially bad in RO?)
+- how to set parameters of trajectory???
+- CalcTrack(targets)
+- ShowTrack(bool)
+- ShowSteer(bool)
+- ShowTargets(bool)
+- ShowThrustVectors(bool)
+- Enable/cancel guidance
+- To be able to clear targets, set targets to lat, long, height above ground
+- To be able to enable/cancel guidance
+- To monitor guidance. Report position, velocity and attitude error for logging
+- To be able to show/hide track
