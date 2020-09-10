@@ -878,14 +878,10 @@ namespace HopperGuidance
           if ((_logging)&&(t >= last_t+log_interval))
           {
             LogData(_tgtWriter, t, dr, dv, da, 0);
-            if (_maxThrust > 0)
-            {
-              // Proportion of thrust given (important for slow startup engines)
-              double thrustProp = (da2.magnitude/amax)*GetCurrentThrust()/_maxThrust;
-              LogData(_vesselWriter, t, tr, tv, da2 * thrustProp, att_err);
-            }
-            else
-              LogData(_vesselWriter, t, tr, tv, Vector3d.zero, att_err);
+            double thrustProp = 0;
+            if ((_maxThrust > 0) && (da2.magnitude > 0))
+              thrustProp = (amax*GetCurrentThrust())/(da2.magnitude*_maxThrust);
+            LogData(_vesselWriter, t, tr, tv, da2*thrustProp, att_err);
             last_t = tRel;
           }
 
