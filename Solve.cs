@@ -35,6 +35,17 @@ namespace HopperGuidance
     public float t;
   }
 
+  public class Solution
+  {
+    public Solution(double a_T=0, double a_fuel=0)
+    {
+      T = a_T;
+      fuel = a_fuel;
+    }
+    public double T;
+    public double fuel;
+  }
+
   public class SolveResult
   {
     public double T;
@@ -45,6 +56,7 @@ namespace HopperGuidance
     public ThrustVectorTime [] thrusts;
     public int retval; // return value of Convex optimiser for last call to GFold()
     public Solve inputs;
+    public List<Solution> solutions;
 
     public SolveResult()
     {
@@ -53,7 +65,8 @@ namespace HopperGuidance
       dt=0;
       fuel=float.MaxValue;
       thrusts=null;
-      retval=0;  
+      retval=0;
+      solutions=new List<Solution>();
     }
 
     public bool isSolved()
@@ -969,6 +982,7 @@ namespace HopperGuidance
                                    List<SolveTarget> a_targets, double Tstart)
    {
       SolveResult result = null;
+      List<Solution> solutions = new List<Solution>();
       // golden section search
       // to find the minimum of f on [a,b]
       // f: a strictly unimodal function on [a,b]
@@ -997,6 +1011,11 @@ namespace HopperGuidance
         // TODO - Adjust times on a_tr_t and a_tv_t for be fc and fd
         resc = GFold(a_r0,a_v0,a_targets,c,Tstart);
         resd = GFold(a_r0,a_v0,a_targets,d,Tstart);
+        // Store duration and fuel
+        if (resc.isSolved())
+          solutions.Add(new Solution(c,resc.fuel));
+        if (resd.isSolved())
+          solutions.Add(new Solution(d,resd.fuel));
         if ((!resc.isSolved()) && (!resd.isSolved()))
         {
           // Where to go - nowhere is good!
@@ -1009,7 +1028,6 @@ namespace HopperGuidance
             //System.Console.Error.WriteLine("STEPPING: T="+c+" fuel="+resc.fuel+" retval="+resc.retval);
             if (resc.isSolved())
             {
-              //if ((resc.fuel < resd.fuel) || (resc.fuel > resd.fuel)) // best or getting worse
               if (resc.fuel < resd.fuel) // best so far
               {
                 d = c; // best time
@@ -1040,6 +1058,7 @@ namespace HopperGuidance
       double bestT = 0.5*(a+b);
       // TODO - Adjust times on a_tr_t and a_tv_t for be fc and fd
       result = GFold(a_r0,a_v0,a_targets,bestT,Tstart);
+      
       if (!result.isSolved())
       {
         System.Console.Error.WriteLine("Fallback "+last_c+" "+last_d+" "+resc.fuel+","+resd.fuel+","+resc.retval+","+resd.retval);
@@ -1047,18 +1066,25 @@ namespace HopperGuidance
         if ((resc.fuel < resd.fuel) && (resc.isSolved()))
         {
           a_targets[a_targets.Count-1].t = (float)resc.T + extraTime;
+          resc.solutions = solutions;
           return resc;
         }
         if ((resd.fuel < resc.fuel) && (resd.isSolved()))
         {
           a_targets[a_targets.Count-1].t = (float)resd.T + extraTime;
+          resd.solutions = solutions;
           return resd;
         }
         System.Console.Error.WriteLine("FAILED AT T={0}",0.5*(a+b));
         return result;
       }
-      a_targets[a_targets.Count-1].t = (float)result.T + extraTime;
-      return result;
+      else
+      {
+        solutions.Add(new Solution(bestT, result.fuel));
+        a_targets[a_targets.Count-1].t = (float)result.T + extraTime;
+        result.solutions = solutions;
+        return result;
+      }
     }
   }
   public class MainProg
@@ -1366,6 +1392,15 @@ namespace HopperGuidance
         comments.Add("thrust_times="+String.Join(",",thrust_times));
         if( result.checktimes != null )
           comments.Add("check_times="+String.Join(",",result.checktimes));
+        List<double> sln_Ts = new List<double>();
+        List<double> sln_fuels = new List<double>();
+        foreach(var sln in result.solutions)
+        {
+          sln_Ts.Add(sln.T);
+          sln_fuels.Add(sln.fuel);
+        }
+        comments.Add("solution_time="+String.Join(",",sln_Ts));
+        comments.Add("solution_fuel="+String.Join(",",sln_fuels));
       
         traj.Write(null, comments);
         System.Console.Error.WriteLine(result.DumpString());
