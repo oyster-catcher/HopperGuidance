@@ -490,13 +490,14 @@ namespace HopperGuidance
               {
                   Vector3 relpos = vessel.transform.InverseTransformPoint(part.transform.position);
                   float isp = (engine.realIsp>0)? engine.realIsp : 280; // guess!
+                  float pressure = (float)FlightGlobals.getStaticPressure()*0.01f; // so 1.0 at Kerbin sea level? 
+                  float atmMaxThrust = engine.MaxThrustOutputAtm(true, true, pressure, FlightGlobals.getExternalTemperature());
                   if (log)
-                    Log("  engine="+engine+" relpos="+relpos+" isp="+isp+" MinThrust="+engine.GetEngineThrust(isp,0)+" MaxThrust="+engine.GetEngineThrust(isp,1)+" operational="+engine.isOperational+" staged="+engine.staged);
-                  // I think this will get the correct thrust given throttle in atmosphere (or wherever)
+                    Log("  engine="+engine+" relpos="+relpos+" isp="+isp+" MinThrust="+engine.GetEngineThrust(isp,0)+" MaxThrust="+atmMaxThrust+" operational="+engine.isOperational);
                   if (engine.isOperational)
                   {
-                      minThrust += engine.GetEngineThrust(isp, 0);
-                      maxThrust += engine.GetEngineThrust(isp, 1);
+                      minThrust += engine.GetEngineThrust(isp, 0); // can't get atmMinThrust (this ignore throttle limiting but thats ok)
+                      maxThrust += atmMaxThrust; // this uses throttle limiting and should give vac thrust as pressure/temp specified too
                       allEngines.Add(engine);
                       numEngines++;
                   }
@@ -1006,7 +1007,7 @@ namespace HopperGuidance
               // Picked
               double lat, lon, alt;
               vessel.mainBody.GetLatLonAlt(hit.point, out lat, out lon, out alt);
-              Target tgt = new Target((float)lat,(float)lon,(float)alt+0.1f,tgtHeight);
+              Target tgt = new Target((float)lat,(float)lon,(float)alt+0.2f,tgtHeight);
               tgts.Add(tgt); // Add temporarily to end of list
               redrawTargets = true;
               // If clicked stop picking
