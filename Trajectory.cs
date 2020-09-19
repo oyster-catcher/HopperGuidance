@@ -140,39 +140,32 @@ namespace HopperGuidance
       return rWeight*(c_r-r).magnitude + vWeight*(c_v-v).magnitude;
     }
 
-    // Correct final position in trajectory to cover up numeric errors
-    public void CorrectFinal(Vector3d rf, Vector3d vf, bool correct_r, bool correct_v)
-    {
-      Vector3d r_err = r[Length()-1] - rf;
-      Vector3d v_err = v[Length()-1] - vf;
-      for( int i = 0 ; i < Length() ; i++ )
-      {
-        if (correct_r)
-          r[i] = r[i] - r_err*((double)i/Length());
-        if (correct_v)
-          v[i] = v[i] - v_err*((double)i/Length());
-      }
-    }
-
     // Correct to go exactly through the targets
     public void CorrectForTargets(List<SolveTarget> targets)
     {
       int start=0, j=0;
       Vector3d start_r_err = Vector3d.zero;
-      //System.Console.Error.WriteLine("length="+Length());
+      Vector3d start_v_err = Vector3d.zero;
       for( int i = 0 ; i < targets.Count ; i++ )
       {
         int end = (int)((targets[i].t/T) * Length() + 0.5f);
         end = Math.Min(Length()-1,end); // inclusive
         Vector3d end_r_err = r[end] - targets[i].r;
+        Vector3d end_v_err = Vector3d.zero;
+        if (targets[i].vaxes != 0)
+        {
+          end_v_err = v[end] - targets[i].v;
+        }
         for ( j=start; j<=end ; j++)
         {
           double p = (j-start)/(double)(end-start);
           r[j] = r[j]  - start_r_err * (1-p) - end_r_err * p;
-          //System.Console.Error.WriteLine("Correcting "+j+" by "+(start_r_err * (1-p))+" and "+(end_r_err * p)+" to "+r[j]+" p="+p);
+          v[j] = v[j]  - start_v_err * (1-p) - end_v_err * p;
+          System.Console.Error.WriteLine("Correcting "+j+" by "+(start_r_err * (1-p))+" and "+(end_r_err * p)+" to "+r[j]+" p="+p);
         }
         start = j;
         start_r_err = end_r_err;
+        start_v_err = end_v_err;
       }
     }
 
