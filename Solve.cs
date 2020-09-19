@@ -235,6 +235,7 @@ namespace HopperGuidance
     // Calculate weights on position and velocity from thrust vectors up to time tX
     public static void RVWeightsToTime(double tX, double dt, List<float> times, out double[] wr, out double[] wv)
     {
+      // TODO
       int N = times.Count;
       wr = new double[N];
       wv = new double[N];
@@ -600,6 +601,11 @@ namespace HopperGuidance
       int rhs = N*4;
       double [,] c = new double[constraints,rhs+1]; // zeroed?
       int [] ct = new int[constraints]; // type of constraint, =, > or <  (default to 0 -> =)
+      double[] s = new double[N*4]; // scale
+
+      // set default scaling
+      for(int i=0;i<N*4;i++)
+        s[i] = 1;
 
       // Constrain thrust vectors to be below thrust magnitudes
       for( int i = 0 ; i < N ; i++ )
@@ -637,6 +643,9 @@ namespace HopperGuidance
         tX = tgt.t;
         if (tX < 0)
           tX = T;
+#if (DEBUG)
+        System.Console.Error.WriteLine("tX="+tX+" tgt.r="+tgt.r+" tgt.v="+tgt.v+" T="+T);
+#endif
         RVWeightsToTime(tX,dt,thrust_times,out double[] wr,out double[] wv);
         // Position contraint
         if( tgt.raxes !=0 )
@@ -792,6 +801,14 @@ namespace HopperGuidance
                      + V4[1] * (rfy - (r0[1] + v0[1]*mdt - 0.5*mdt*mdt*g))
                      + V4[2] * (rfz - (r0[2] + v0[2]*mdt)); // RHS
           ct[k+3] = 1; // LHS > RHS
+          // scale down to avoid too much weight
+          for(int ii = 0 ; ii < N*4+1 ; ii++) 
+          {
+            c[k+0,ii] = c[k+0,ii] * 0.01f;
+            c[k+1,ii] = c[k+1,ii] * 0.01f;
+            c[k+2,ii] = c[k+2,ii] * 0.01f;
+            c[k+3,ii] = c[k+3,ii] * 0.01f;
+          }
           k += 4;
         }
       }
@@ -799,11 +816,14 @@ namespace HopperGuidance
 
 #if (MAXVELOCITY)
       // Constrain N intermediate positions to be within vmax
-      for( int j=0; j<N; j++ )
+      for( int j=0 ; j<N ; j++ )
       {
         // No check at t=0 and t=T
         tX = T*((double)(j+1))/(N+1);
         // Get whole weight vector up to time t
+#if (DEBUG)
+        System.Console.Error.WriteLine("tX="+tX+" T="+T+" N="+N);
+#endif
         RVWeightsToTime(tX,dt,thrust_times,out double[] wr,out double[] wv);
 
         for(int i = 0 ; i < N ; i++)
@@ -813,20 +833,30 @@ namespace HopperGuidance
           c[k+2,i*3+1] = wv[i]; // vy increase by tX
           c[k+3,i*3+1] = wv[i]; // vy increase by tX
           c[k+4,i*3+2] = wv[i]; // vz increase by tX
-          c[k+5,i*3+2] = wv[i]; // vy increase by tX
+          c[k+5,i*3+2] = wv[i]; // vz increase by tX
         }
         c[k+0,rhs] = - v0[0] - vmax;
-        ct[k+0] = 1; // incV@tx + v0 - g*tX > -vmax
+        ct[k+0] = 1; // incV@tx + v0 > -vmax
         c[k+1,rhs] = - v0[0] + vmax;
-        ct[k+1] = -1; // incV@tx + v0 - g*tX < -vmax
+        ct[k+1] = -1; // incV@tx + v0 < -vmax
         c[k+2,rhs] = - v0[1] + g*tX - vmax;
         ct[k+2] = 1; // incV@tx + v0 - g*tX > -vmax
         c[k+3,rhs] = - v0[1] + g*tX + vmax;
         ct[k+3] = -1; // incV@tx + v0 -g*tX < +vmax
         c[k+4,rhs] = - v0[2] - vmax;
-        ct[k+4] = 1; // incV@tx + v0 -g*tX > -vmax
+        ct[k+4] = 1; // incV@tx + v0 > -vmax
         c[k+5,rhs] = - v0[2] + vmax;
-        ct[k+5] = -1; // incV@tx + v0 -g*tX < +vmax
+        ct[k+5] = -1; // incV@tx + v0 < +vmax
+        // scale down to avoid too much weight
+        for(int i = 0 ; i < N*4+1 ; i++) 
+        {
+          c[k+0,i] = c[k+0,i] * 0.01f;
+          c[k+1,i] = c[k+1,i] * 0.01f;
+          c[k+2,i] = c[k+2,i] * 0.01f;
+          c[k+3,i] = c[k+3,i] * 0.01f;
+          c[k+4,i] = c[k+4,i] * 0.01f;
+          c[k+5,i] = c[k+5,i] * 0.01f;
+        }
         k+=6;
       }
 #endif
@@ -892,11 +922,6 @@ namespace HopperGuidance
       // zeroes for equality constraints
       alglib.minqpsetlc(state, c, ct);
 
-      double[] s = new double[N*4];
-      for(int i=0;i<N*4;i++)
-      {
-        s[i] = 1;
-      }
       alglib.minqpsetscale(state, s);
 
 #if (DUMP)
@@ -904,11 +929,12 @@ namespace HopperGuidance
       WriteVector("b",b,N*3);
       WriteVector("bndl",bndl,N*3);
       WriteVector("bndu",bndu,N*3);
-      WriteMatrix("c",c,k,N*3+1);
+      WriteMatrix("c",c,k,N*4+1);
       WriteVector("ct",ct,k);
 #endif
 
-      alglib.minqpsetalgodenseipm(state, 0.001);
+      alglib.minqpsetalgodenseipm(state, 0.00001);
+      //alglib.minqpsetscaleautodiag(state);
       alglib.minqpoptimize(state);
       alglib.minqpresults(state, out x, out rep);
       result.dt = dt;
@@ -932,6 +958,9 @@ namespace HopperGuidance
           result.thrusts[i].v.x = x[i*3+0];
           result.thrusts[i].v.y = x[i*3+1];
           result.thrusts[i].v.z = x[i*3+2];
+#if (DEBUG)
+          System.Console.Error.WriteLine("T["+i+"]="+(Vector3)result.thrusts[i].v);
+#endif
         }
         System.Console.Error.WriteLine("PASS: T={0:F2} Tstart={1:F2} FUEL={2:F2} retval={3:F0}", T, Tstart, result.fuel, result.retval);
       }
@@ -1095,7 +1124,7 @@ namespace HopperGuidance
                                             Vector3d local_r, Vector3d local_v,
                                             ref List<SolveTarget> a_targets,
                                             float g,
-                                            float extendTime)
+                                            float extendTime, bool correct=false)
     {
       double tStart = solver.TstartMin;
       double Tmin = solver.Tmin;
@@ -1106,7 +1135,7 @@ namespace HopperGuidance
         List<SolveTarget> tTargets = new List<SolveTarget>(a_targets);
         solver.Tmin = Tmin;
         solver.Tmax = Tmax;
-        result = MultiPartSolve2(ref solver,ref local_traj,local_r,local_v,ref tTargets,g,extendTime,tStart);
+        result = MultiPartSolve2(ref solver,ref local_traj,local_r,local_v,ref tTargets,g,extendTime,tStart,correct);
         if (result.isSolved())
         {
           a_targets = tTargets;
@@ -1124,7 +1153,8 @@ namespace HopperGuidance
                                               Vector3d local_r, Vector3d local_v,
                                               ref List<SolveTarget> a_targets,
                                               float g,
-                                              float extendTime, double Tstart)
+                                              float extendTime, double Tstart,
+                                              bool correct=false)
     {
       SolveResult result = new SolveResult();
 #if (UNITYDEBBUG)
@@ -1206,13 +1236,17 @@ namespace HopperGuidance
       local_traj = new Trajectory();
       local_traj.Simulate(result.T, result.thrusts, local_r, local_v, new Vector3d(0,-g,0), result.dt);
       Vector3d vf = a_targets[a_targets.Count-1].v;
-      local_traj.CorrectForTargets(a_targets);
+      if (correct)
+      {
+        local_traj.CorrectForTargets(a_targets);
+      }
       local_traj.Extend(vf, new Vector3d(0,-g,0), extendTime);
       return result;
     }
 
     static int RunTest(string[] args)
     {
+      bool correct = false;
       Solve solver = new Solve();
       solver.Tmax = -1; // means estimate if not set
       Vector3d r0 = Vector3d.zero;
@@ -1230,10 +1264,15 @@ namespace HopperGuidance
       {
         char [] delim={'='};
         char [] colon={':'};
-        if (args[i].Split(delim,2).Length != 2)
+        if (args[i] == "--correct") {
+          correct = true;
           continue;
-        string k = args[i].Split(delim,2)[0];
-        string v = args[i].Split(delim,2)[1];
+        }
+        var parts = args[i].Split(delim,2);
+        if (parts.Length != 2)
+          continue;
+        string k = parts[0];
+        string v = parts[1];
         if (v.StartsWith("[")) {
           string v1,v2;
           t = -1;
@@ -1378,7 +1417,7 @@ namespace HopperGuidance
 
       Trajectory traj = new Trajectory();
       // targets gets times filled in if set to -1
-      SolveResult result = MultiPartSolve(ref solver, ref traj, r0, v0, ref targets, (float)solver.g, solver.extendTime);
+      SolveResult result = MultiPartSolve(ref solver, ref traj, r0, v0, ref targets, (float)solver.g, solver.extendTime, correct);
 
       if (result.isSolved())
       {
@@ -1411,7 +1450,7 @@ namespace HopperGuidance
     static int Main(string[] args)
     {
       if (args.Length == 0) {
-        System.Console.Error.WriteLine("usage: Solve.exe k=v ... - set of key=value pairs from r0,v0,rf,vf,Tmin,Tmax,amin,amax,g,minDescentAngle,tol,vmax,ir,iv which also have defaults (ir,iv are intermediates which be specified multiple times)");
+        System.Console.Error.WriteLine("usage: Solve.exe [--correct] k=v ... - set of key=value pairs from r0,v0,rf,vf,Tmin,Tmax,amin,amax,g,minDescentAngle,tol,vmax,ir,iv which also have defaults (ir,iv are intermediates which be specified multiple times)");
         return(1);
       } else {
         return RunTest(args);
