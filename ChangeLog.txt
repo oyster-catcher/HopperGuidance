@@ -1,3 +1,10 @@
+v0.2.4
+- Don't need to activate engines to enable guidance with RO (guesses ISP!)
+- Doesn't shutdown engines fully in RO now (unless see below)
+- Will Shutdown engines in RO for final seconds of landing to reduce thrust < gravity (like Falcon 9 does)
+- Will take notice of thrust limiter setting
+- Falcon 9 like descent can be enable early before engines need to be ignited
+
 v0.2.3
 - Added ability to pick multiple intermediate targets
 - Removed latitude, longitude and altitude target (set target via pick target only)

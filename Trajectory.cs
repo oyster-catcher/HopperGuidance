@@ -86,6 +86,7 @@ namespace HopperGuidance
       Array.Resize<Vector3d>(ref v, newsize);
       Array.Resize<Vector3d>(ref a, newsize); 
       Vector3d cr = r[oldsize-1];
+      System.Console.Error.WriteLine("g="+a_g);
       for( int i=oldsize; i<newsize; i++ )
       {
         r[i] = cr;
@@ -201,7 +202,6 @@ namespace HopperGuidance
       int ci = -1;
       double t;
       double cdist = 99999999;
-      double rdist = 99999999;
       for(int i=0;i<r.Length; i++)
       {
         double dr = (a_r-r[i]).magnitude;
@@ -211,7 +211,6 @@ namespace HopperGuidance
         {
           ci = i;
           cdist = d;
-          rdist = dr;
         }
       }
       if (ci!=-1)
@@ -246,7 +245,7 @@ namespace HopperGuidance
             cdist = d2;
           }
         }
-        return rdist;
+        return (closest_r - a_r).magnitude;
       }
       else
       {
@@ -254,7 +253,7 @@ namespace HopperGuidance
         closest_v = Vector3d.zero;
         closest_a = Vector3d.zero;
         closest_t = 0;
-        return rdist;
+        return (closest_r - a_r).magnitude;
       }
     }
 
@@ -285,20 +284,39 @@ namespace HopperGuidance
       f.Close();
     }
 
-//    static int Main(string[] argv)
-//    {
-//      Trajectory traj = new Trajectory();
-//
-//      Vector3d [] trackr = {new Vector3d(0,0,0),new Vector3d(3,10,4), new Vector3d(8,12,8)};
-//
-//      traj.Init(0.1,trackr,trackr,trackr);
-//
-//      Vector3d r0 = new Vector3d(8,8,8);
-//      Vector3d closer,closev,close_a;
-//      System.Console.WriteLine("Closest:"+traj.FindClosest(r0,r0,out closer,out closev,out close_a));
-//      System.Console.WriteLine("closer="+closer);
-//
-//      return 0;
-//    }
+/*
+    static int Main(string[] argv)
+    {
+      Trajectory traj = new Trajectory();
+
+      if (argv.Length != 8) {
+        System.Console.Error.WriteLine("usage: Trajectory.exe <weight_r> <weight_v> <x> <y> <z> <vx> <vy> <vz>");
+        return(1);
+      }
+      double wr = Convert.ToDouble(argv[0]);
+      double wv = Convert.ToDouble(argv[1]);
+      double x = Convert.ToDouble(argv[2]);
+      double y = Convert.ToDouble(argv[3]);
+      double z = Convert.ToDouble(argv[4]);
+      double vx = Convert.ToDouble(argv[5]);
+      double vy = Convert.ToDouble(argv[6]);
+      double vz = Convert.ToDouble(argv[7]);
+
+      Vector3d [] trackr = {new Vector3d(0,2,0),new Vector3d(0,1,0), new Vector3d(0,0,0), new Vector3d(0,-1,0)};
+      Vector3d [] trackv = {new Vector3d(0,-5,0),new Vector3d(0,-4,0), new Vector3d(0,-3,0), new Vector3d(0,-3,0)};
+      Vector3d [] tracka = {new Vector3d(0,13,0),new Vector3d(0,13,0), new Vector3d(0,9,0), new Vector3d(0,9,0)};
+
+      traj.Init(0.1,trackr,trackv,tracka);
+
+      Vector3d r = new Vector3d(x,y,z);
+      Vector3d v = new Vector3d(vx,vy,vz);
+      Vector3d close_r,close_v,close_a;
+      double close_t;
+      System.Console.WriteLine("Closest:"+traj.FindClosest(r,v,out close_r,out close_v,out close_a,out close_t,wr,wv));
+      System.Console.WriteLine("close_r="+close_r+" close_v="+close_v+" close_a="+close_a);
+
+      return 0;
+    }
+*/
   }
 }

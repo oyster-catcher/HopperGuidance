@@ -4,10 +4,21 @@ namespace HopperGuidance
 {
   public class PID3d
   {
+    public float kp1;
+    public float ki1;
+    public float kd1;
+    public float kp2;
+    public float ki2;
+    public float kd2;
+    public float vmax;
+    public float amax;
+    public float ymult;
     PIDclamp pid1x,pid1y,pid1z;
     PIDclamp pid2x,pid2y,pid2z;
 
-    public void Init(float kp1, float ki1, float kd1, float kp2, float ki2, float kd2, float vmax, float amax, float ymult=1.0f)
+    public PID3d(float a_kp1=1, float a_ki1=0, float a_kd1=0,
+                 float a_kp2=1, float a_ki2=0, float a_kd2=0,
+                 float a_vmax=1000, float a_amax=100, float a_ymult=1.0f)
     {
       // Probably set I1=0, D1=0, I2=0, D2=0
       // P1 determines proportion of position error to velocity 1, to close 1m as 1m/s
@@ -15,6 +26,20 @@ namespace HopperGuidance
       // I1>0 would help overcome something like a constant wind or gravity (but can compensate exactly for gravity)
       // ymult scales up P1 for make the PID focus on hitting the height target
       // (this is easier since we have gravity to pull us down if overshooting upward)
+      kp1 = a_kp1;
+      ki1 = a_ki1;
+      kd1 = a_kd1;
+      kp2 = a_kp2;
+      ki2 = a_ki2;
+      kd2 = a_kd2;
+      vmax = a_vmax;
+      amax = a_amax;
+      ymult = a_ymult;
+      Reset();
+    }
+
+    public void Reset()
+    {
       pid1x = new PIDclamp("pid1x",kp1,ki1,kd1,vmax);
       pid1y = new PIDclamp("pid1y",kp1*ymult,ki1,kd1,vmax);
       pid1z = new PIDclamp("pid1z",kp1,ki1,kd1,vmax);
@@ -22,13 +47,6 @@ namespace HopperGuidance
       pid2x = new PIDclamp("pid2x",kp2,ki2,kd2,amax);
       pid2y = new PIDclamp("pid2y",kp2*ymult,ki2,kd2,amax);
       pid2z = new PIDclamp("pid2z",kp2,ki2,kd2,amax);
-    }
-
-    public void Reset()
-    {
-      pid1x.Reset();
-      pid1y.Reset();
-      pid1z.Reset();
     }
 
     public Vector3d Update(Vector3d r, Vector3d v, Vector3d dr, Vector3d dv, float dt)

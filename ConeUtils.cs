@@ -111,16 +111,16 @@ namespace HopperGuidance
 
       // Put on 3D plane
       Vector2 F2 = new Vector2(Vector3.Dot(N,F),F.y);
-      Console.WriteLine("F2="+F2);
+      //Console.WriteLine("F2="+F2);
 
       // Find closest ( can be inside)
       Vector2 pmin = FindClosestPointOnConvexPolygon(F2, conemax);
-      Console.WriteLine("pmin="+pmin);
+      //Console.WriteLine("pmin="+pmin);
 
       // Now consider thrust cone 0 to amin. This is better check than polygon
       // cos we will be on an edge which causes problems
       bool inside_min = (pmin.magnitude < amin);
-      Console.WriteLine("inside_min="+inside_min);
+      //Console.WriteLine("inside_min="+inside_min);
 
       // Find closest point on boundary with at amin
       if (inside_min)
@@ -134,20 +134,25 @@ namespace HopperGuidance
         //pmin = FindClosestPointOnLines(F2, bound);
         // Actually it seems to work better just to use a vector is the same direction
         // but with greater magnitude
-        Console.WriteLine("mag="+pmin.magnitude);
+        //Console.WriteLine("mag="+pmin.magnitude+" F2.x="+F2.x);
+        pmin.x = F2.x;
         if (pmin.magnitude > 0)
         {
           // Aim to keep horizonal component as desired
           // but fix vertical component to that magnitude = amin
-          pmin.x = F2.x;
-          pmin.y = Mathf.Sqrt(amin*amin - F2.x*F2.x);
+          if (amin*amin - F2.x*F2.x > 0)
+            pmin.y = Mathf.Sqrt(amin*amin - F2.x*F2.x);
+          else
+            pmin.y = 0;
         }
         else
         {
-          pmin.x = 0;
+          pmin.x = F2.x;
           pmin.y = amin;
         }
       }
+      // Clamp x to inside cone
+      pmin.x = Mathf.Clamp(F2.x,0,pmin.y*Mathf.Sin(maxAngle));
 
       //Console.WriteLine("pmin="+pmin);
       // Transform back into 3D
@@ -155,7 +160,7 @@ namespace HopperGuidance
 
       return F;
     }
-
+/*
     public static int Main(string[] args)
     {
       if (args.Length != 6) {
@@ -174,6 +179,7 @@ namespace HopperGuidance
       System.Console.WriteLine("F="+F+" F^="+Fp);
 
       return 0;
-    } 
+    }
+*/ 
   }
 }

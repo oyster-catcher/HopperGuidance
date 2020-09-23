@@ -45,6 +45,7 @@ namespace HopperGuidance
         PID3d _pid3d = new PID3d();
         bool checkingLanded = false; // only check once in flight to avoid failure to start when already on ground
         AutoMode autoMode = AutoMode.Off;
+        Controller controller;
         float errMargin = 0.1f; // margin of error in solution to allow for headroom in amax (use double for maxThrustAngle)
         double lowestY = 0; // Y position of bottom of craft relative to centre
         float _minThrust, _maxThrust;
@@ -57,17 +58,21 @@ namespace HopperGuidance
         double log_interval = 0.05f; // Interval between logging
         System.IO.StreamWriter _tgtWriter = null; // Actual vessel
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
-        float extendTime = 3; // duration to extend trajectory to slowly descent to touch down and below at touchDownSpeed
-        double touchDownSpeed = 1.4f;
+        float extendTime = 0; // duration to extend trajectory to slowly descent to touch down and below at touchDownSpeed
         bool pickingPositionTarget = false;
         string _vesselLogFilename = "vessel.dat";
         string _tgtLogFilename = "target.dat";
         string _solutionLogFilename = "solution.dat";
 
+        [UI_FloatRange(minValue = 0.1f, maxValue = 5, stepIncrement = 0.1f)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Touchdown speed", guiFormat = "F0", isPersistant = false, guiUnits = "m/s")]
+        float touchDownSpeed = 2.5f;
+
         // Specials for Realism Overhaul
         List<ModuleEngines> allEngines = new List<ModuleEngines>();
         List<ModuleEngines> shutdownEngines = new List<ModuleEngines>();
         bool ignited = false;
+        Vector3d F2;
 
         [UI_FloatRange(minValue = 5, maxValue = 500, stepIncrement = 5)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target size", guiFormat = "F0", isPersistant = false)]
@@ -107,10 +112,13 @@ namespace HopperGuidance
         //float kP2Scale=4 ; // Makes kP2 = corrFactor * kP2Scale;
         float yMult = 2; // Extra weight for Y to try and minimise height error over other errors
 
-        [UI_FloatRange(minValue = 0.01f, maxValue = 2.0f, stepIncrement = 0.1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Accel factor", guiFormat = "F1", isPersistant = true)]
-        float accelFactor = 1.0f; // Gain on thrust vector
-        float setAccelFactor;
+        float accelFactor = 0.6f; // Gain on thrust vector
+
+        //[UI_FloatRange(minValue = 0.01f, maxValue = 0.99f, stepIncrement = 0.01f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Thrust smoothing", guiFormat = "F2", isPersistant = true)]
+        float thrustSmoothFactor = 0.9f;
+
+        float kd2 = 0f;
 
         // Can't get any improvement by raising these coeffs from zero
         float ki1 = 0;
@@ -450,9 +458,9 @@ namespace HopperGuidance
           last_t = -1;
         }
 
-        static void LogData(System.IO.StreamWriter f, double t, Vector3 r, Vector3 v, Vector3 a, float att_err)
+        static void LogData(System.IO.StreamWriter f, double t, Vector3 r, Vector3 v, Vector3 a, float att_err, double amin, double amax)
         {
-          f.WriteLine(string.Format("{0} {1:F5} {2:F5} {3:F5} {4:F5} {5:F5} {6:F5} {7:F1} {8:F1} {9:F1} {10:F1}",t,r.x,r.y,r.z,v.x,v.y,v.z,a.x,a.y,a.z,att_err));
+          f.WriteLine(string.Format("{0} {1:F5} {2:F5} {3:F5} {4:F5} {5:F5} {6:F5} {7:F1} {8:F1} {9:F1} {10:F1} {11:F2} {12:F2}",t,r.x,r.y,r.z,v.x,v.y,v.z,a.x,a.y,a.z,att_err,amin,amax));
         }
 
         static void LogSolution(SolveResult result, Trajectory traj, string filename)
@@ -649,6 +657,7 @@ namespace HopperGuidance
           Vector3d v0 = vessel.GetSrfVelocity();
           Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
           Vector3d vf = new Vector3d(0,-touchDownSpeed,0);
+          //_pid3d.Init(corrFactor,ki1,0,accelFactor,ki2,kd2,maxV,(float)amax,yMult);
 
           ComputeMinMaxThrust(out _minThrust,out _maxThrust, true);
           if( _maxThrust == 0 )
@@ -660,6 +669,7 @@ namespace HopperGuidance
           _startTime = Time.time;
           double amin = _minThrust/vessel.totalMass;
           double amax = _maxThrust/vessel.totalMass;
+          controller = new Controller(corrFactor,ki1,0,accelFactor,ki2,kd2,(float)amax,yMult);
           if( amin > amax*0.95 )
           {
             Log("Engine doesn't appear to be throttleable. This makes precision guidance impossible", true);
@@ -732,7 +742,8 @@ namespace HopperGuidance
             string msg = String.Format("Found solution T={0:F1} Tstart={1:F1} Fuel={2:F1}",_result.T,_result.Tstart,_result.fuel);
             Log(msg, true);
             // Enable autopilot
-            _pid3d.Init(corrFactor,ki1,0,accelFactor,ki2,0,maxV,(float)amax,yMult);
+            // TODO: Use New functions on Controller()
+            //_pid3d.Init(corrFactor,ki1,0,accelFactor,ki2,kd2,maxV,(float)amax,yMult);
             DrawTargets(_tgts,_transform,targetcol,tgtSize);
             vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
             vessel.OnFlyByWire += new FlightInputCallback(Fly);
@@ -827,6 +838,7 @@ namespace HopperGuidance
         // F should be initial acceleration before any corrections
         // For forced landing this is the opposite vector to gravity (to hover)
         // For an autopilot path this is the acceleration vector from the computed solution
+        /*
         void AutopilotStepToTarget(FlightCtrlState state, Vector3d tr, Vector3d tv, Vector3d dr, Vector3d dv, Vector3d da, float g, double t, double T, double Tstart)
         {
 
@@ -856,17 +868,15 @@ namespace HopperGuidance
             // - needed acceleration less than the minimum
             // - falling less than 20m/s (otherwise can decide to shutdown engines when still high and travelling fast)
             bool cant_reach_ground = (minHeight > 0) && (tv.y > -20);
+            Log("minHeight="+minHeight+" tv.y="+tv.y+" unlimda.y="+unlimda.y);
             // Other criteria?
             // - amin > required acceleration for rest of trajectory?
             if (cant_reach_ground)
             {
               // Check if thrust beyond this point is higher again?
-              int numShutdown = ShutdownOuterEngines(da.y*vessel.totalMass); // set thrust in range for desired accel
+              int numShutdown = ShutdownOuterEngines(unlimda.y*vessel.totalMass); // set thrust in range for desired accel
               if (numShutdown > 0)
-              {
                 Log("Shutdown "+numShutdown+" engines for controlled touchdown", true);
-                Log("Shutdown "+numShutdown+" engines for controlled touchdown. (cant_reach_ground="+cant_reach_ground+")");
-              }
             }
             // Shutoff throttle if pointing in wrong direction
             float ddot = (float)Vector3d.Dot(Vector3d.Normalize(tatt),Vector3d.Normalize(da2));
@@ -889,19 +899,19 @@ namespace HopperGuidance
           if ((_vesselWriter == null) && (_logging))
           {
             _vesselWriter = new System.IO.StreamWriter(_vesselLogFilename);
-            _vesselWriter.WriteLine("time x y z vx vy vz ax ay az att_err");
+            _vesselWriter.WriteLine("time x y z vx vy vz ax ay az att_err amin amax");
             _tgtWriter = new System.IO.StreamWriter(_tgtLogFilename);
-            _tgtWriter.WriteLine("time x y z vx vy vz ax ay az att_err");
+            _tgtWriter.WriteLine("time x y z vx vy vz ax ay az att_err amin amax");
           }
 
           double tRel = Time.time - _startTime;
           if ((_logging) && (tRel >= last_t+log_interval))
           {
-            LogData(_tgtWriter, tRel, dr, dv, da, 0);
+            LogData(_tgtWriter, tRel, dr, dv, da, 0, solver.amin, solver.amax);
             double thrustProp = 0;
             if ((_maxThrust > 0) && (da2.magnitude > 0))
               thrustProp = (amax*GetCurrentThrust())/(da2.magnitude*_maxThrust);
-            LogData(_vesselWriter, tRel, tr, tv, da2*thrustProp, att_err);
+            LogData(_vesselWriter, tRel, tr, tv, da2*thrustProp, att_err, amin, amax);
             last_t = tRel;
           }
 
@@ -916,16 +926,19 @@ namespace HopperGuidance
           Log("da2="+da2+" throttle="+throttle+" minThrottle="+minThrottle+" amax="+amax+" ignited="+ignited);
           state.mainThrottle = throttle;
         }
+        */
 
+        /*
         // returns the thrust cone limited vector
         // accepted original thrust vector as F, and returns unlimited F after adjustment
         Vector3d GetThrustVector(Vector3d tr, Vector3d tv, Vector3d dr, Vector3d dv, float amin, float amax, float maxThrustAngle, Vector3d F, out Vector3d unlimF)
         {
-          Vector3 F2 = _pid3d.Update(tr,tv,dr,dv,Time.deltaTime);
+          F2 = (1-thrustSmoothFactor) * _pid3d.Update(tr,tv,dr,dv,Time.deltaTime) + thrustSmoothFactor * F2;
           unlimF = F + F2;
           // Reduce sideways components
           return ConeUtils.ClosestThrustInsideCone((float)maxThrustAngle,(float)amin,(float)amax,unlimF);
         }
+        */
 
         public void Fly(FlightCtrlState state)
         {
@@ -952,15 +965,22 @@ namespace HopperGuidance
           Vector3 tr = _transform.InverseTransformPoint(r);
           Vector3 tv = _transform.InverseTransformVector(v);
           float g = (float)FlightGlobals.getGeeForceAtPosition(r).magnitude;
+          ComputeMinMaxThrust(out _minThrust,out _maxThrust);
+          controller.amax = (float)(_maxThrust/vessel.totalMass);
+          controller.amin = (float)(_minThrust/vessel.totalMass);
+          Vector3d dr, dv, da, thrustV;
+          double throttle;
+          controller.GetControlOutputs(_traj, tr, tv, new Vector3d(0,-FlightGlobals.getGeeForceAtPosition(r).magnitude,0), Time.deltaTime, out dr, out dv, out da, out throttle, out thrustV);
 
-          Vector3d dr,dv,da;
-          double desired_t; // closest time in trajectory (desired)
-          _traj.FindClosest(tr, tv, out dr, out dv, out da, out desired_t, 0.5f, 0.5f);
+          thrustV = _transform.TransformVector(thrustV); // transform back to world co-ordinates
+          vessel.Autopilot.SAS.lockedMode = false;
+          vessel.Autopilot.SAS.SetTargetOrientation(thrustV,false);
+          state.mainThrottle = (float)throttle;
 
           // Uses transformed positions and vectors
           // sets throttle and desired attitude based on targets
           // F is the inital force (acceleration) vector
-          AutopilotStepToTarget(state, tr, tv, dr, dv, da, g, desired_t, _traj.T, _result.Tstart);
+          //AutopilotStepToTarget(state, tr, tv, dr, dv, da, g, desired_t, _traj.T, _result.Tstart);
         }
 
         public override void OnUpdate()
@@ -993,11 +1013,16 @@ namespace HopperGuidance
             setCorrFactor = corrFactor;
             resetPID = true;
           }
-          if (accelFactor != setAccelFactor)
-          {
-            setAccelFactor = accelFactor;
-            resetPID = true;
-          }
+          //if (accelFactor != setAccelFactor)
+          //{
+          //  setAccelFactor = accelFactor;
+          //  resetPID = true;
+          //}
+          //if (kd2 != setKd2)
+          //{
+          //  setKd2 = kd2;
+          //  resetPID = true;
+          //}
           if ((minDescentAngle != setMinDescentAngle)||(maxThrustAngle != setMaxThrustAngle))
           {
             setMinDescentAngle = minDescentAngle;
@@ -1061,7 +1086,8 @@ namespace HopperGuidance
           {
             ComputeMinMaxThrust(out _minThrust,out _maxThrust); // This might be including RCS (i.e. non main Throttle)
             double amax = _maxThrust/vessel.totalMass;
-            _pid3d.Init(corrFactor,ki1,0,accelFactor,ki2,0,maxV,(float)amax,yMult);
+            //TODO: Use new functions in Controller()
+            //_pid3d.Init(corrFactor,ki1,0,accelFactor,ki2,kd2,maxV,(float)amax,yMult);
           }
           if ((!_logging) && (_vesselWriter != null))
           {

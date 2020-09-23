@@ -12,29 +12,8 @@ using System.Collections.Generic;
 using KSPAssets;
 using UnityEngine;
 
-
 namespace HopperGuidance
 {
-
-  public class SolveTarget
-  {
-    public const int X = 1;
-    public const int Y = 2;
-    public const int Z = 4;
-
-    public Vector3d r;
-    public int raxes; // combination of X, Y, Z
-    public Vector3d v;
-    public int vaxes; // combination of X, Y, Z
-    public float t;
-  }
-
-  public class ThrustVectorTime
-  {
-    public Vector3d v;
-    public float t;
-  }
-
   public class Solution
   {
     public Solution(double a_T=0, double a_fuel=0)
@@ -153,6 +132,45 @@ namespace HopperGuidance
       System.Console.WriteLine("]");
     }
 #endif
+    public bool Set(string key, string value)
+    {
+      if (key=="maxThrustsBetweenTargets")
+        maxThrustsBetweenTargets = Convert.ToInt32(value);
+      else if (key=="minDescentAngle")
+         minDescentAngle = Convert.ToDouble(value);
+      else if (key=="maxThrustsBetweenTargets")
+        maxThrustsBetweenTargets = Convert.ToInt32(value);
+      else if (key=="amin")
+        amin = Convert.ToDouble(value);
+      else if (key=="amax")
+        amax = Convert.ToDouble(value);
+      else if (key=="tol")
+         tol = Convert.ToDouble(value);
+      else if (key=="Tmax")
+         Tmax = Convert.ToDouble(value);
+      else if (key=="TstartMiin")
+         TstartMin = Convert.ToDouble(value);
+      else if (key=="TstartMax")
+         TstartMax = Convert.ToDouble(value);
+      else if (key=="maxLandingThrustAngle")
+         maxLandingThrustAngle = Convert.ToDouble(value);
+      else if (key=="timePenalty")
+         timePenalty = Convert.ToDouble(value);
+      else if (key=="g")
+         g = Convert.ToDouble(value);
+      else if (key=="extraTime")
+         extraTime = (float)Convert.ToDouble(value);
+      else if (key=="maxChecks")
+         maxChecks = Convert.ToInt32(value);
+      else if (key=="checkGapStep")
+         checkGapStep = Convert.ToDouble(value);
+      else if (key=="extendTime")
+         extendTime = (float)Convert.ToDouble(value);
+      else
+        return false;
+      return true;
+    }
+
     // axes it bitfield of X, Y, Z flags
     public static string Vec2Str(Vector3d v, int axes=7)
     {
@@ -1116,6 +1134,7 @@ namespace HopperGuidance
       }
     }
   }
+
   public class MainProg
   {
     // Loop over start times. No thrust below start times
@@ -1195,9 +1214,7 @@ namespace HopperGuidance
 
         // Move final target off ground a little as extend time was extend trajectory vertically downloads
         if (a_targets.Count == partial_targets.Count)
-        {
           partial_targets[partial_targets.Count-1].r -= partial_targets[partial_targets.Count-1].v * extendTime * 0.5f;
-        }
  
         solver.Tmin = (Tmin>=0) ? Tmin : result.T;
         if (Tmax < 0)
@@ -1244,10 +1261,12 @@ namespace HopperGuidance
       return result;
     }
 
-    static int RunTest(string[] args)
+
+    static public bool RunTest(Dictionary<string,string> args, ref Solve solver, out SolveResult result, out Trajectory traj)
     {
       bool correct = false;
-      Solve solver = new Solve();
+      result = new SolveResult();
+      traj = new Trajectory();
       solver.Tmax = -1; // means estimate if not set
       Vector3d r0 = Vector3d.zero;
       Vector3d v0 = Vector3d.zero;
@@ -1257,141 +1276,31 @@ namespace HopperGuidance
       int vfaxes = 0;
       // Intermediate positions and velocities
       List<SolveTarget> targets = new List<SolveTarget>();
-      Vector3d c;
-      double d;
       float t = -1;
-      for(int i=0;i<args.Length;i++)
+
+      foreach(var arg in args)
       {
-        char [] delim={'='};
-        char [] colon={':'};
-        if (args[i] == "--correct") {
-          correct = true;
-          continue;
+        if (arg.Key=="r0")
+          r0 = HGUtils.ToVector3d(arg.Value);
+        if (arg.Key=="v0")
+          v0 = HGUtils.ToVector3d(arg.Value);
+        if (arg.Key=="rf") {
+          rf = HGUtils.ToVector3d(arg.Value);
+          rfaxes = SolveTarget.X | SolveTarget.Y | SolveTarget.Z;
         }
-        var parts = args[i].Split(delim,2);
-        if (parts.Length != 2)
-          continue;
-        string k = parts[0];
-        string v = parts[1];
-        if (v.StartsWith("[")) {
-          string v1,v2;
-          t = -1;
-          if (v.Contains(":"))
-          {
-            v1 = v.Replace("[","").Replace("]","").Split(colon,2)[0];
-            v2 = v.Replace("[","").Replace("]","").Split(colon,2)[1];
-            t = (float)Convert.ToDouble(v2);
-          }
-          else
-          {
-            v1 = v.Replace("[","").Replace("]","");
-          }
-          double x=0,y=0,z=0;
-          int axes = 0;
-          string sx = v1.Split(',')[0];
-          string sy = v1.Split(',')[1];
-          string sz = v1.Split(',')[2];
-          if ((sx != "")&&(sx != "*"))
-          {
-            axes = axes | SolveTarget.X;
-            x = Convert.ToDouble(sx);
-          }
-          if ((sy != "")&&(sy != "*"))
-          {
-            axes = axes | SolveTarget.Y;
-            y = Convert.ToDouble(sy);
-          }
-          if ((sz != "")&&(sz != "*"))
-          {
-            axes = axes | SolveTarget.Z;
-            z = Convert.ToDouble(sz);
-          }
-          c = new Vector3d(x,y,z);
-          if (k=="r0")
-            r0 = c;
-          else if (k=="v0")
-            v0 = c;
-          else if (k=="rf")
-          {
-            rf = c;
-            rfaxes = axes;
-          }
-          else if (k=="vf")
-          {
-           vf = c;
-           vfaxes = axes;
-          }
-          else if (k=="target")
-          {
-            SolveTarget tgt = new SolveTarget();
-            tgt.r = c;
-            tgt.raxes = axes;
-            tgt.vaxes = 0;
-            tgt.t = t;
-            targets.Add(tgt);
-          }
-          else
-          {
-            System.Console.Error.WriteLine("No such parameter name: "+k);
-            return 1;
-          }
-        } else if (v.StartsWith("T")||v.StartsWith("F"))
+        if (arg.Key=="vf") {
+          vf = HGUtils.ToVector3d(arg.Value);
+          vfaxes = SolveTarget.X | SolveTarget.Y | SolveTarget.Z;
+        }
+        // TODO: Handle : to specify time
+        if (arg.Key=="target")
         {
-          bool flag = v.StartsWith("T")?true:false;
-          if (k=="full")
-            solver.full = flag; // full search instead of golden search
-          else
-          {
-            System.Console.Error.WriteLine("No such parameter name: "+k);
-            return 1;
-          }
-        } else {
-          d = Convert.ToDouble(v);
-          if (k=="N")
-            {} // ignore
-          else if (k=="maxThrustsBetweenTargets")
-            solver.maxThrustsBetweenTargets = (int)d;
-          else if (k=="minDurationPerThrust")
-            solver.minDurationPerThrust = d;
-          else if (k=="amin")
-            solver.amin = d;
-          else if (k=="amax")
-            solver.amax = d;
-          else if (k=="g")
-            solver.g = d;
-          else if (k=="minDescentAngle")
-            solver.minDescentAngle = d;
-          else if (k=="tol")
-            solver.tol = d;
-          else if (k=="vmax")
-            solver.vmax = d;
-          else if (k=="Tmin")
-            solver.Tmin = d;
-          else if (k=="Tmax")
-            solver.Tmax = d;
-          else if (k=="TstartMin")
-            solver.TstartMin = d;
-          else if (k=="TstartMax")
-            solver.TstartMax = d;
-          else if (k=="maxLandingThrustAngle")
-            solver.maxLandingThrustAngle = d;
-          else if (k=="maxThrustAngle")
-            solver.maxThrustAngle = d;
-          else if (k=="timePenalty")
-            solver.timePenalty = d;
-          else if (k=="extraTime")
-            solver.extraTime = (float)d;
-          else if (k=="maxChecks")
-            solver.maxChecks = (int)d;
-          else if (k=="checkGapStep")
-            solver.checkGapStep = d;
-          else if (k=="extendTime")
-            solver.extendTime = (float)d;
-          else
-          {
-            System.Console.Error.WriteLine("No such parameter name: "+k);
-            return(1);
-          }
+          SolveTarget tgt = new SolveTarget();
+          tgt.r = HGUtils.ToVector3d(arg.Value);
+          tgt.raxes = SolveTarget.X | SolveTarget.Y | SolveTarget.Z;
+          tgt.vaxes = 0;
+          tgt.t = t;
+          targets.Add(tgt);
         }
       }
 
@@ -1411,50 +1320,13 @@ namespace HopperGuidance
         if (targets.Count == 0)
         {
           System.Console.Error.WriteLine("Must set targets with target= or set rf= and/or vf=");
-          return(1);
+          return false;
         }
       }
 
-      Trajectory traj = new Trajectory();
       // targets gets times filled in if set to -1
-      SolveResult result = MultiPartSolve(ref solver, ref traj, r0, v0, ref targets, (float)solver.g, solver.extendTime, correct);
-
-      if (result.isSolved())
-      {
-        List<string> comments = new List<string>();
-        comments.Add(solver.DumpString());
-        comments.Add(result.DumpString());
-        // Thrusts
-        List<float> thrust_times = new List<float>();
-        for( int i=0; i<result.thrusts.Length; i++)
-          thrust_times.Add(result.thrusts[i].t);
-        comments.Add("thrust_times="+String.Join(",",thrust_times));
-        if( result.checktimes != null )
-          comments.Add("check_times="+String.Join(",",result.checktimes));
-        List<double> sln_Ts = new List<double>();
-        List<double> sln_fuels = new List<double>();
-        foreach(var sln in result.solutions)
-        {
-          sln_Ts.Add(sln.T);
-          sln_fuels.Add(sln.fuel);
-        }
-        comments.Add("solution_time="+String.Join(",",sln_Ts));
-        comments.Add("solution_fuel="+String.Join(",",sln_fuels));
-      
-        traj.Write(null, comments);
-        System.Console.Error.WriteLine(result.DumpString());
-        return(0);
-      }
-      return(1);
-    }
-    static int Main(string[] args)
-    {
-      if (args.Length == 0) {
-        System.Console.Error.WriteLine("usage: Solve.exe [--correct] k=v ... - set of key=value pairs from r0,v0,rf,vf,Tmin,Tmax,amin,amax,g,minDescentAngle,tol,vmax,ir,iv which also have defaults (ir,iv are intermediates which be specified multiple times)");
-        return(1);
-      } else {
-        return RunTest(args);
-      }
+      result = MainProg.MultiPartSolve(ref solver, ref traj, r0, v0, ref targets, (float)solver.g, solver.extendTime, correct);
+      return result.isSolved();
     }
   }  
 }
