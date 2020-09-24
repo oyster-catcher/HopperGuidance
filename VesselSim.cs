@@ -26,8 +26,9 @@ namespace HopperGuidance
         v = v + g*dt;
 
         // Control loop
-        controller.GetControlOutputs(traj, r, v, g, (float)dt, out dr, out dv, out da, out throttle, out thrustV);
-        tgtWriter.WriteLine("{0:F2} {1:F2} {2:F2} {3:F2} {4:F2} {5:F2} {6:F2} {7:F2} {8:F2} {9:F2} 0",t,dr.x,dr.y,dr.z,dv.x,dv.y,dv.z,da.x,da.y,da.z);
+        float att_err;
+        controller.GetControlOutputs(traj, r, v, g, (float)dt, out dr, out dv, out da, out throttle, out thrustV,out att_err);
+        tgtWriter.WriteLine("{0:F2} {1:F2} {2:F2} {3:F2} {4:F2} {5:F2} {6:F2} {7:F2} {8:F2} {9:F2} {10:F2}",t,dr.x,dr.y,dr.z,dv.x,dv.y,dv.z,da.x,da.y,da.z,att_err);
         //System.Console.WriteLine("throttle="+throttle+" thrustV="+thrustV);
         //
         // Make engine thrust have effect

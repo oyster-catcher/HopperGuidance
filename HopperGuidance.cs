@@ -67,6 +67,7 @@ namespace HopperGuidance
         [UI_FloatRange(minValue = 0.1f, maxValue = 5, stepIncrement = 0.1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Touchdown speed", guiFormat = "F0", isPersistant = false, guiUnits = "m/s")]
         float touchDownSpeed = 2.5f;
+        float finalDescentHeight = 20;
 
         // Specials for Realism Overhaul
         List<ModuleEngines> allEngines = new List<ModuleEngines>();
@@ -100,7 +101,6 @@ namespace HopperGuidance
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust angle", guiFormat = "F1", isPersistant = true, guiUnits="°")]
         float maxThrustAngle = 45f; // Max. thrust angle from vertical
         float setMaxThrustAngle;
-        float idleAngle = 90.0f;
 
         [UI_FloatRange(minValue = 0.01f, maxValue = 0.5f, stepIncrement = 0.01f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Correction factor", guiFormat = "F2", isPersistant = true)]
@@ -669,7 +669,9 @@ namespace HopperGuidance
           _startTime = Time.time;
           double amin = _minThrust/vessel.totalMass;
           double amax = _maxThrust/vessel.totalMass;
-          controller = new Controller(corrFactor,ki1,0,accelFactor,ki2,kd2,(float)amax,yMult);
+          controller = new Controller(corrFactor,ki1,0,accelFactor,ki2,kd2,yMult,(float)amin,(float)amax,maxThrustAngle);
+          controller.finalDescentHeight = (float)(finalDescentHeight - lowestY);
+
           if( amin > amax*0.95 )
           {
             Log("Engine doesn't appear to be throttleable. This makes precision guidance impossible", true);
@@ -965,22 +967,41 @@ namespace HopperGuidance
           Vector3 tr = _transform.InverseTransformPoint(r);
           Vector3 tv = _transform.InverseTransformVector(v);
           float g = (float)FlightGlobals.getGeeForceAtPosition(r).magnitude;
+          // Update controller vessel parameters
           ComputeMinMaxThrust(out _minThrust,out _maxThrust);
           controller.amax = (float)(_maxThrust/vessel.totalMass);
           controller.amin = (float)(_minThrust/vessel.totalMass);
+          controller.maxThrustAngle = maxThrustAngle;
           Vector3d dr, dv, da, thrustV;
+          float att_err;
           double throttle;
-          controller.GetControlOutputs(_traj, tr, tv, new Vector3d(0,-FlightGlobals.getGeeForceAtPosition(r).magnitude,0), Time.deltaTime, out dr, out dv, out da, out throttle, out thrustV);
+          controller.GetControlOutputs(_traj, tr, tv, new Vector3d(0,-FlightGlobals.getGeeForceAtPosition(r).magnitude,0), Time.deltaTime, out dr, out dv, out da, out throttle, out thrustV, out att_err);
 
           thrustV = _transform.TransformVector(thrustV); // transform back to world co-ordinates
           vessel.Autopilot.SAS.lockedMode = false;
           vessel.Autopilot.SAS.SetTargetOrientation(thrustV,false);
           state.mainThrottle = (float)throttle;
 
-          // Uses transformed positions and vectors
-          // sets throttle and desired attitude based on targets
-          // F is the inital force (acceleration) vector
-          //AutopilotStepToTarget(state, tr, tv, dr, dv, da, g, desired_t, _traj.T, _result.Tstart);
+          // Open log files
+          if ((_vesselWriter == null) && (_logging))
+          {
+            _vesselWriter = new System.IO.StreamWriter(_vesselLogFilename);
+            _vesselWriter.WriteLine("time x y z vx vy vz ax ay az att_err amin amax");
+            _tgtWriter = new System.IO.StreamWriter(_tgtLogFilename);
+            _tgtWriter.WriteLine("time x y z vx vy vz ax ay az att_err amin amax");
+          }
+
+          // Logging
+          double tRel = Time.time - _startTime;
+          if ((_logging) && (tRel >= last_t+log_interval))
+          {
+            LogData(_tgtWriter, tRel, dr, dv, da, 0, solver.amin, solver.amax);
+            double thrustProp = 0;
+            if ((_maxThrust > 0) && (thrustV.magnitude > 0))
+              thrustProp = (controller.amax*GetCurrentThrust())/(thrustV.magnitude*_maxThrust);
+            LogData(_vesselWriter, tRel, tr, tv, thrustV*thrustProp, att_err, controller.amin, controller.amax);
+            last_t = tRel;
+          }
         }
 
         public override void OnUpdate()
@@ -1084,10 +1105,11 @@ namespace HopperGuidance
             EnableLandAtTarget();
           if (resetPID)
           {
-            ComputeMinMaxThrust(out _minThrust,out _maxThrust); // This might be including RCS (i.e. non main Throttle)
-            double amax = _maxThrust/vessel.totalMass;
+            //ComputeMinMaxThrust(out _minThrust,out _maxThrust); // This might be including RCS (i.e. non main Throttle)
+            //double amax = _maxThrust/vessel.totalMass;
             //TODO: Use new functions in Controller()
             //_pid3d.Init(corrFactor,ki1,0,accelFactor,ki2,kd2,maxV,(float)amax,yMult);
+            controller.ResetPIDs(corrFactor,ki1,0,accelFactor,ki2,kd2);
           }
           if ((!_logging) && (_vesselWriter != null))
           {

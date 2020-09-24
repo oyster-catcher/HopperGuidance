@@ -10,7 +10,6 @@ namespace HopperGuidance
   {
     // Parameters
     public PID3d _pid3d = new PID3d();
-    public float minThrust = 1;
     public float maxThrustAngle = 25;
     public float idleAngle = 90;
     public float amin = 0;
@@ -24,7 +23,7 @@ namespace HopperGuidance
     public Vector3d currentThrustV = Vector3d.zero;
 
 
-    public Controller(float kp1=1, float ki1=0, float kd1=0, float kp2=1, float ki2=0, float kd2=0, float amax=1000, float ymult=2)
+    public Controller(float kp1=1, float ki1=0, float kd1=0, float kp2=1, float ki2=0, float kd2=0, float ymult=2, float a_amin=0, float a_amax=30, float a_maxThrustAngle=45)
     {
       _pid3d.kp1 = kp1;
       _pid3d.ki1 = ki1;
@@ -34,10 +33,24 @@ namespace HopperGuidance
       _pid3d.kd2 = kd2;
       _pid3d.amax = amax;
       _pid3d.ymult = ymult;
+      amin = a_amin;
+      amax = a_amax;
+      maxThrustAngle = a_maxThrustAngle;
       _pid3d.Reset();
     }
 
-    double MinHeightAtMinThrust(double y, double vy,double amin,double g)
+    public void ResetPIDs(float kp1, float ki1, float kd1, float kp2, float ki2, float kd2)
+    {
+      _pid3d.kp1 = kp1;
+      _pid3d.ki1 = ki1;
+      _pid3d.kd1 = kd1;
+      _pid3d.kp2 = kp2;
+      _pid3d.ki2 = ki2;
+      _pid3d.kd2 = kd2;
+      _pid3d.Reset();
+    }
+
+    public double MinHeightAtMinThrust(double y, double vy,double g)
     {
       double minHeight = 0;
       if (amin < g)
@@ -95,18 +108,18 @@ namespace HopperGuidance
             Vector3d tatt, Vector3d tr, Vector3d tv,
             Vector3d dr, Vector3d dv, Vector3d da,
             Vector3d g, float deltaTime,
-            out double throttle, out Vector3d thrustV)
+            out double throttle, out Vector3d thrustV, out float att_err)
     {
       //ComputeMinMaxThrust(out _minThrust,out _maxThrust);
       //float amax = (float)(maxThrust/mass);
       //float amin = (float)(minThrust/mass);
       // In Realism Overhaul where engines have limited throttle keep throttle >= 0.01 once
       // engines have been ignited and engines have non 0% minThrust (suggests Realism Overhaul)
-      float minThrottle = (ignited && (minThrust>0)) ? 0.01f : 0;
+      float minThrottle = (ignited && (amin>0)) ? 0.01f : 0;
       throttle = minThrottle;
 
       Vector3d da2 = Vector3d.zero; // actual thrust vector
-      float att_err = 0;
+      att_err = 0;
       if (ignited)
       {
         Vector3d unlimda;
@@ -115,7 +128,7 @@ namespace HopperGuidance
         // Decide to shutdown engines for final touch down? (within 3 secs)
         // Criteria should be if amin maintained with current engines we could not reach next target
         // height
-        double minHeight  = MinHeightAtMinThrust(tr.y,tv.y,amin,g.magnitude);
+        double minHeight  = MinHeightAtMinThrust(tr.y,tv.y,g.magnitude);
         // Criteria for shutting down engines
         // - we could not reach ground at minimum thrust (would ascend)
         // - engines not already shutdown
@@ -197,7 +210,7 @@ namespace HopperGuidance
                     out Vector3d dr,
                     out Vector3d dv,
                     out Vector3d da,
-                    out double throttle, out Vector3d thrustV)
+                    out double throttle, out Vector3d thrustV, out float att_err)
     {
         Vector3d att = new Vector3d(0,1,0);
         double desired_t; // closest time in trajectory (desired)
@@ -211,7 +224,7 @@ namespace HopperGuidance
         }
         else
           traj.FindClosest(r, v, out dr, out dv, out da, out desired_t, 0.5f, 0.5f);
-        AutopilotStepToTarget(att, r, v, dr, dv, da, g, deltaTime, out throttle, out thrustV);
+        AutopilotStepToTarget(att, r, v, dr, dv, da, g, deltaTime, out throttle, out thrustV, out att_err);
     }
   }
 }
