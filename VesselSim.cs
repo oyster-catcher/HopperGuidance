@@ -16,7 +16,6 @@ namespace HopperGuidance
       var tgtWriter = new System.IO.StreamWriter(tgtLogFilename);
       tgtWriter.WriteLine("time x y z vx vy vz ax ay az att_err");
 
-      Vector3d up = new Vector3d(0,1,0);
       System.Console.WriteLine("time x y z vx vy vz ax ay az att_err");
       while(( t < maxT ) && (r.y > 0))
       {
@@ -27,10 +26,9 @@ namespace HopperGuidance
 
         // Control loop
         float att_err;
-        controller.GetControlOutputs(traj, r, v, g, (float)dt, out dr, out dv, out da, out throttle, out thrustV,out att_err);
+        Vector3d att = new Vector3d(0,1,0); // TODO: Fake attitude
+        controller.GetControlOutputs(traj, r, v, att, g, (float)t, out dr, out dv, out da, out throttle, out thrustV,out att_err);
         tgtWriter.WriteLine("{0:F2} {1:F2} {2:F2} {3:F2} {4:F2} {5:F2} {6:F2} {7:F2} {8:F2} {9:F2} {10:F2}",t,dr.x,dr.y,dr.z,dv.x,dv.y,dv.z,da.x,da.y,da.z,att_err);
-        //System.Console.WriteLine("throttle="+throttle+" thrustV="+thrustV);
-        //
         // Make engine thrust have effect
         v = v + thrustV*dt;
 
@@ -85,12 +83,16 @@ namespace HopperGuidance
       }
     }
 
-    static bool Set(string k, string v, ref double dt, ref double maxT)
+    static bool Set(string k, string v, ref double dt, ref double maxT, ref Vector3d r0offset, ref Vector3d v0offset)
     {
       if (k=="dt") {
         dt = Convert.ToDouble(v);
       } else if (k=="maxT") {
         maxT = Convert.ToDouble(v);
+      } else if (k=="r0offset") {
+        r0offset = HGUtils.ToVector3d(v);
+      } else if (k=="v0offset") {
+        v0offset = HGUtils.ToVector3d(v);
       } else
         return false;
       return true;
@@ -101,9 +103,9 @@ namespace HopperGuidance
       if (mainargs.Length == 0)
       {
         System.Console.Error.WriteLine("usage: VesselSim.exe  - computes a solution given initial conditions like SolveText.exe but also simulates a vessel like running inside KSP");
-        System.Console.Error.WriteLine("vessel options:  drag=<float>");
-        System.Console.Error.WriteLine("                 start-up-time=<float>");
-        System.Console.Error.WriteLine("                 dt=<float>");
+        System.Console.Error.WriteLine("vessel options:  r0offset=<float>");
+        System.Console.Error.WriteLine("                 v0offset=<float>");
+        System.Console.Error.WriteLine("                 maxT=<float>");
         return 1;
       }
       var solver = new Solve();
@@ -115,6 +117,8 @@ namespace HopperGuidance
       Vector3d v0 = Vector3d.zero;
       Vector3d rf = Vector3d.zero;
       Vector3d vf = Vector3d.zero;
+      Vector3d r0offset = Vector3d.zero; // move away from compute solution at start
+      Vector3d v0offset = Vector3d.zero;
       int rfaxes = 0;
       int vfaxes = 0;
       double dt = 0.1;
@@ -124,11 +128,15 @@ namespace HopperGuidance
       foreach(var arg in HGUtils.ToKeyValuePairs(mainargs))
       {
         bool used = solver.Set(arg.Item1, arg.Item2);
-        used = used || controller.Set(arg.Item1, arg.Item2);
-        used = used || SetTargets(arg.Item1, arg.Item2, ref r0, ref v0, ref rf, ref vf, ref rfaxes, ref vfaxes, ref targets, ref correct);
-        used = used || Set(arg.Item1, arg.Item2, ref dt, ref maxT);
+        if (controller.Set(arg.Item1, arg.Item2))
+          used = true;
+        if (SetTargets(arg.Item1, arg.Item2, ref r0, ref v0, ref rf, ref vf, ref rfaxes, ref vfaxes, ref targets, ref correct))
+          used = true;
+        if (Set(arg.Item1, arg.Item2, ref dt, ref maxT, ref r0offset, ref v0offset))
+          used = true;
         if (!used) {
           throw new System.ArgumentException("Unexpected argument: "+arg.Item1+"="+arg.Item2);
+          return 1;
         }
       }
       SetFinalTarget(rf, vf, rfaxes, vfaxes, ref targets);
@@ -145,7 +153,9 @@ namespace HopperGuidance
         traj.Write("solution.dat", comments);
         if (traj.T > maxT)
           maxT = traj.T;
-        Simulate(controller, ref traj, traj.r[0], traj.v[0], new Vector3d(0,-solver.g,0), dt, maxT);
+        r0 = r0 + r0offset;
+        v0 = v0 + v0offset;
+        Simulate(controller, ref traj, r0, v0, new Vector3d(0,-solver.g,0), dt, maxT);
       }
       return 0;
     }

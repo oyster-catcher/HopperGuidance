@@ -15,10 +15,13 @@ namespace HopperGuidance
     public float ymult;
     PIDclamp pid1x,pid1y,pid1z;
     PIDclamp pid2x,pid2y,pid2z;
+    float last_t;
+    System.IO.StreamWriter f = null;
 
     public PID3d(float a_kp1=1, float a_ki1=0, float a_kd1=0,
                  float a_kp2=1, float a_ki2=0, float a_kd2=0,
-                 float a_vmax=1000, float a_amax=100, float a_ymult=1.0f)
+                 float a_vmax=1000, float a_amax=100, float a_ymult=1.0f,
+                 string logFilename="")
     {
       // Probably set I1=0, D1=0, I2=0, D2=0
       // P1 determines proportion of position error to velocity 1, to close 1m as 1m/s
@@ -35,7 +38,20 @@ namespace HopperGuidance
       vmax = a_vmax;
       amax = a_amax;
       ymult = a_ymult;
+      last_t = 0;
+      SetLogFilename(logFilename);
       Reset();
+    }
+
+    public void SetLogFilename(string logFilename)
+    {
+      if (f != null)
+        f.Close();
+      if (logFilename != "")
+      {
+        f = new System.IO.StreamWriter(logFilename);
+        f.WriteLine("time x_err y_err z_err vx_err vy_err vz_err ax ay az");
+      }
     }
 
     public void Reset()
@@ -49,9 +65,11 @@ namespace HopperGuidance
       pid2z = new PIDclamp("pid2z",kp2,ki2,kd2,amax);
     }
 
-    public Vector3d Update(Vector3d r, Vector3d v, Vector3d dr, Vector3d dv, float dt)
+    public Vector3d Update(Vector3d r, Vector3d v, Vector3d dr, Vector3d dv, float t)
     {
       Vector3d tgt_v1;
+      float dt = t - last_t;
+      last_t = t;
 
       // Errors
       Vector3d err_r = dr - r;
@@ -68,7 +86,9 @@ namespace HopperGuidance
       Vector3d a = new Vector3d(pid2x.Update(tgt_v1.x, dt),
                                 pid2y.Update(tgt_v1.y, dt),
                                 pid2z.Update(tgt_v1.z, dt));
-      //Debug.Log("err_r="+(Vector3)err_r+" err_v="+(Vector3)err_v+" tgt_v="+(Vector3d)tgt_v1+" a="+(Vector3)a);
+
+      if (f != null)
+        f.WriteLine("{0:F3} {1:F2} {2:F2} {3:F2} {4:F2} {5:F2} {6:F2} {7:F2} {8:F2} {9:F2}",t,err_r.x,err_r.y,err_r.z,err_v.x,err_v.y,err_v.z,a.x,a.y,a.z);
 
       return a;
     }

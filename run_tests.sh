@@ -6,7 +6,6 @@ for ang in 1 10 20 30;
   do mono ./SolveTest.exe r0=[200,160,0] v0=[0,-10,0] Tmin=1 Tmax=30 g=9.8 amin=0 amax=20 minDescentAngle=$ang rf=[0,0,0] vf=[0,0,0] maxThrustsBetweenTargets=4 > test1.minDescentAngle=$ang.dat
 done
 ./plotXYZ.py --showchecks --square test1.minDescentAngle={1,10,20,30}.dat
-exit
 
 # Test maximum velocity
 for vmax in 40 60 80 100 150;
@@ -27,12 +26,6 @@ done
 ./plotXYZ.py --square test4.*.dat
 
 # Test min thrust
-for amin in 0 2 4 6 8;
-  do mono ./SolveTest.exe r0=[400,400,0] v0=[40,10,0] Tmin=1 Tmax=300 g=9.8 amin=$amin amax=15 maxLandingThrustAngle=30 rf=[0,0,0] vf=[0,0,0] > test5.amin=$amin.dat
-done
-./plotXYZ.py --square test5.*.dat
-
-# Test multiple targets
 for amin in 0 2 4 6 8;
   do mono ./SolveTest.exe r0=[400,400,0] v0=[40,10,0] Tmin=1 Tmax=300 g=9.8 amin=$amin amax=15 maxLandingThrustAngle=30 rf=[0,0,0] vf=[0,0,0] > test5.amin=$amin.dat
 done

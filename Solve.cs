@@ -136,6 +136,8 @@ namespace HopperGuidance
     {
       if (key=="maxThrustsBetweenTargets")
         maxThrustsBetweenTargets = Convert.ToInt32(value);
+      else if (key=="minDurationPerThrust")
+        minDurationPerThrust = Convert.ToDouble(value);
       else if (key=="minDescentAngle")
          minDescentAngle = Convert.ToDouble(value);
       else if (key=="maxThrustsBetweenTargets")
@@ -144,14 +146,20 @@ namespace HopperGuidance
         amin = Convert.ToDouble(value);
       else if (key=="amax")
         amax = Convert.ToDouble(value);
+      else if (key=="vmax")
+        vmax = Convert.ToDouble(value);
       else if (key=="tol")
          tol = Convert.ToDouble(value);
+      else if (key=="Tmin")
+         Tmin = Convert.ToDouble(value);
       else if (key=="Tmax")
          Tmax = Convert.ToDouble(value);
-      else if (key=="TstartMiin")
+      else if (key=="TstartMin")
          TstartMin = Convert.ToDouble(value);
       else if (key=="TstartMax")
          TstartMax = Convert.ToDouble(value);
+      else if (key=="maxThrustAngle")
+         maxThrustAngle = Convert.ToDouble(value);
       else if (key=="maxLandingThrustAngle")
          maxLandingThrustAngle = Convert.ToDouble(value);
       else if (key=="timePenalty")
