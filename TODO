@@ -1,8 +1,10 @@
 - Show path travelled by vessel? (when logging?)
 - Get a working Visual Studio Project file
 - Make target always show above ground. Especially random on RO
-- Still hovering near ground in Falcon 9 landing, targets gets to be the high thrust descent portion rather than slow. Special code? Higher accelGain
   is this because CoG moves up because fuel is used up? could well be.
+- Add finalDescentHeight to interface?
+- Trouble touching down
+- Difficult to fly from ground upwards and descent mode is activated (use next target is below?)
 
 Thinking of the interface to this mod from another mod. Want
 - make sure target is always visible (especially bad in RO?)
