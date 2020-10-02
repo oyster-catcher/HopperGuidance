@@ -67,6 +67,10 @@ namespace HopperGuidance
         _pid3d.kd2 = (float)Convert.ToDouble(v);
       else if (k=="ymult")
         _pid3d.ymult = (float)Convert.ToDouble(v);
+      else if (k=="amin")
+        amin = (float)Convert.ToDouble(v);
+      else if (k=="amax")
+        amax = (float)Convert.ToDouble(v);
       else if (k=="maxThrustAngle")
       {
         maxThrustAngle = (float)Convert.ToDouble(v);
@@ -104,13 +108,11 @@ namespace HopperGuidance
             Vector3d tatt, Vector3d tr, Vector3d tv,
             Vector3d dr, Vector3d dv, Vector3d da,
             Vector3d g, float t,
-            out double throttle, out Vector3d thrustV, out float att_err)
+            out double throttle, out Vector3d thrustV, out float att_err, out bool shutdownEnginesNow)
     {
       float deltaTime = t - last_t;
       last_t = t;
-      //ComputeMinMaxThrust(out _minThrust,out _maxThrust);
-      //float amax = (float)(maxThrust/mass);
-      //float amin = (float)(minThrust/mass);
+      shutdownEnginesNow = false;
       // In Realism Overhaul where engines have limited throttle keep throttle >= 0.01 once
       // engines have been ignited and engines have non 0% minThrust (suggests Realism Overhaul)
       float minThrottle = (ignited && (amin>0)) ? 0.01f : 0;
@@ -129,21 +131,13 @@ namespace HopperGuidance
         double minHeight  = MinHeightAtMinThrust(tr.y,tv.y,g.magnitude);
         // Criteria for shutting down engines
         // - we could not reach ground at minimum thrust (would ascend)
-        // - engines not already shutdown
-        // - needed acceleration less than the minimum
         // - falling less than 20m/s (otherwise can decide to shutdown engines when still high and travelling fast)
         bool cant_reach_ground = (minHeight > 0) && (tv.y > -20);
 
         // Other criteria?
         // - amin > required acceleration for rest of trajectory?
         if (cant_reach_ground)
-        {
-          // Check if thrust beyond this point is higher again?
-          // TODO: Add this back in
-          //int numShutdown = ShutdownOuterEngines(unlimda.y*vessel.totalMass); // set thrust in range for desired accel
-          //if (numShutdown > 0)
-          //Log("Shutdown "+numShutdown+" engines for controlled touchdown", true);
-        }
+          shutdownEnginesNow = true;
         // Shutoff throttle if pointing in wrong direction
         float ddot = (float)Vector3d.Dot(Vector3d.Normalize(tatt),Vector3d.Normalize(da2));
         att_err = Mathf.Acos(ddot)*180/Mathf.PI;
@@ -183,9 +177,11 @@ namespace HopperGuidance
                     out Vector3d dr,
                     out Vector3d dv,
                     out Vector3d da,
-                    out double throttle, out Vector3d thrustV, out float att_err)
+                    out double throttle, out Vector3d thrustV, out float att_err,
+                    out bool shutdownEnginesNow)
     {
       double desired_t; // closest time in trajectory (desired)
+      shutdownEnginesNow = false;
       if (r.y < finalDescentHeight) // If near ground just descent vertically
       {
         desired_t = 0;
@@ -195,7 +191,7 @@ namespace HopperGuidance
       }
       else
         traj.FindClosest(r, v, out dr, out dv, out da, out desired_t, 0.5f, 0.5f);
-      AutopilotStepToTarget(att, r, v, dr, dv, da, g, t, out throttle, out thrustV, out att_err);
+      AutopilotStepToTarget(att, r, v, dr, dv, da, g, t, out throttle, out thrustV, out att_err, out shutdownEnginesNow);
     }
   }
 }
