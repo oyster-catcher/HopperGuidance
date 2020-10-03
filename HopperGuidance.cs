@@ -58,7 +58,7 @@ namespace HopperGuidance
         double log_interval = 0.05f; // Interval between logging
         System.IO.StreamWriter _tgtWriter = null; // Actual vessel
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
-        float extendTime = 0; // duration to extend trajectory to slowly descent to touch down and below at touchDownSpeed
+        float extendTime = 0; // duration to extend trajectory to slowly descent to touch down and below at touchdownSpeed
         bool pickingPositionTarget = false;
         string _vesselLogFilename = "vessel.dat";
         string _tgtLogFilename = "target.dat";
@@ -66,8 +66,11 @@ namespace HopperGuidance
 
         [UI_FloatRange(minValue = 0.1f, maxValue = 5, stepIncrement = 0.1f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Touchdown speed", guiFormat = "F0", isPersistant = false, guiUnits = "m/s")]
-        float touchDownSpeed = 2.5f;
-        float finalDescentHeight = 20;
+        float touchdownSpeed = 2.5f;
+
+        [UI_FloatRange(minValue = 0, maxValue = 100, stepIncrement = 1)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Final descent distance", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
+        float finalDescentDistance = 10;
 
         // Specials for Realism Overhaul
         List<ModuleEngines> allEngines = new List<ModuleEngines>();
@@ -677,7 +680,7 @@ namespace HopperGuidance
           Vector3d r0 = vessel.GetWorldPos3D();
           Vector3d v0 = vessel.GetSrfVelocity();
           Vector3d g = FlightGlobals.getGeeForceAtPosition(r0);
-          Vector3d vf = new Vector3d(0,-touchDownSpeed,0);
+          Vector3d vf = new Vector3d(0,-touchdownSpeed,0);
 
           ComputeMinMaxThrust(out _minThrust,out _maxThrust, true);
           if( _maxThrust == 0 )
@@ -691,7 +694,8 @@ namespace HopperGuidance
           double amin = _minThrust/vessel.totalMass;
           double amax = _maxThrust/vessel.totalMass;
           controller = new Controller(corrFactor,ki1,kd1,accelFactor,ki2,kd2,yMult,(float)amin,(float)amax,maxThrustAngle);
-          controller.finalDescentHeight = (float)(finalDescentHeight - lowestY);
+          controller.touchdownSpeed = touchdownSpeed;
+          controller.finalDescentDistance = finalDescentDistance;
           controller.throttleTimeConstant = 0.1f;
 
           if( amin > amax*0.95 )

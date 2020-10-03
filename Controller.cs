@@ -15,7 +15,7 @@ namespace HopperGuidance
     public float amin = 0;
     public float amax = 30;
     public float touchdownSpeed = 1;
-    public float finalDescentHeight = 0; // Ignore trajectory under this height and descent to ground
+    public float finalDescentDistance = 0; // Ignore trajectory under this distance to final landing spot
     public double throttleTimeConstant = 0; // Instanteous
 
     // Live values
@@ -75,8 +75,8 @@ namespace HopperGuidance
       {
         maxThrustAngle = (float)Convert.ToDouble(v);
       }
-      else if (k=="finalDescentHeight")
-        finalDescentHeight = (float)Convert.ToDouble(v);
+      else if (k=="finalDescentDistance")
+        finalDescentDistance = (float)Convert.ToDouble(v);
       else if (k=="touchdownSpeed")
         touchdownSpeed = (float)Convert.ToDouble(v);
       else if (k=="throttleTimeConstant")
@@ -182,15 +182,24 @@ namespace HopperGuidance
     {
       double desired_t; // closest time in trajectory (desired)
       shutdownEnginesNow = false;
-      if (r.y < finalDescentHeight) // If near ground just descent vertically
+      traj.FindClosest(r, v, out dr, out dv, out da, out desired_t, 0.5f, 0.5f);
+      double distToLast = (traj.r[traj.Length()-1] - r).magnitude;
+      //System.Console.Error.WriteLine("r="+r+" distToLast="+distToLast);
+      Vector3d touchdownv = new Vector3d(0,-touchdownSpeed,0);
+      if (distToLast < finalDescentDistance) // If near ground just descent vertically
       {
-        desired_t = 0;
-        dr = r;
-        dv = v;
-        da = -g - new Vector3d(v.x*0.4,v.y*0.4,v.z*0.4);
+        // TODO: Assumes touching down in ground downwards
+        double h = r.y - traj.r[traj.Length()-1].y;
+        // p=0 when h==distToLast
+        // p=1 when h<=0.5*distToLast
+        float p = Mathf.Clamp((float)(h/finalDescentDistance),0,1);
+        p = Mathf.Clamp(1-2*(p-0.5f),0,1);
+        System.Console.Error.WriteLine("h="+h+" p="+p+" finalDescentDistance="+finalDescentDistance);
+        // Interpolate between computed trajectory and touchdown speed for smooth transition
+        r = dr*(1-p) + r*p;
+        dv = dv*(1-p) + touchdownv*p;
+        da = da*(1-p);
       }
-      else
-        traj.FindClosest(r, v, out dr, out dv, out da, out desired_t, 0.5f, 0.5f);
       AutopilotStepToTarget(att, r, v, dr, dv, da, g, t, out throttle, out thrustV, out att_err, out shutdownEnginesNow);
     }
   }
