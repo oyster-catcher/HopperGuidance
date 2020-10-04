@@ -20,8 +20,8 @@ all: install SolveTest.exe VesselSim.exe HopperGuidance-${VER}.zip
 
 install: GameData/HopperGuidance/Plugins/HopperGuidance.dll
 	cp -r GameData ${KSP}
-#	cp -r GameData ~/KSP_Cutdown
-#	cp -r GameData ~/KSP_RO
+	cp -r GameData ~/KSP_Cutdown
+	cp -r GameData ~/KSP_RO
 
 HopperGuidance-${VER}.zip: GameData/HopperGuidance/Plugins/HopperGuidance.dll
 	rm -f HopperGuidance-${VER}.zip
@@ -46,7 +46,7 @@ VesselSim.exe : VesselSim.cs HGTypes.cs HGUtils.cs Solve.cs Trajectory.cs Contro
 Spin.exe : Spin.cs Quaternion.cs
 	${MCS} ${ASSEMBLYOPTS} ${SDKOPTS} $^ -out:$@
 
-Vessel.exe : Vessel.cs Quaternion.cs
+RotBody.exe : RotBody.cs Quaternion.cs
 	${MCS} ${ASSEMBLYOPTS} ${SDKOPTS} $^ -out:$@
 
 test:
