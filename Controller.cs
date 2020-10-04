@@ -16,29 +16,45 @@ namespace HopperGuidance
     public float amax = 30;
     public float touchdownSpeed = 1;
     public float finalDescentDistance = 0; // Ignore trajectory under this distance to final landing spot
-    public double throttleTimeConstant = 0; // Instanteous
+    public double attitudeTimeConstant = 0; // Instanteous - speed of attitude change
+    public double throttleTimeConstant = 0; // Instanteous - speed of throttle change
 
     // Live values
     public bool ignited = false;
-    public Vector3d currentThrustV = Vector3d.zero;
+    public Vector3d currentThrustDir = Vector3d.zero;
+    public double currentThrustMag = 0;
     float last_t = 0;
+    bool finalDescent = false;
 
-    public Controller(float kp1=1, float ki1=0, float kd1=0, float kp2=1, float ki2=0, float kd2=0, float ymult=2, float a_amin=0, float a_amax=30, float a_maxThrustAngle=45, string logFilename="")
+    public Controller(float kp1=1, float ki1=0, float kd1=0, float kp2=1, float ki2=0, float kd2=0,
+                      float kp1y=1, float ki1y=0, float kd1y=0,
+                      float kp2y=1, float ki2y=0, float kd2y=0,
+                      float a_amin=0, float a_amax=30, float a_maxThrustAngle=45, string logFilename="")
     {
-      _pid3d = new PID3d(kp1,ki1,kd1,kp2,ki2,kd2,1000,amax,ymult,logFilename);
+      _pid3d = new PID3d(kp1,ki1,kd1,kp2,ki2,kd2,kp1y,ki1y,kd1y,kp2y,ki2y,kd2y,1000,amax,logFilename);
       amin = a_amin;
       amax = a_amax;
       maxThrustAngle = a_maxThrustAngle;
+      ignited = false;
+      finalDescent = false;
     }
 
-    public void ResetPIDs(float kp1, float ki1, float kd1, float kp2, float ki2, float kd2)
+    public void ResetPIDs(float kp1, float ki1, float kd1, float kp2, float ki2, float kd2,
+                          float kp1y, float ki1y, float kd1y,
+                          float kp2y, float ki2y, float kd2y)
     {
       _pid3d.kp1 = kp1;
       _pid3d.ki1 = ki1;
       _pid3d.kd1 = kd1;
+      _pid3d.kp1y = kp1y;
+      _pid3d.ki1y = ki1y;
+      _pid3d.kd1y = kd1y;
       _pid3d.kp2 = kp2;
       _pid3d.ki2 = ki2;
       _pid3d.kd2 = kd2;
+      _pid3d.kp2y = kp2y;
+      _pid3d.ki2y = ki2y;
+      _pid3d.kd2y = kd2y;
       _pid3d.Reset();
     }
 
@@ -65,8 +81,19 @@ namespace HopperGuidance
         _pid3d.ki2 = (float)Convert.ToDouble(v);
       else if (k=="kd2")
         _pid3d.kd2 = (float)Convert.ToDouble(v);
-      else if (k=="ymult")
-        _pid3d.ymult = (float)Convert.ToDouble(v);
+      //TODO: Add y PIDs params
+      else if (k=="kp1y")
+        _pid3d.kp1y = (float)Convert.ToDouble(v);
+      else if (k=="ki1y")
+        _pid3d.ki1y = (float)Convert.ToDouble(v);
+      else if (k=="kd1y")
+        _pid3d.kd1y = (float)Convert.ToDouble(v);
+      else if (k=="kp2y")
+        _pid3d.kp2y = (float)Convert.ToDouble(v);
+      else if (k=="ki2y")
+        _pid3d.kp2y = (float)Convert.ToDouble(v);
+      else if (k=="kd2y")
+        _pid3d.kp2y = (float)Convert.ToDouble(v);
       else if (k=="amin")
         amin = (float)Convert.ToDouble(v);
       else if (k=="amax")
@@ -81,6 +108,8 @@ namespace HopperGuidance
         touchdownSpeed = (float)Convert.ToDouble(v);
       else if (k=="throttleTimeConstant")
         throttleTimeConstant = (float)Convert.ToDouble(v);
+      else if (k=="attitudeTimeConstant")
+        attitudeTimeConstant = (float)Convert.ToDouble(v);
       else if (k=="controllerLogFilename")
         _pid3d.SetLogFilename(v);
       else
@@ -132,7 +161,7 @@ namespace HopperGuidance
         // Criteria for shutting down engines
         // - we could not reach ground at minimum thrust (would ascend)
         // - falling less than 20m/s (otherwise can decide to shutdown engines when still high and travelling fast)
-        bool cant_reach_ground = (minHeight > 0) && (tv.y > -20);
+        bool cant_reach_ground = (minHeight > 0) && (tv.y > -10);
 
         // Other criteria?
         // - amin > required acceleration for rest of trajectory?
@@ -160,11 +189,15 @@ namespace HopperGuidance
         da2 = new Vector3d(0,0.01f,0);
 
       // Update current thrust with smoothing
-      double alpha = 1;
+      // decompose into throttle setting and direction
+      double alphaThrottle = 1, alphaAttitude = 1;
       if (throttleTimeConstant > 0)
-        alpha = 1 - Math.Exp(-deltaTime/throttleTimeConstant);
-      currentThrustV = currentThrustV*(1-alpha) + da2*alpha;
-      thrustV = currentThrustV;
+        alphaThrottle = 1 - Math.Exp(-deltaTime/throttleTimeConstant);
+      if (attitudeTimeConstant > 0)
+        alphaAttitude = 1 - Math.Exp(-deltaTime/attitudeTimeConstant);
+      currentThrustMag = currentThrustMag*(1-alphaThrottle) + da2.magnitude*alphaThrottle;
+      currentThrustDir = currentThrustDir*(1-alphaAttitude) + Vector3d.Normalize(da2)*alphaAttitude;
+      thrustV = currentThrustMag * currentThrustDir;
     }
 
 
@@ -193,14 +226,20 @@ namespace HopperGuidance
         // p=0 when h==distToLast
         // p=1 when h<=0.5*distToLast
         float p = Mathf.Clamp((float)(h/finalDescentDistance),0,1);
-        p = Mathf.Clamp(1-2*(p-0.5f),0,1);
-        System.Console.Error.WriteLine("h="+h+" p="+p+" finalDescentDistance="+finalDescentDistance);
+        // Smoothed from trajectory to touchdown from 0.5*finalDescentDistance to finalDescentDistance
+        p = Mathf.Clamp(HGUtils.LinearMap(p,0.5f,1,0,1),0,1);
         // Interpolate between computed trajectory and touchdown speed for smooth transition
-        r = dr*(1-p) + r*p;
-        dv = dv*(1-p) + touchdownv*p;
-        da = da*(1-p);
+        r = dr*p + r*(1-p);
+        dv = dv*p + touchdownv*(1-p);
+        da = da*p + (-g)*(1-p);
+        finalDescent = true;
       }
       AutopilotStepToTarget(att, r, v, dr, dv, da, g, t, out throttle, out thrustV, out att_err, out shutdownEnginesNow);
+    }
+
+    public bool IsFinalDescent()
+    {
+      return finalDescent;
     }
   }
 }

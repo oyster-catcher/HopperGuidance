@@ -162,7 +162,7 @@ namespace HopperGuidance
           double p = (j-start)/(double)(end-start);
           r[j] = r[j]  - start_r_err * (1-p) - end_r_err * p;
           v[j] = v[j]  - start_v_err * (1-p) - end_v_err * p;
-          System.Console.Error.WriteLine("Correcting "+j+" by "+(start_r_err * (1-p))+" and "+(end_r_err * p)+" to "+r[j]+" p="+p);
+          //System.Console.Error.WriteLine("Correcting "+j+" by "+(start_r_err * (1-p))+" and "+(end_r_err * p)+" to "+r[j]+" p="+p);
         }
         start = j;
         start_r_err = end_r_err;

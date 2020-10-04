@@ -1228,7 +1228,7 @@ namespace HopperGuidance
         if (Tmax < 0)
         { 
           float estT = Solve.EstimateTimeBetweenTargets(lr, lv, next_targets, (float)solver.amax, (float)solver.g, (float)solver.vmax, (float)solver.maxThrustAngle);
-          solver.Tmax = result.T + estT*1.2f;
+          solver.Tmax = result.T + estT*1.5f;
           System.Console.Error.WriteLine("Estimated Tmax="+solver.Tmax);
         }
         else

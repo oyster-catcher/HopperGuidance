@@ -75,6 +75,7 @@ namespace HopperGuidance
         // Specials for Realism Overhaul
         List<ModuleEngines> allEngines = new List<ModuleEngines>();
         List<ModuleEngines> shutdownEngines = new List<ModuleEngines>();
+        bool finalDescentLogged = false;
 
         [UI_FloatRange(minValue = 5, maxValue = 500, stepIncrement = 5)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target size", guiFormat = "F0", isPersistant = false)]
@@ -103,25 +104,34 @@ namespace HopperGuidance
         float maxThrustAngle = 45f; // Max. thrust angle from vertical
         float setMaxThrustAngle;
 
-        [UI_FloatRange(minValue = 0.01f, maxValue = 0.5f, stepIncrement = 0.01f)]
+        // This factor just affects X and Z PIDs (horizontal)
+        [UI_FloatRange(minValue = 0.1f, maxValue = 0.5f, stepIncrement = 0.01f)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Correction factor", guiFormat = "F2", isPersistant = true)]
+        // Set this down to 0.05 for large craft and up to 0.4 for very agile small craft
         float corrFactor = 0.25f; // If 1 then at 1m error aim to close a 1m/s
         float setCorrFactor;
-        // Set this down to 0.05 for large craft and up to 0.4 for very agile small craft
 
-        float yMult = 2; // Extra weight for Y to try and minimise height error over other errors
+        // Fixed values for Y PIDs (vertical)
+        // - these must be quite high otherwise we can get into hovering above landing spot
+        //   if vessel has slow too much but trajectory says high thrust required
+        float kp1y = 0.5f, ki1y = 0, kd1y = 0;
+        float kp2y = 0.6f, ki2y = 0, kd2y = 0;
 
-        float accelFactor = 0.6f; // Gain on thrust vector
+        //[UI_FloatRange(minValue = 0.01f, maxValue = 1.0f, stepIncrement = 0.01f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "Accel factor", guiFormat = "F2", isPersistant = true)]
+        //float accelFactor = 0.6f; // Gain on thrust vector
+        float corrFactorP1 = 0.15f, corrFactorP2 = 0.4f;
+        float accelFactorP1 = 0.2f, accelFactorP2 = 0.6f;
 
-        //[UI_FloatRange(minValue = 0.00f, maxValue = 0.5f, stepIncrement = 0.01f)]
-        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "kd1", guiFormat = "F2", isPersistant = true)]
+        //[UI_FloatRange(minValue = 0.00f, maxValue = 2.0f, stepIncrement = 0.1f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "kd1", guiFormat = "F1", isPersistant = true)]
         float kd1 = 0;
-        float setKd1;
+        //float setKd1;
 
-        //[UI_FloatRange(minValue = 0.00f, maxValue = 0.5f, stepIncrement = 0.01f)]
-        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "kd2", guiFormat = "F2", isPersistant = true)]
+        //[UI_FloatRange(minValue = 0.00f, maxValue = 2.0f, stepIncrement = 0.1f)]
+        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "kd2", guiFormat = "F1", isPersistant = true)]
         float kd2 = 0;
-        float setKd2;
+        //float setKd2;
 
         // Can't get any improvement by raising these coeffs from zero
         float ki1 = 0;
@@ -575,21 +585,24 @@ namespace HopperGuidance
             {
               minThrust += engine.GetEngineThrust(engine.realIsp, 0);
               maxThrust += engine.GetEngineThrust(engine.realIsp, 1);
-              if ((minThrust < desiredThrust) && (desiredThrust < maxThrust)) // good amount of thrust
-                shutdownDist = engDist.Item1 + 0.1f;
-              if (minThrust > desiredThrust)
-                shutdownDist = engDist.Item1 - 0.1f;
+              if (shutdownDist == float.MaxValue)
+              {
+                if ((minThrust < desiredThrust) && (desiredThrust < maxThrust)) // good amount of thrust
+                  shutdownDist = engDist.Item1 + 0.1f;
+                if (minThrust > desiredThrust)
+                  shutdownDist = engDist.Item1 - 0.1f;
+              }
 
               if (engDist.Item1 > shutdownDist)
               {
                 if (log)
-                  Debug.Log("[HopperGuidance] ComputeShutdownMinMaxThrust(): minThrust="+minThrust+" desiredThrust="+desiredThrust+" SHUTDOWN");
+                  Log("ComputeShutdownMinMaxThrust(): minThrust="+minThrust+" desiredThrust="+desiredThrust+" SHUTDOWN");
                 engine.Shutdown();
                 shutdown.Add(engine);
               }
               else
                 if (log)
-                  Debug.Log("[HopperGuidance] ComputeShutdownMinMaxThrust(): minThrust="+minThrust+" desiredThrust="+desiredThrust+" KEEP");
+                  Log("ComputeShutdownMinMaxThrust(): minThrust="+minThrust+" desiredThrust="+desiredThrust+" KEEP");
             }
           }
           Debug.Log(shutdown.Count+" engines shutdown");
@@ -674,6 +687,8 @@ namespace HopperGuidance
             _transform = SetUpTransform(_tgts[_tgts.Count-1]);
             DrawTargets(_tgts,_transform,targetcol,tgtSize);
           }
+          // Reset
+          finalDescentLogged = false;
           shutdownEngines.Clear();
           checkingLanded = false; // stop trajectory being cancelled while on ground
           lowestY = FindLowestPointOnVessel();
@@ -693,10 +708,13 @@ namespace HopperGuidance
           // Shutdown amin/amax will be recomputed in Fly()
           double amin = _minThrust/vessel.totalMass;
           double amax = _maxThrust/vessel.totalMass;
-          controller = new Controller(corrFactor,ki1,kd1,accelFactor,ki2,kd2,yMult,(float)amin,(float)amax,maxThrustAngle);
+          float accelFactor  = HGUtils.LinearMap(corrFactor, corrFactorP1, corrFactorP2, accelFactorP1, accelFactorP2);
+          Log("accelFactor="+accelFactor);
+          controller = new Controller(corrFactor,ki1,kd1,accelFactor,ki2,kd2,kp1y,ki1y,kd1y,kp2y,ki2y,kd2y,(float)amin,(float)amax,maxThrustAngle);
           controller.touchdownSpeed = touchdownSpeed;
           controller.finalDescentDistance = finalDescentDistance;
-          controller.throttleTimeConstant = 0.1f;
+          controller.attitudeTimeConstant = 0.2f;
+          controller.throttleTimeConstant = 0.2f;
 
           if( amin > amax*0.95 )
           {
@@ -902,6 +920,11 @@ namespace HopperGuidance
           Vector3d tatt = _transform.InverseTransformVector(att);
           bool shutdownEnginesNow;
           controller.GetControlOutputs(_traj, tr, tv, tatt, new Vector3d(0,-FlightGlobals.getGeeForceAtPosition(r).magnitude,0), (float)tRel, out dr, out dv, out da, out throttle, out tthrustV, out att_err, out shutdownEnginesNow);
+          if ((controller.IsFinalDescent()) && (!finalDescentLogged))
+          {
+            Log("Final descent activated at "+(int)(tr.y+lowestY)+"m",true);
+            finalDescentLogged = true;
+          }
 
           Vector3d thrustV = _transform.TransformVector(tthrustV); // transform back to world co-ordinates
           vessel.Autopilot.SAS.lockedMode = false;
@@ -909,7 +932,7 @@ namespace HopperGuidance
           state.mainThrottle = (float)throttle;
 
           if (shutdownEnginesNow)
-            shutdownEngines = ShutdownOuterEngines(g*(float)vessel.totalMass);
+            shutdownEngines = ShutdownOuterEngines(g*(float)vessel.totalMass, true);
 
           // Drawing
           DrawAlign(tr,dr,_transform,aligncol);
@@ -966,16 +989,16 @@ namespace HopperGuidance
             setCorrFactor = corrFactor;
             resetPID = true;
           }
-          if (kd1 != setKd1)
-          {
-            setKd1 = kd1;
-            resetPID = true;
-          }
-          if (kd2 != setKd2)
-          {
-            setKd2 = kd2;
-            resetPID = true;
-          }
+          //if (kd1 != setKd1)
+          //{
+          //  setKd1 = kd1;
+          //  resetPID = true;
+          //}
+          //if (kd2 != setKd2)
+          //{
+          //  setKd2 = kd2;
+          //  resetPID = true;
+          //}
           if ((minDescentAngle != setMinDescentAngle)||(maxThrustAngle != setMaxThrustAngle))
           {
             setMinDescentAngle = minDescentAngle;
@@ -1036,7 +1059,11 @@ namespace HopperGuidance
           if ((recomputeTrajectory)&&((autoMode == AutoMode.LandAtTarget)||(autoMode == AutoMode.Failed)))
             EnableLandAtTarget();
           if (resetPID)
-            controller.ResetPIDs(corrFactor,ki1,kd1,accelFactor,ki2,kd2);
+          {
+            float accelFactor  = HGUtils.LinearMap(corrFactor, corrFactorP1, corrFactorP2, accelFactorP1, accelFactorP2);
+            Log("accelFactor="+accelFactor);
+            controller.ResetPIDs(corrFactor,ki1,kd1,accelFactor,ki2,kd2,kp1y,ki1y,kd1y,kp2y,ki2y,kd2y);
+          }
           if ((!_logging) && (_vesselWriter != null))
             LogStop();
         }

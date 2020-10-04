@@ -81,5 +81,13 @@ namespace HopperGuidance
       }
       return tuples;
     }
+
+    // Linear scale remapping of x where inP1 goes to outP1
+    // inP2 goes to outP2
+    public static float LinearMap(float x, float inP1, float inP2, float outP1, float outP2)
+    {
+      float v = (x-inP1)/(inP2-inP1);
+      return outP1 + v*(outP2-outP1);
+    }
   }
 }
