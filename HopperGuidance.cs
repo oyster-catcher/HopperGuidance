@@ -35,12 +35,14 @@ namespace HopperGuidance
         static Color targetcol = new Color(1,1,0,0.5f); // solid yellow
         static Color thrustcol = new Color(1,0.2f,0.2f,0.3f); // transparent red
         static Color aligncol = new Color(0,0.1f,1.0f,0.3f); // blue
+        static Color predictedcol = new Color(1,0.1f,0.1f,0.5f); // red
 
         List<GameObject> _tgt_objs = new List<GameObject>(); // new GameObject("Target");
         GameObject _track_obj = null;
         GameObject _thrusts_obj = null;
         GameObject _align_obj = null;
         GameObject _steer_obj = null;
+        GameObject _predicted_obj = null;
         LineRenderer _align_line = null; // so it can be updated
         LineRenderer _steer_line = null; // so it can be updated
         bool checkingLanded = false; // only check once in flight to avoid failure to start when already on ground
@@ -71,16 +73,21 @@ namespace HopperGuidance
         [UI_FloatRange(minValue = 0, maxValue = 100, stepIncrement = 1)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Final descent distance", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
         float finalDescentDistance = 10;
+        bool finalDescentLogged = false;
 
         // Specials for Realism Overhaul
         List<ModuleEngines> allEngines = new List<ModuleEngines>();
         List<ModuleEngines> shutdownEngines = new List<ModuleEngines>();
-        bool finalDescentLogged = false;
 
         [UI_FloatRange(minValue = 5, maxValue = 500, stepIncrement = 5)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target size", guiFormat = "F0", isPersistant = false)]
         float tgtSize = 10;
         float setTgtSize;
+
+        // Boostback settings
+        float steerThrottle = 0.001f;
+        double min_target_err = float.MaxValue;
+        double last_msg_t = 0;
 
         List<Target> _tgts = new List<Target>();
 
@@ -150,7 +157,13 @@ namespace HopperGuidance
         {
           Debug.Log("[HopperGuidance] "+msg);
           if (onScreen)
-            ScreenMessages.PostScreenMessage(msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
+          {
+            if (Time.time > last_msg_t + 1)
+            {
+              ScreenMessages.PostScreenMessage(msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
+              last_msg_t = Time.time;
+            }
+          }
         }
 
         // Quad should be described a,b,c,d in anti-clockwise order when looking at it
@@ -210,7 +223,7 @@ namespace HopperGuidance
         }
 
         // pos is ground position, but draw up to height
-        void DrawTarget(Vector3d pos, Transform a_transform, Color color, double size, float height)
+        GameObject DrawTarget(Vector3d pos, Transform a_transform, Color color, double size, float height)
         {
           double[] r = new double[]{size*0.5,size*0.55,size*0.95,size};
           Vector3d gpos = pos;
@@ -220,8 +233,8 @@ namespace HopperGuidance
           Vector3d vz = new Vector3d(0,0,1);
 
           GameObject o = new GameObject();
-          o.transform.SetParent(a_transform, false);
           _tgt_objs.Add(o);
+          o.transform.SetParent(a_transform, false);
           MeshFilter meshf = o.AddComponent<MeshFilter>();
           MeshRenderer meshr = o.AddComponent<MeshRenderer>();
           meshr.material = new Material(Shader.Find("KSP/Alpha/Unlit Transparent"));
@@ -283,6 +296,7 @@ namespace HopperGuidance
           mesh.triangles = triangles;
           meshf.mesh = mesh;
           mesh.RecalculateNormals();
+          return o;
         }
 
         void DrawTargets(List<Target> tgts, Transform a_transform, Color color, double size)
@@ -297,11 +311,21 @@ namespace HopperGuidance
           {
             Vector3d pos = vessel.mainBody.GetWorldSurfacePosition(t.lat, t.lon, t.alt);
             pos = a_transform.InverseTransformPoint(pos); // convert to local (for orientation)
-            DrawTarget(pos,a_transform,color,size,t.height);
+            GameObject o = DrawTarget(pos,a_transform,color,size,t.height);
+            //_tgt_objs.Add(o);
           }
         }
 
-        void DrawTrack(Trajectory traj, Transform a_transform, float amult=1)
+        /*
+        void DrawPredictedTarget(Vector3d pos, Transform a_transform, Color color, double size)
+        {
+          if (_predicted_obj != null)
+            Destroy(_predicted_obj);
+          _predicted_obj = DrawTarget(pos,a_transform,color,size,0);
+        }
+        */
+
+        void DrawTrack(Trajectory traj, Transform a_transform, float amult=1, float lineWidth=0.2f)
         {
           if (traj == null)
             return;
@@ -330,7 +354,6 @@ namespace HopperGuidance
           Mesh mesh = new Mesh();
           Vector3 [] vertices = new Vector3[(traj.Length()-1)*4*2];
           int [] triangles = new int[(traj.Length()-1)*4*2*3]; // number of vertices in tris
-          float lineWidth = 0.2f;
           int v=0,t=0;
           for (int i = 0; i < traj.Length()-1; i++)
           {
@@ -909,6 +932,7 @@ namespace HopperGuidance
           ComputeMinMaxThrust(out _minThrust,out _maxThrust);
           // New thrust after shutdown should span a range that enables
           // a hover
+          controller.finalDescentDistance = finalDescentDistance;
           controller.amin = (float)(_minThrust/vessel.totalMass);
           controller.amax = (float)(_maxThrust/vessel.totalMass);
           controller.maxThrustAngle = maxThrustAngle;
@@ -1067,5 +1091,105 @@ namespace HopperGuidance
           if ((!_logging) && (_vesselWriter != null))
             LogStop();
         }
+
+        /*
+        [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Boostback", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
+        void Boostback()
+        {
+          vessel.OnFlyByWire += new FlightInputCallback(FlyBoostback);
+          vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
+          vessel.Autopilot.SAS.lockedMode = false;
+        }
+        */
+
+        /*
+        [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Set target to KSC", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
+        void SetTargetToKSC()
+        {
+          _tgts.Clear();
+          Target tgt = new Target(-0.091754f,-74.6297f,75,1000);
+          _tgts.Add(tgt);
+          _transform = SetUpTransform(_tgts[0]);
+          DrawTargets(_tgts,_transform,targetcol,tgtSize);
+        }
+        */
+
+        /*
+        void DisableBoostback(string msg)
+        {
+          Log(msg, true);
+          vessel.OnFlyByWire -= new FlightInputCallback(FlyBoostback);
+          if (_track_obj != null)
+          {
+            Destroy(_track_obj); // delete old track
+            _track_obj = null;
+          }
+          if (_thrusts_obj != null)
+          {
+            Destroy(_thrusts_obj); // delete old track
+            _thrusts_obj = null;
+          }
+          min_target_err = float.MaxValue;
+        }
+
+        void FlyBoostback(FlightCtrlState state)
+        {
+          Trajectory traj = new Trajectory();
+
+          traj.SimulateAero(vessel, 100);
+          traj.CompensateForBodyRotation(vessel.mainBody);
+          if (traj.Length() == 0)
+          {
+            DisableBoostback("Can't compute trajectory to ground");
+            return;
+          }
+          DrawTrack(traj,vessel.mainBody.transform,1,5);
+          //DrawPredictedTarget(traj.r[traj.Length()-1], vessel.mainBody.transform, predictedcol, tgtSize);
+          double lat,lon,alt;
+          vessel.mainBody.GetLatLonAlt(vessel.mainBody.transform.TransformPoint(traj.r[traj.Length()-1]),out lat,out lon,out alt);
+          if (_tgts.Count > 0)
+          {
+            float tlat = _tgts[_tgts.Count-1].lat;
+            float tlon = _tgts[_tgts.Count-1].lon;
+            Vector3d p = vessel.mainBody.GetWorldSurfacePosition(lat,lon,alt);
+            Vector3d t = vessel.mainBody.GetWorldSurfacePosition(tlat,tlon,alt);
+            Vector3d steer = t-p;
+            Vector3d att = new Vector3d(vessel.transform.up.x,vessel.transform.up.y,vessel.transform.up.z);
+            float ddot = (float)Vector3d.Dot(Vector3d.Normalize(att),Vector3d.Normalize(steer));
+            float att_err = (float)Math.Acos(ddot)*180/Mathf.PI;
+            Log("Target error = "+(int)steer.magnitude+"m Attitude error="+(int)att_err+"°", true);
+            vessel.Autopilot.SAS.SetTargetOrientation(steer, false);
+            float throttle = steerThrottle;
+            double v_err = steer.magnitude/traj.T;
+            ComputeMinMaxThrust(out _minThrust,out _maxThrust, true);
+            double amin = _minThrust/vessel.totalMass;
+            double amax = _maxThrust/vessel.totalMass;
+            if( _maxThrust == 0 )
+            {
+              DisableBoostback("No engine thrust available");
+              return;
+            }
+            if (att_err < 5)
+              throttle = (float)(0.2f*v_err/amax); // Compensate for delta V in 5+ seconds
+            state.mainThrottle = (float)throttle;
+            if (steer.magnitude < 100)
+            {
+              DisableBoostback("Predicted target error <100m. Stopping boostback burn");
+              return;
+            }
+            if (steer.magnitude > min_target_err*1.3f)
+            {
+              DisableBoostback("Predicted target error increased by 30%. Stopping boostback burn");
+              return;
+            }
+            min_target_err = Math.Min(min_target_err,steer.magnitude);
+          }
+          else
+          {
+            DisableBoostback("No target");
+            return;
+          }
+        }
+        */
     }
 }
