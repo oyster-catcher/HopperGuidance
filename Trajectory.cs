@@ -3,6 +3,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using HopperGuidance;
+using Trajectories;
 
 namespace HopperGuidance
 {
@@ -73,6 +74,69 @@ namespace HopperGuidance
         v[j] = cv;
         j++;
         t += dt;
+      }
+    }
+
+    // Simulates an aerodynamic descent trajectory at current attitude with no thrust
+    // applied. The reference from in the vessels main body transform
+    public void SimulateAero(Vessel vessel, float tgtAlt)
+    {
+      Vector3d wr = vessel.GetWorldPos3D();
+      CelestialBody b = vessel.mainBody;
+      Vector3d g = FlightGlobals.getGeeForceAtPosition(wr);
+      Vector3d wv = vessel.GetObtVelocity();
+      T = 0;
+      dt = 1;
+      int newsize=50;
+      int i = 0;
+
+      Array.Resize<Vector3d>(ref r, newsize);
+      Array.Resize<Vector3d>(ref v, newsize);
+      Array.Resize<Vector3d>(ref a, newsize); 
+      double altitude = (wr - b.transform.position).magnitude - b.Radius;
+      while(altitude > tgtAlt)
+      {
+        if (i > newsize-1)
+        {
+          newsize = newsize + 50;
+          Array.Resize<Vector3d>(ref r, newsize);
+          Array.Resize<Vector3d>(ref v, newsize);
+          Array.Resize<Vector3d>(ref a, newsize); 
+          g = FlightGlobals.getGeeForceAtPosition(wr);
+        }
+        r[i] = b.transform.InverseTransformPoint(wr);
+        v[i] = b.transform.InverseTransformVector(wv);
+        //Debug.Log("wr="+wr+" wv="+wv+" alt="+altitude);
+        Vector3d f = Trajectories.StockAeroUtil.SimAeroForce(vessel, wv, wr);
+        altitude = (wr - b.position).magnitude - b.Radius; // NOTE: latitude of last point
+        wr = wr + wv*dt;
+        wv = wv - (f/vessel.totalMass)*dt;
+        wv = wv + g*dt;
+        T = T + dt;
+        i++;
+      }
+      Array.Resize<Vector3d>(ref r, i);
+      Array.Resize<Vector3d>(ref v, i);
+      Array.Resize<Vector3d>(ref a, i);
+      // Reset last point by interpolating to altitude=0
+      double alt1 = r[i-2].magnitude - b.Radius;
+      double alt2 = r[i-1].magnitude - b.Radius;
+      double p = (alt1 - tgtAlt)/(alt1 - alt2);
+      r[i-1] = r[i-2] + (0.5*v[i-2] + 0.5*v[i-1]) * p;
+      double altf = r[i-1].magnitude - b.Radius;
+      Debug.Log("alt1="+alt1+" alt2="+alt2+" altf="+altf+" p="+p);
+      Debug.Log("SimulateAero() finished. Trajectory size="+i+" alt="+altitude);
+    }
+
+    public void CompensateForBodyRotation(CelestialBody body)
+    {
+      double t=0;
+      for(int i=0; i<r.Length; i++)
+      {
+        float ang = (float)((-t) * body.angularVelocity.magnitude / Math.PI * 180.0);
+        Quaternion bodyRotation = Quaternion.AngleAxis(ang, body.angularVelocity.normalized);
+        r[i] = bodyRotation * r[i];
+        t = t + dt;
       }
     }
 
