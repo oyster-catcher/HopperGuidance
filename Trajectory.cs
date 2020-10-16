@@ -78,54 +78,62 @@ namespace HopperGuidance
     }
 
     // Simulates an aerodynamic descent trajectory at current attitude with no thrust
-    // applied. The reference from in the vessels main body transform
+    // applied. Co-ordinates must in world co-ords due to calling StockAeroUtils()
+    // which expects
     public void SimulateAero(Vessel vessel, float tgtAlt)
     {
-      Vector3d wr = vessel.GetWorldPos3D();
       CelestialBody b = vessel.mainBody;
-      Vector3d g = FlightGlobals.getGeeForceAtPosition(wr);
+      // Get is mainBody co-ordinates
+      Vector3d wr = vessel.GetWorldPos3D() - b.transform.position;
       Vector3d wv = vessel.GetObtVelocity();
       T = 0;
-      dt = 1;
+      dt = 2;
       int newsize=50;
       int i = 0;
+      float latitude = 0;
 
       Array.Resize<Vector3d>(ref r, newsize);
       Array.Resize<Vector3d>(ref v, newsize);
       Array.Resize<Vector3d>(ref a, newsize); 
-      double altitude = (wr - b.transform.position).magnitude - b.Radius;
-      while(altitude > tgtAlt)
+      double alt = wr.magnitude - b.Radius;
+      //Debug.Log("SimulateAero-start: r="+(Vector3)wr+" v="+(Vector3)wv+" alt="+alt);
+      r[i] = wr + b.transform.position;
+      v[i] = wv;
+      i++;
+      while(alt > tgtAlt)
       {
+        Vector3d vel_air = wv - b.getRFrmVel(wr);
+        Vector3d f = Trajectories.StockAeroUtil.SimAeroForce(vessel, vel_air, wr);
+        wr = wr + wv*dt;
+        wv = wv - (f/vessel.totalMass)*dt;
+        double R = wr.magnitude;
+        Vector3d g = wr * (-b.gravParameter / (R*R*R));
+        wv = wv + g*dt;
+        alt = wr.magnitude - b.Radius;
         if (i > newsize-1)
         {
           newsize = newsize + 50;
           Array.Resize<Vector3d>(ref r, newsize);
           Array.Resize<Vector3d>(ref v, newsize);
           Array.Resize<Vector3d>(ref a, newsize); 
-          g = FlightGlobals.getGeeForceAtPosition(wr);
         }
-        r[i] = b.transform.InverseTransformPoint(wr);
-        v[i] = b.transform.InverseTransformVector(wv);
-        //Debug.Log("wr="+wr+" wv="+wv+" alt="+altitude);
-        Vector3d f = Trajectories.StockAeroUtil.SimAeroForce(vessel, wv, wr);
-        altitude = (wr - b.position).magnitude - b.Radius; // NOTE: latitude of last point
-        wr = wr + wv*dt;
-        wv = wv - (f/vessel.totalMass)*dt;
-        wv = wv + g*dt;
+        r[i] = wr + b.transform.position;  // make in world co-ords
+        v[i] = wv;
+        //Debug.Log("SimulateAero: r="+(Vector3)wr+" v="+(Vector3)wv+" g="+(Vector3)g+" alt="+alt);
         T = T + dt;
         i++;
       }
       Array.Resize<Vector3d>(ref r, i);
       Array.Resize<Vector3d>(ref v, i);
       Array.Resize<Vector3d>(ref a, i);
+      double last_alt = wr.magnitude - b.Radius;
       // Reset last point by interpolating to altitude=0
-      double alt1 = r[i-2].magnitude - b.Radius;
-      double alt2 = r[i-1].magnitude - b.Radius;
-      double p = (alt1 - tgtAlt)/(alt1 - alt2);
-      r[i-1] = r[i-2] + (0.5*v[i-2] + 0.5*v[i-1]) * p;
-      double altf = r[i-1].magnitude - b.Radius;
-      Debug.Log("alt1="+alt1+" alt2="+alt2+" altf="+altf+" p="+p);
-      Debug.Log("SimulateAero() finished. Trajectory size="+i+" alt="+altitude);
+      double p = (last_alt - tgtAlt)/(last_alt - alt);
+      if (last_alt > tgtAlt)
+      {
+        r[i-1] = r[i-2] + wv * p;
+      }
+      Debug.Log("SimulateAero() finished. Trajectory size="+i+" alt="+((r[i-1]-b.transform.position).magnitude - b.Radius));
     }
 
     public void CompensateForBodyRotation(CelestialBody body)
@@ -135,7 +143,7 @@ namespace HopperGuidance
       {
         float ang = (float)((-t) * body.angularVelocity.magnitude / Math.PI * 180.0);
         Quaternion bodyRotation = Quaternion.AngleAxis(ang, body.angularVelocity.normalized);
-        r[i] = bodyRotation * r[i];
+        r[i] = bodyRotation * (r[i] - body.transform.position) + body.transform.position;
         t = t + dt;
       }
     }
@@ -321,7 +329,7 @@ namespace HopperGuidance
       }
     }
 
-    public void Write(string filename = null, List<string> comments = null)
+    public void Write(string filename = null, List<string> comments = null, float startTime=0)
     {
       System.IO.StreamWriter f;
       if (filename != null)
@@ -342,7 +350,7 @@ namespace HopperGuidance
         tr = r[i];
         tv = v[i];
         ta = a[i];
-        f.WriteLine(string.Format("{0} {1:F5} {2:F5} {3:F5} {4:F5} {5:F5} {6:F5} {7:F1} {8:F1} {9:F1} 0",t,tr.x,tr.y,tr.z,tv.x,tv.y,tv.z,ta.x,ta.y,ta.z));
+        f.WriteLine(string.Format("{0} {1:F5} {2:F5} {3:F5} {4:F5} {5:F5} {6:F5} {7:F1} {8:F1} {9:F1} 0",t+startTime,tr.x,tr.y,tr.z,tv.x,tv.y,tv.z,ta.x,ta.y,ta.z));
         t += dt;
       }
       f.Close();

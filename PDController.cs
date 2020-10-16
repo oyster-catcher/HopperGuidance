@@ -1,3 +1,6 @@
+// Powered Descent Controller
+//   - calculates a trajectory to follow using GFold algorithm and attempts to follow it
+
 using System;
 using System.Collections.Generic;
 
@@ -6,16 +9,18 @@ using UnityEngine.UI;
 
 namespace HopperGuidance
 {
-  public class Controller
+  public class PDController
   {
     // Parameters
     public PID3d _pid3d = new PID3d();
-    public float maxThrustAngle = 25;
+    public float maxThrustAngle = 45;
     public float idleAngle = 90;
     public float amin = 0;
     public float amax = 30;
     public float touchdownSpeed = 1;
-    public float finalDescentDistance = 0; // Ignore trajectory under this distance to final landing spot
+    public float powerDescentAlt = 5000; // Powered descent below this altitude
+    public float aeroDescentAlt = 70000; // Aerodynamic descent below this altitude
+    public float finalDescentAlt = 0; // Ignore trajectory under this distance to final landing spot
     public double attitudeTimeConstant = 0; // Instanteous - speed of attitude change
     public double throttleTimeConstant = 0; // Instanteous - speed of throttle change
 
@@ -26,10 +31,10 @@ namespace HopperGuidance
     float last_t = 0;
     bool finalDescent = false;
 
-    public Controller(float kp1=1, float ki1=0, float kd1=0, float kp2=1, float ki2=0, float kd2=0,
-                      float kp1y=1, float ki1y=0, float kd1y=0,
-                      float kp2y=1, float ki2y=0, float kd2y=0,
-                      float a_amin=0, float a_amax=30, float a_maxThrustAngle=45, string logFilename="")
+    public PDController(float kp1=1, float ki1=0, float kd1=0, float kp2=1, float ki2=0, float kd2=0,
+                        float kp1y=1, float ki1y=0, float kd1y=0,
+                        float kp2y=1, float ki2y=0, float kd2y=0,
+                        float a_amin=0, float a_amax=30, float a_maxThrustAngle=45, string logFilename="")
     {
       _pid3d = new PID3d(kp1,ki1,kd1,kp2,ki2,kd2,kp1y,ki1y,kd1y,kp2y,ki2y,kd2y,1000,amax,logFilename);
       amin = a_amin;
@@ -61,10 +66,11 @@ namespace HopperGuidance
     public double MinHeightAtMinThrust(double y, double vy,double g)
     {
       double minHeight = 0;
-      if (amin < g)
+      double lower_amin = amin*0.8;
+      if (lower_amin < g)
         return -float.MaxValue;
-      double tHover = -vy/amin; // time to come to hover
-      minHeight = y + vy*tHover + 0.5*amin*tHover*tHover - 0.5*g*tHover*tHover;
+      double tHover = -vy/lower_amin; // time to come to hover
+      minHeight = y + vy*tHover + 0.5*lower_amin*tHover*tHover - 0.5*g*tHover*tHover;
       return minHeight;
     }
 
@@ -102,8 +108,8 @@ namespace HopperGuidance
       {
         maxThrustAngle = (float)Convert.ToDouble(v);
       }
-      else if (k=="finalDescentDistance")
-        finalDescentDistance = (float)Convert.ToDouble(v);
+      else if (k=="finalDescentAlt")
+        finalDescentAlt = (float)Convert.ToDouble(v);
       else if (k=="touchdownSpeed")
         touchdownSpeed = (float)Convert.ToDouble(v);
       else if (k=="throttleTimeConstant")
@@ -219,14 +225,14 @@ namespace HopperGuidance
       double distToLast = (traj.r[traj.Length()-1] - r).magnitude;
       //System.Console.Error.WriteLine("r="+r+" distToLast="+distToLast);
       Vector3d touchdownv = new Vector3d(0,-touchdownSpeed,0);
-      if (distToLast < finalDescentDistance) // If near ground just descent vertically
+      if (distToLast < finalDescentAlt) // If near ground just descent vertically
       {
         // TODO: Assumes touching down in ground downwards
         double h = r.y - traj.r[traj.Length()-1].y;
         // p=0 when h==distToLast
         // p=1 when h<=0.5*distToLast
-        float p = Mathf.Clamp((float)(h/finalDescentDistance),0,1);
-        // Smoothed from trajectory to touchdown from 0.5*finalDescentDistance to finalDescentDistance
+        float p = Mathf.Clamp((float)(h/finalDescentAlt),0,1);
+        // Smoothed from trajectory to touchdown from 0.5*finalDescentAlt to finalDescentAlt
         p = Mathf.Clamp(HGUtils.LinearMap(p,0.5f,1,0,1),0,1);
         // Interpolate between computed trajectory and touchdown speed for smooth transition
         r = dr*p + r*(1-p);

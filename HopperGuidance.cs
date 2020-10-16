@@ -9,10 +9,13 @@ using KSPAssets;
 
 namespace HopperGuidance
 {
-    enum AutoMode
-    {
+  enum AutoMode
+  {
       Off,
-      LandAtTarget,
+      FinalDescent,
+      PoweredDescent,
+      AeroDescent,
+      Boostback,
       Failed
     }
 
@@ -36,6 +39,7 @@ namespace HopperGuidance
         static Color thrustcol = new Color(1,0.2f,0.2f,0.3f); // transparent red
         static Color aligncol = new Color(0,0.1f,1.0f,0.3f); // blue
         static Color predictedcol = new Color(1,0.1f,0.1f,0.5f); // red
+        static float logInterval = 0.5f;
 
         List<GameObject> _tgt_objs = new List<GameObject>(); // new GameObject("Target");
         GameObject _track_obj = null;
@@ -47,7 +51,7 @@ namespace HopperGuidance
         LineRenderer _steer_line = null; // so it can be updated
         bool checkingLanded = false; // only check once in flight to avoid failure to start when already on ground
         AutoMode autoMode = AutoMode.Off;
-        Controller controller;
+        PDController pdController = new PDController();
         float errMargin = 0.1f; // margin of error in solution to allow for headroom in amax (use double for maxThrustAngle)
         double lowestY = 0; // Y position of bottom of craft relative to centre
         float _minThrust, _maxThrust;
@@ -57,37 +61,29 @@ namespace HopperGuidance
         double _startTime = 0; // Start solution starts to normalize vessel times to start at 0
         Transform _transform = null;
         double last_t = -1; // last time data was logged
-        double log_interval = 0.05f; // Interval between logging
-        System.IO.StreamWriter _tgtWriter = null; // Actual vessel
+        //System.IO.StreamWriter _tgtWriter = null; // Closest target to try and fit
         System.IO.StreamWriter _vesselWriter = null; // Actual vessel
         float extendTime = 0; // duration to extend trajectory to slowly descent to touch down and below at touchdownSpeed
         bool pickingPositionTarget = false;
         string _vesselLogFilename = "vessel.dat";
-        string _tgtLogFilename = "target.dat";
+        //string _tgtLogFilename = "target.dat";
         string _solutionLogFilename = "solution.dat";
 
-        [UI_FloatRange(minValue = 0.1f, maxValue = 5, stepIncrement = 0.1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Touchdown speed", guiFormat = "F0", isPersistant = false, guiUnits = "m/s")]
-        float touchdownSpeed = 2.5f;
-
-        [UI_FloatRange(minValue = 0, maxValue = 100, stepIncrement = 1)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Final descent distance", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
-        float finalDescentDistance = 10;
-        bool finalDescentLogged = false;
-
-        // Specials for Realism Overhaul
         List<ModuleEngines> allEngines = new List<ModuleEngines>();
+        // Specials for Realism Overhaul to shutdown engines when minimum thrust too high
         List<ModuleEngines> shutdownEngines = new List<ModuleEngines>();
 
-        [UI_FloatRange(minValue = 5, maxValue = 500, stepIncrement = 5)]
+        [UI_FloatRange(minValue = 1, maxValue = 10, stepIncrement = 1)]
         [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Target size", guiFormat = "F0", isPersistant = false)]
-        float tgtSize = 10;
+        float tgtSize = 1;
         float setTgtSize;
 
         // Boostback settings
-        float steerThrottle = 0.001f;
-        double min_target_err = float.MaxValue;
-        double last_msg_t = 0;
+        Target pred = new Target(0,0,0,0); // prediction to target transform _transform
+        double minTargetError = float.MaxValue;
+        // Aero descent
+        Trajectory aerotraj = null;
+        double last_calc_t = 0;
 
         List<Target> _tgts = new List<Target>();
 
@@ -96,24 +92,60 @@ namespace HopperGuidance
         float tgtHeight;
         float setTgtHeight;
 
+        // =========================== BOOSTBACK PARAMS ==========================
+        [UI_FloatRange(minValue = 0, maxValue = 1000, stepIncrement = 1)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Boostback: max error", guiFormat = "F0", isPersistant = true, guiUnits="m")]
+        float maxTargetError = 500;
+
+        // =========================== RE-ENTRY BURN PARAMS ==========================
+        [UI_FloatRange(minValue = 0, maxValue = 70000, stepIncrement = 100)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Re-entry burn: altitude", guiFormat = "F0", isPersistant = true, guiUnits="m")]
+        float reentryBurnAlt = 50000;
+
+        [UI_FloatRange(minValue = 0, maxValue = 1500, stepIncrement = 100)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Re-entry burn: final velocity", guiFormat = "F0", isPersistant = true, guiUnits="m")]
+        float reentryBurnFinalVel = 700;
+
+        // =========================== AERO DESCENT PARAMS ==========================
+        // Aerodynamic descent altitude - use aerodynamics surface and not thrust
+        // once under this altitude - above this use boostback
+        [UI_FloatRange(minValue = 0, maxValue = 70000, stepIncrement = 1000)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Aero: altitude", guiFormat = "F0", isPersistant = true, guiUnits="km")]
+        float aeroDescentAlt = 70000;
+        
+        // 100m error = approx 45 degree deviation at steerGain=0.5
+        [UI_FloatRange(minValue = 0.001f, maxValue = 0.5f, stepIncrement = 0.001f)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Aero: steer gain", guiFormat = "F2", isPersistant = true)]
+        float steerGain = 0.05f;
+
+        [UI_FloatRange(minValue = 0, maxValue = 20, stepIncrement = 1)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Aero: Max Angle-of-Attack", guiFormat = "F0", isPersistant = true, guiUnits="°")]
+        float maxAoA = 5;
+
+        // =========================== POWERED DESCENT PARAMS ==========================
+        // Powered descent altitude - use powered descent under this altitude
+        [UI_FloatRange(minValue = 0, maxValue = 70000, stepIncrement = 1000)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Powered: altitude", guiFormat = "F0", isPersistant = true, guiUnits="km")]
+        float poweredDescentAlt = 5000;
+
         [UI_FloatRange(minValue = -1, maxValue = 90.0f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Min descent angle", guiFormat = "F0", isPersistant = true, guiUnits = "°")]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Powered: Min descent angle", guiFormat = "F0", isPersistant = true, guiUnits = "°")]
         float minDescentAngle = 20.0f;
         float setMinDescentAngle;
 
         [UI_FloatRange(minValue = 1, maxValue = 1500, stepIncrement = 10f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max velocity", guiFormat = "F0", isPersistant = true, guiUnits = "m/s")]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Powered: Max velocity", guiFormat = "F0", isPersistant = true, guiUnits = "m/s")]
         float maxV = 150f; // Max. vel to add to get towards target - not too large that vessel can't turn around
         float setMaxV;
 
         [UI_FloatRange(minValue = 0f, maxValue = 180f, stepIncrement = 1f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Max thrust angle", guiFormat = "F1", isPersistant = true, guiUnits="°")]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Powered: Max thrust angle", guiFormat = "F1", isPersistant = true, guiUnits="°")]
         float maxThrustAngle = 45f; // Max. thrust angle from vertical
         float setMaxThrustAngle;
 
         // This factor just affects X and Z PIDs (horizontal)
         [UI_FloatRange(minValue = 0.1f, maxValue = 0.5f, stepIncrement = 0.01f)]
-        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Correction factor", guiFormat = "F2", isPersistant = true)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Powered: Correction factor", guiFormat = "F2", isPersistant = true)]
         // Set this down to 0.05 for large craft and up to 0.4 for very agile small craft
         float corrFactor = 0.25f; // If 1 then at 1m error aim to close a 1m/s
         float setCorrFactor;
@@ -130,8 +162,15 @@ namespace HopperGuidance
         float corrFactorP1 = 0.15f, corrFactorP2 = 0.4f;
         float accelFactorP1 = 0.2f, accelFactorP2 = 0.6f;
 
-        //[UI_FloatRange(minValue = 0.00f, maxValue = 2.0f, stepIncrement = 0.1f)]
-        //[KSPField(guiActive = true, guiActiveEditor = true, guiName = "kd1", guiFormat = "F1", isPersistant = true)]
+        // =========================== FINAL DESCENT PARAMS ==========================
+        [UI_FloatRange(minValue = 0, maxValue = 1000, stepIncrement = 10)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Final: altitude", guiFormat = "F1", isPersistant = true, guiUnits = "m")]
+        float finalDescentAlt = 10;
+
+        [UI_FloatRange(minValue = 0.1f, maxValue = 5, stepIncrement = 0.1f)]
+        [KSPField(guiActive = true, guiActiveEditor = true, guiName = "Touchdown speed", guiFormat = "F0", isPersistant = false, guiUnits = "m/s")]
+        float touchdownSpeed = 2.5f;
+
         float kd1 = 0;
         //float setKd1;
 
@@ -157,13 +196,7 @@ namespace HopperGuidance
         {
           Debug.Log("[HopperGuidance] "+msg);
           if (onScreen)
-          {
-            if (Time.time > last_msg_t + 1)
-            {
-              ScreenMessages.PostScreenMessage(msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
-              last_msg_t = Time.time;
-            }
-          }
+            ScreenMessages.PostScreenMessage(msg, 3.0f, ScreenMessageStyle.UPPER_CENTER);
         }
 
         // Quad should be described a,b,c,d in anti-clockwise order when looking at it
@@ -233,7 +266,6 @@ namespace HopperGuidance
           Vector3d vz = new Vector3d(0,0,1);
 
           GameObject o = new GameObject();
-          _tgt_objs.Add(o);
           o.transform.SetParent(a_transform, false);
           MeshFilter meshf = o.AddComponent<MeshFilter>();
           MeshRenderer meshr = o.AddComponent<MeshRenderer>();
@@ -299,7 +331,7 @@ namespace HopperGuidance
           return o;
         }
 
-        void DrawTargets(List<Target> tgts, Transform a_transform, Color color, double size)
+        void DrawTargets(List<Target> tgts, Transform a_transform, Color color, double logsize)
         {
           foreach (GameObject obj in _tgt_objs)
           {
@@ -311,19 +343,17 @@ namespace HopperGuidance
           {
             Vector3d pos = vessel.mainBody.GetWorldSurfacePosition(t.lat, t.lon, t.alt);
             pos = a_transform.InverseTransformPoint(pos); // convert to local (for orientation)
-            GameObject o = DrawTarget(pos,a_transform,color,size,t.height);
-            //_tgt_objs.Add(o);
+            GameObject o = DrawTarget(pos,a_transform,color,5*Math.Pow(2,logsize),t.height);
+            _tgt_objs.Add(o);
           }
         }
 
-        /*
-        void DrawPredictedTarget(Vector3d pos, Transform a_transform, Color color, double size)
+        void DrawPredictedTarget(Vector3d pos, Transform a_transform, Color color, double logsize)
         {
           if (_predicted_obj != null)
             Destroy(_predicted_obj);
-          _predicted_obj = DrawTarget(pos,a_transform,color,size,0);
+          _predicted_obj = DrawTarget(pos,a_transform,color,5*Math.Pow(2,logsize),0);
         }
-        */
 
         void DrawTrack(Trajectory traj, Transform a_transform, float amult=1, float lineWidth=0.2f)
         {
@@ -445,14 +475,22 @@ namespace HopperGuidance
             _steer_line.startWidth = 0.3f;
             _steer_line.endWidth = 0.3f;
             _steer_line.positionCount = 2;
-            _steer_line.SetPosition(0,a_transform.TransformPoint(r_from));
-            _steer_line.SetPosition(1,a_transform.TransformPoint(r_to));
+            if (a_transform != null)
+            {
+              _steer_line.SetPosition(0,a_transform.TransformPoint(r_from));
+              _steer_line.SetPosition(1,a_transform.TransformPoint(r_to));
+            }
+            else
+            {
+              _steer_line.SetPosition(0,r_from);
+              _steer_line.SetPosition(1,r_to);
+            }
         }
 
         public void OnDestroy()
         {
-          DisableLand();
-          // Remove targets as they are not removed on DisableLand()
+          DisableGuidance();
+          // Remove targets as they are not removed on DisableGuidance()
           foreach (GameObject obj in _tgt_objs)
           {
             if (obj != null)
@@ -488,28 +526,49 @@ namespace HopperGuidance
           if (_vesselWriter != null)
             _vesselWriter.Close();
           _vesselWriter = null;
-          if (_tgtWriter != null)
-            _tgtWriter.Close();
-          _tgtWriter = null;
+          //if (_tgtWriter != null)
+          //  _tgtWriter.Close();
+          //_tgtWriter = null;
+          _startTime = 0;
           last_t = -1;
         }
 
-        static void LogData(System.IO.StreamWriter f, double t, Vector3 r, Vector3 v, Vector3 a, float att_err, double amin, double amax)
+        void LogData(string filename, Vector3 r, Vector3 v, Vector3 a, float att_err, double amin, double amax)
         {
-          f.WriteLine(string.Format("{0} {1:F5} {2:F5} {3:F5} {4:F5} {5:F5} {6:F5} {7:F1} {8:F1} {9:F1} {10:F1} {11:F2} {12:F2}",t,r.x,r.y,r.z,v.x,v.y,v.z,a.x,a.y,a.z,att_err,amin,amax));
+          if (_vesselWriter == null)
+          {
+            _vesselWriter = new System.IO.StreamWriter(filename);
+            _vesselWriter.WriteLine("time x y z vx vy vz ax ay az att_err amin amax");
+          }
+          if (_startTime == 0)
+            _startTime = Time.time;
+          double t = Time.time - _startTime;
+          if (t > last_t + logInterval)
+          {
+            Log("LogData at "+t);
+            _vesselWriter.WriteLine(string.Format("{0} {1:F5} {2:F5} {3:F5} {4:F5} {5:F5} {6:F5} {7:F1} {8:F1} {9:F1} {10:F1} {11:F2} {12:F2}",t,r.x,r.y,r.z,v.x,v.y,v.z,a.x,a.y,a.z,att_err,amin,amax));
+            _vesselWriter.Flush();
+            last_t = t;
+          }
         }
 
-        static void LogSolution(SolveResult result, Trajectory traj, string filename)
+        void LogSolution(SolveResult result, Trajectory traj, string filename)
         {
+          float startTime = (float)(Time.time - _startTime); // offset to add
           List<string> comments = new List<string>();
           comments.Add(result.DumpString());
           // Thrusts
           List<float> thrust_times = new List<float>();
           for( int i=0; i<result.thrusts.Length; i++)
-            thrust_times.Add(result.thrusts[i].t);
+            thrust_times.Add(result.thrusts[i].t + startTime);
           comments.Add("thrust_times="+String.Join(",",thrust_times));
           if( result.checktimes != null )
-            comments.Add("check_times="+String.Join(",",result.checktimes));
+          {
+            List<float> checktimes = new List<float>();
+            for( int i=0; i<result.checktimes.Count; i++)
+              checktimes.Add((float)(result.checktimes[i] + startTime));
+            comments.Add("check_times="+String.Join(",",checktimes));
+          }
           List<double> sln_Ts = new List<double>();
           List<double> sln_fuels = new List<double>();
           foreach(var sln in result.solutions)
@@ -519,7 +578,7 @@ namespace HopperGuidance
           }
           comments.Add("solution_time="+String.Join(",",sln_Ts));
           comments.Add("solution_fuel="+String.Join(",",sln_fuels));
-          traj.Write(filename, comments);
+          traj.Write(filename, comments, (float)(Time.time - _startTime));
         }
 
         // Find Y offset to lowest part from origin of the vessel
@@ -690,17 +749,8 @@ namespace HopperGuidance
         }
 
 
-        public void EnableLandAtTarget()
+        public bool EnablePoweredDescent()
         {
-
-          Type type = Type.GetType("Mono.Runtime");
-          if (type != null)
-          {
-             MethodInfo displayName = type.GetMethod("GetDisplayName", BindingFlags.NonPublic | BindingFlags.Static);
-             if (displayName != null)
-               Log("Mono version: "+displayName.Invoke(null, null));
-          }
-
           if (_tgts.Count == 0)
           {
             ScreenMessages.PostScreenMessage("No targets - adding one on the ground directly below", 3.0f, ScreenMessageStyle.UPPER_CENTER);
@@ -711,7 +761,6 @@ namespace HopperGuidance
             DrawTargets(_tgts,_transform,targetcol,tgtSize);
           }
           // Reset
-          finalDescentLogged = false;
           shutdownEngines.Clear();
           checkingLanded = false; // stop trajectory being cancelled while on ground
           lowestY = FindLowestPointOnVessel();
@@ -724,26 +773,21 @@ namespace HopperGuidance
           if( _maxThrust == 0 )
           {
             Log("No engine thrust (activate engines)", true);
-            autoMode = AutoMode.Off;
-            return;
+            return false;
           }
-          _startTime = Time.time;
           // Shutdown amin/amax will be recomputed in Fly()
           double amin = _minThrust/vessel.totalMass;
           double amax = _maxThrust/vessel.totalMass;
           float accelFactor  = HGUtils.LinearMap(corrFactor, corrFactorP1, corrFactorP2, accelFactorP1, accelFactorP2);
-          Log("accelFactor="+accelFactor);
-          controller = new Controller(corrFactor,ki1,kd1,accelFactor,ki2,kd2,kp1y,ki1y,kd1y,kp2y,ki2y,kd2y,(float)amin,(float)amax,maxThrustAngle);
-          controller.touchdownSpeed = touchdownSpeed;
-          controller.finalDescentDistance = finalDescentDistance;
-          controller.attitudeTimeConstant = 0.2f;
-          controller.throttleTimeConstant = 0.2f;
+          pdController.touchdownSpeed = touchdownSpeed;
+          pdController.finalDescentAlt = finalDescentAlt;
+          pdController.attitudeTimeConstant = 0.2f;
+          pdController.throttleTimeConstant = 0.2f;
 
           if( amin > amax*0.95 )
           {
             Log("Engine doesn't appear to be throttleable. This makes precision guidance impossible", true);
-            autoMode = AutoMode.Off;
-            return;
+            return false;
           }
 
           solver = new Solve();
@@ -810,20 +854,16 @@ namespace HopperGuidance
             string msg = String.Format("Found solution T={0:F1} Tstart={1:F1} Fuel={2:F1}",_result.T,_result.Tstart,_result.fuel);
             Log(msg, true);
             // Enable autopilot
-            // TODO: Use New functions on Controller()
+            DrawTrack(_traj, _transform);
             DrawTargets(_tgts,_transform,targetcol,tgtSize);
-            vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
-            vessel.OnFlyByWire += new FlightInputCallback(Fly);
             // Write solution
             if (_logging)
               LogSolution(_result, _traj, _solutionLogFilename);
-            autoMode = AutoMode.LandAtTarget;
-            Events["ToggleGuidance"].guiName = "Cancel guidance";
+            return true;
           }
           else
           {
-            DisableLand();
-            Events["ToggleGuidance"].guiName = "Failed! - Cancel guidance";
+            DisableGuidance();
             string msg = "Failure to find solution as ";
             double minHeight = MinHeightAtMinThrust(tr0.y, tv0.y, amin, g.magnitude);
             // Do some checks
@@ -836,21 +876,19 @@ namespace HopperGuidance
             else
               msg = msg + "impossible to reach target within constraints";
             Log(msg, true);
-            autoMode = AutoMode.Failed;
+            return false;
           }
-          if (_result.isSolved()) // solved for complete path? - show partial?
-            DrawTrack(_traj, _transform);
         }
 
-        public void DisableLand()
+        public void DisableGuidance()
         {
           autoMode = AutoMode.Off;
           if (_track_obj != null)   {Destroy(_track_obj); _track_obj=null;}
           if (_thrusts_obj != null) {Destroy(_thrusts_obj); _thrusts_obj=null;}
           if (_align_obj != null)   {Destroy(_align_obj); _align_obj=null;}
           if (_steer_obj != null)   {Destroy(_steer_obj); _steer_obj=null;}
+          if (_predicted_obj != null)   {Destroy(_predicted_obj); _predicted_obj=null;}
           _traj = null;
-          LogStop();
           if (vessel != null)
           {
             if (vessel.OnFlyByWire != null)
@@ -858,18 +896,19 @@ namespace HopperGuidance
             if (vessel.Autopilot != null)
               vessel.Autopilot.Disable();
           }
-          Events["ToggleGuidance"].guiName = "Enable guidance";
+          SwitchAutoMode(AutoMode.Off);
         }
 
         ~HopperGuidance()
         {
-          DisableLand();
+          DisableGuidance();
+          LogStop();
         }
 
         public override void OnInactive()
         {
           base.OnInactive();
-          DisableLand();
+          DisableGuidance();
         }
 
         [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Clear targets", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
@@ -877,7 +916,7 @@ namespace HopperGuidance
         {
           _tgts.Clear();
           DrawTargets(_tgts,_transform,targetcol,tgtSize);
-          DisableLand();
+          DisableGuidance();
         }
 
         [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Pick target", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
@@ -888,27 +927,108 @@ namespace HopperGuidance
           ScreenMessages.PostScreenMessage(message, 3.0f, ScreenMessageStyle.UPPER_CENTER);
         }
 
+        // Sets button text of toggle guidance to correct program for the altitude
+        // and changes the auto mode and logs it
+        void SwitchAutoMode(AutoMode mode)
+        {
+          String strmode = "n/a";
+          if (mode == AutoMode.Off)
+          {
+            strmode = "Boostback";
+            if (vessel.altitude < aeroDescentAlt)
+              strmode = "Aero Descent";
+            if (vessel.altitude < poweredDescentAlt)
+              strmode = "Powered Descent";
+            if (vessel.altitude < finalDescentAlt)
+              strmode = "Final Descent";
+            Events["ToggleGuidance"].guiName = "Enable "+strmode;
+            Log("Switched to AutoMode=Off");
+          }
+          else
+          {
+            if (mode == AutoMode.Boostback)
+              strmode = "Boostback";
+            if (mode == AutoMode.AeroDescent)
+              strmode = "Aero Descent";
+            if (mode == AutoMode.PoweredDescent)
+              strmode = "Powered Descent";
+            if (mode == AutoMode.FinalDescent)
+              strmode = "Final Descent";
+            Events["ToggleGuidance"].guiName = "Cancel "+strmode;
+            Log("Switched to AutoMode="+strmode+"("+autoMode+")");
+          }
+          minTargetError = float.MaxValue;
+          autoMode = mode;
+        }
+
         [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Enable guidance", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
         void ToggleGuidance()
         {
-          if (autoMode == AutoMode.Failed)
-            DisableLand();
+          AutoMode mode = AutoMode.Off;
+          if (autoMode == AutoMode.Off)
+          {
+            mode = AutoMode.Boostback;
+            if (vessel.altitude < aeroDescentAlt)
+              mode = AutoMode.AeroDescent;
+            if (vessel.altitude < finalDescentAlt)
+              mode = AutoMode.FinalDescent;
+            else
+            {
+              if (vessel.altitude < poweredDescentAlt)
+              {
+                if (EnablePoweredDescent())
+                  mode = AutoMode.PoweredDescent;
+                else
+                  mode = AutoMode.AeroDescent;
+              }
+            }
+            SwitchAutoMode(mode);
+            vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
+            vessel.OnFlyByWire += new FlightInputCallback(Fly);
+          }
           else
           {
-            if (autoMode != AutoMode.LandAtTarget)
-              EnableLandAtTarget();
-            else
-              DisableLand();
+            SwitchAutoMode(mode);
+            vessel.Autopilot.Disable();
+            vessel.OnFlyByWire -= new FlightInputCallback(Fly);
+          }
+        }
+
+
+        public void GetFlightStatus(out Vector3d r, out Vector3d v, out Vector3d att,
+                                    out Vector3d tr, out Vector3d tv, out Vector3d tatt)
+        {
+          r = vessel.GetWorldPos3D();
+          v = vessel.GetSrfVelocity();
+          att = new Vector3d(vessel.transform.up.x,vessel.transform.up.y,vessel.transform.up.z);
+          if (_transform != null)
+          {
+            tr = _transform.InverseTransformPoint(r);
+            tv = _transform.InverseTransformVector(v);
+            tatt = _transform.InverseTransformVector(att);
+          }
+          else
+          {
+            tr = Vector3d.zero;
+            tv = Vector3d.zero;
+            tatt = Vector3d.zero;
           }
         }
 
 
         public void Fly(FlightCtrlState state)
         {
+          if (_tgts.Count == 0)
+          {
+            autoMode = AutoMode.Off;
+            Log("No targets!", true);
+            DisableGuidance();
+          }
+
           if ((vessel == null) || (vessel.checkLanded() && checkingLanded) )
           {
             ScreenMessages.PostScreenMessage("Landed!", 3.0f, ScreenMessageStyle.UPPER_CENTER);
-            DisableLand();
+            DisableGuidance();
             // Shut-off throttle
             FlightCtrlState ctrl = new FlightCtrlState();
             vessel.GetControlState(ctrl);
@@ -923,69 +1043,179 @@ namespace HopperGuidance
           if (!vessel.checkLanded())
             checkingLanded = true;
 
-          Vector3 r = vessel.GetWorldPos3D();
-          Vector3 v = vessel.GetSrfVelocity();
-          Vector3 tr = _transform.InverseTransformPoint(r);
-          Vector3 tv = _transform.InverseTransformVector(v);
-          float g = (float)FlightGlobals.getGeeForceAtPosition(r).magnitude;
-          // Update controller vessel parameters
+          // Basic vessel flight values
+          Vector3d r, v, att, tr, tv, tatt;
+          GetFlightStatus(out r, out v, out att, out tr,out tv,out tatt);
+          Vector3d dr = Vector3d.zero;
+          Vector3d dv = Vector3d.zero;
+          Vector3d da = Vector3d.zero;
+          Vector3d ta = Vector3d.zero; // acceleration due to thrust
+          float att_err = 0;
+
+          double throttle = 0;
           ComputeMinMaxThrust(out _minThrust,out _maxThrust);
-          // New thrust after shutdown should span a range that enables
-          // a hover
-          controller.finalDescentDistance = finalDescentDistance;
-          controller.amin = (float)(_minThrust/vessel.totalMass);
-          controller.amax = (float)(_maxThrust/vessel.totalMass);
-          controller.maxThrustAngle = maxThrustAngle;
-          Vector3d dr, dv, da, tthrustV;
-          float att_err;
-          double throttle;
-          double tRel = Time.time - _startTime;
-          Vector3d att = new Vector3d(vessel.transform.up.x,vessel.transform.up.y,vessel.transform.up.z);
-          Vector3d tatt = _transform.InverseTransformVector(att);
-          bool shutdownEnginesNow;
-          controller.GetControlOutputs(_traj, tr, tv, tatt, new Vector3d(0,-FlightGlobals.getGeeForceAtPosition(r).magnitude,0), (float)tRel, out dr, out dv, out da, out throttle, out tthrustV, out att_err, out shutdownEnginesNow);
-          if ((controller.IsFinalDescent()) && (!finalDescentLogged))
+          double amin = (float)(_minThrust/vessel.totalMass);
+          double amax = (float)(_maxThrust/vessel.totalMass);
+          Vector3d steer = Vector3d.zero;
+
+          // =================== POWERED DESCENT ===================
+          if ((autoMode == AutoMode.PoweredDescent) || (autoMode == AutoMode.FinalDescent))
           {
-            Log("Final descent activated at "+(int)(tr.y+lowestY)+"m",true);
-            finalDescentLogged = true;
+            float g = (float)FlightGlobals.getGeeForceAtPosition(r).magnitude;
+            // New thrust after shutdown should span a range that enables
+            // a hover
+            Vector3d tthrustV;
+            bool shutdownEnginesNow;
+            // Update controller vessel parameters
+            pdController.finalDescentAlt = finalDescentAlt;
+            pdController.amin = (float)(_minThrust/vessel.totalMass);
+            pdController.amax = (float)(_maxThrust/vessel.totalMass);
+            pdController.maxThrustAngle = maxThrustAngle;
+            pdController.GetControlOutputs(_traj, tr, tv, tatt, new Vector3d(0,-FlightGlobals.getGeeForceAtPosition(r).magnitude,0), Time.time, out dr, out dv, out da, out throttle, out tthrustV, out att_err, out shutdownEnginesNow);
+            if ((pdController.IsFinalDescent()) && (autoMode == AutoMode.PoweredDescent))
+            {
+              Log("Final descent activated at "+(int)(tr.y+lowestY)+"m",true);
+              autoMode = AutoMode.FinalDescent;
+            }
+
+            if (shutdownEnginesNow)
+              shutdownEngines = ShutdownOuterEngines(g*(float)vessel.totalMass, true);
+
+            // Drawing
+            DrawAlign(tr,dr,_transform,aligncol);
+            steer = _transform.TransformVector(tthrustV); // transform back to world co-ordinates
           }
 
-          Vector3d thrustV = _transform.TransformVector(tthrustV); // transform back to world co-ordinates
+          // =================== AERODYNAMIC DESCENT AND BOOSTBACK ===================
+          if ((autoMode == AutoMode.AeroDescent) || (autoMode == AutoMode.Boostback))
+          {
+            float tlat = _tgts[0].lat;
+            float tlon = _tgts[0].lon;
+            float talt = _tgts[0].alt;
+            // Do every 0.2 secs
+            if ((Time.time > last_calc_t + 0.2) || (aerotraj == null))
+            {
+              aerotraj = new Trajectory();
+              // Trajectory computed in world co-ords
+              // TODO: Need to use FAR model in Realism Overhaul
+              aerotraj.SimulateAero(vessel, talt); // provides world co-ords
+              aerotraj.CompensateForBodyRotation(vessel.mainBody);
+              
+              last_calc_t = Time.time;
+              //DrawTrack(aerotraj,null,1,5);
+              Vector3 rPred = aerotraj.r[aerotraj.Length()-1]; // saved
+              Log("pred="+rPred);
+              pred.height = 0;
+              // Store prediction as lat, lon, alt on the surface
+              double lat, lon, alt;
+              vessel.mainBody.GetLatLonAlt(rPred, out lat, out lon, out alt);
+              pred.lat = (float)lat;
+              pred.lon = (float)lon;
+              pred.alt = (float)vessel.mainBody.TerrainAltitude(lat,lon);
+            }
+
+            // Gives world position at current time
+            Vector3d wpred = vessel.mainBody.GetWorldSurfacePosition(pred.lat,pred.lon,pred.alt+1);
+            Vector3d target = vessel.mainBody.GetWorldSurfacePosition(tlat,tlon,talt);
+            DrawPredictedTarget(_transform.InverseTransformPoint(wpred), _transform, predictedcol, tgtSize);
+            Vector3d error = wpred - target; // horizontal error in prediction
+
+            if (autoMode == AutoMode.Boostback)
+            {
+              steer = -error; // Boostback burn
+              double ba = 0.003 * error.magnitude; // desired acceleration
+              throttle = Mathf.Clamp((float)((ba-amin) / (amax-amin)), 0, 1);
+              Log("error mag: "+(error.magnitude)+" amax="+amax+" throttle="+throttle);
+              float ddot = (float)Vector3d.Dot(Vector3d.Normalize(att),Vector3d.Normalize(steer));
+              att_err = Mathf.Acos(ddot)*180/Mathf.PI;
+              if (att_err > 4) // only use thrust within 4 degrees of target attitude
+              {
+                if ((GetCurrentThrust() > 0) && (_minThrust > 0)) // RO min thrust engine - don't shutdown
+                  throttle = 0.001f;
+                else
+                  throttle = 0;
+              }
+              // Close enough? or error not reducing
+              if ((error.magnitude < maxTargetError) && (error.magnitude > minTargetError*1.2))
+              {
+                SwitchAutoMode(AutoMode.AeroDescent);
+                throttle = 0;
+              } 
+
+              if (vessel.altitude < aeroDescentAlt)
+              {
+                SwitchAutoMode(AutoMode.AeroDescent);
+                throttle = 0;
+              }
+              minTargetError = Math.Min(minTargetError,error.magnitude);
+              Log("Boostback predicted error = "+(int)(error.magnitude)+"m  Attitude error="+(int)att_err+"°", true);
+            }
+            else
+            {
+              // Aero dynamic descent
+              Vector3d adj = error * steerGain * 0.01;
+              // good approx for small angles
+              double maxAdj = Math.Sin(maxAoA*Mathf.PI/180);
+              if (adj.magnitude > maxAdj)
+                adj = Vector3d.Normalize(adj)*maxAdj;
+              steer = -Vector3d.Normalize(vessel.GetSrfVelocity()) + adj;
+              float ddot = (float)Vector3d.Dot(Vector3d.Normalize(att),Vector3d.Normalize(steer));
+              att_err = Mathf.Acos(ddot)*180/Mathf.PI;
+              if (vessel.altitude < poweredDescentAlt)
+              {
+                if (EnablePoweredDescent()) // Keeps trying again and again -- too much probably
+                  SwitchAutoMode(AutoMode.PoweredDescent);
+              }
+              Log("Aero Descent predicted error = "+(int)(error.magnitude)+"m", true);
+            }
+          }
+
+          // Calculate thrust vector for logging
+          double thrustProp = GetCurrentThrust() / _maxThrust;
+          ta = tatt * thrustProp * amax;
+
+          // Set autopilot controls
           vessel.Autopilot.SAS.lockedMode = false;
-          vessel.Autopilot.SAS.SetTargetOrientation(thrustV ,false);
+          vessel.Autopilot.SAS.SetTargetOrientation(steer ,false);
           state.mainThrottle = (float)throttle;
-
-          if (shutdownEnginesNow)
-            shutdownEngines = ShutdownOuterEngines(g*(float)vessel.totalMass, true);
-
-          // Drawing
-          DrawAlign(tr,dr,_transform,aligncol);
-          DrawSteer(tr, tr+3*vessel.vesselSize.x*Vector3d.Normalize(tthrustV), _transform, thrustcol);
+          DrawSteer(Vector3d.zero, 3*vessel.vesselSize.x*Vector3d.Normalize(steer), null, thrustcol);
 
           // Open log files
-          if ((_vesselWriter == null) && (_logging))
+          if (_logging)
           {
-            _vesselWriter = new System.IO.StreamWriter(_vesselLogFilename);
-            _vesselWriter.WriteLine("time x y z vx vy vz ax ay az att_err amin amax");
-            _tgtWriter = new System.IO.StreamWriter(_tgtLogFilename);
-            _tgtWriter.WriteLine("time x y z vx vy vz ax ay az att_err amin amax");
-          }
-
-          // Logging
-          if ((_logging) && (tRel >= last_t+log_interval))
-          {
-            LogData(_tgtWriter, tRel, dr, dv, da, 0, solver.amin, solver.amax);
-            double thrustProp = 0;
-            if ((_maxThrust > 0) && (thrustV.magnitude > 0))
-              thrustProp = (controller.amax*GetCurrentThrust())/(tthrustV.magnitude*_maxThrust);
-            LogData(_vesselWriter, tRel, tr, tv, tthrustV*thrustProp, att_err, controller.amin, controller.amax);
-            last_t = tRel;
+            //LogData(_tgtWriter, dr, dv, da, 0, amin, amax);
+            //LogData(_vesselLogFilename, tr, tv, ta, att_err, amin, amax);
           }
         }
 
         public override void OnUpdate()
         {
           base.OnUpdate();
+          // Still do logging if Fly() isn't called
+          if ((_logging) && (_transform != null))
+          {
+            Vector3d r, v, att, tr, tv, tatt;
+            // NOTE: If _transform not set up these values will be zero
+            GetFlightStatus(out r, out v, out att, out tr, out tv, out tatt);
+            // Logging
+            Vector3d ta = tatt * GetCurrentThrust() / vessel.totalMass;
+            LogData(_vesselLogFilename, tr, tv, ta, 0, 0, 0);
+          };
+          if ((!_logging) && (_vesselWriter != null))
+            LogStop();
+
+          // Set guidance mode
+          if (autoMode == AutoMode.Off)
+          {
+            string mode = "Boostback";
+            if (vessel.altitude < aeroDescentAlt)
+              mode = "Aero Descent";
+            if (vessel.altitude < poweredDescentAlt)
+              mode = "Powered Descent";
+            if (vessel.altitude < finalDescentAlt)
+              mode = "Final Descent";
+            Events["ToggleGuidance"].guiName = "Enable "+mode;
+          }
 
           List<Target> tgts = new List<Target>(_tgts);
 
@@ -1057,10 +1287,12 @@ namespace HopperGuidance
               vessel.mainBody.GetLatLonAlt(hit.point, out lat, out lon, out alt);
               Target tgt = new Target((float)lat,(float)lon,(float)alt+0.2f,tgtHeight);
               tgts.Add(tgt); // Add temporarily to end of list
+              Log("Added temporary target",true);
               redrawTargets = true;
               // If clicked stop picking
-              if (Input.GetMouseButtonDown(0))
+              if (Input.GetMouseButton(0))
               {
+                Log("Mouse clicked "+(_tgts.Count)+" targets", true);
                 _tgts = new List<Target>(tgts); // Copy to final list of targets
                 _transform = SetUpTransform(_tgts[_tgts.Count-1]);
                 recomputeTrajectory = true;
@@ -1080,116 +1312,14 @@ namespace HopperGuidance
               DrawTargets(tgts,_transform,targetcol,tgtSize);
             }
           }
-          if ((recomputeTrajectory)&&((autoMode == AutoMode.LandAtTarget)||(autoMode == AutoMode.Failed)))
-            EnableLandAtTarget();
+          if ((recomputeTrajectory)&&((autoMode == AutoMode.PoweredDescent)||(autoMode == AutoMode.Failed)))
+            EnablePoweredDescent();
           if (resetPID)
           {
             float accelFactor  = HGUtils.LinearMap(corrFactor, corrFactorP1, corrFactorP2, accelFactorP1, accelFactorP2);
             Log("accelFactor="+accelFactor);
-            controller.ResetPIDs(corrFactor,ki1,kd1,accelFactor,ki2,kd2,kp1y,ki1y,kd1y,kp2y,ki2y,kd2y);
-          }
-          if ((!_logging) && (_vesselWriter != null))
-            LogStop();
-        }
-
-        /*
-        [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Boostback", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
-        void Boostback()
-        {
-          vessel.OnFlyByWire += new FlightInputCallback(FlyBoostback);
-          vessel.Autopilot.Enable(VesselAutopilot.AutopilotMode.StabilityAssist);
-          vessel.Autopilot.SAS.lockedMode = false;
-        }
-        */
-
-        /*
-        [KSPEvent(guiActive = true, guiActiveEditor = true, guiName = "Set target to KSC", active = true, guiActiveUnfocused = true, unfocusedRange = 1000)]
-        void SetTargetToKSC()
-        {
-          _tgts.Clear();
-          Target tgt = new Target(-0.091754f,-74.6297f,75,1000);
-          _tgts.Add(tgt);
-          _transform = SetUpTransform(_tgts[0]);
-          DrawTargets(_tgts,_transform,targetcol,tgtSize);
-        }
-        */
-
-        /*
-        void DisableBoostback(string msg)
-        {
-          Log(msg, true);
-          vessel.OnFlyByWire -= new FlightInputCallback(FlyBoostback);
-          if (_track_obj != null)
-          {
-            Destroy(_track_obj); // delete old track
-            _track_obj = null;
-          }
-          if (_thrusts_obj != null)
-          {
-            Destroy(_thrusts_obj); // delete old track
-            _thrusts_obj = null;
-          }
-          min_target_err = float.MaxValue;
-        }
-
-        void FlyBoostback(FlightCtrlState state)
-        {
-          Trajectory traj = new Trajectory();
-
-          traj.SimulateAero(vessel, 100);
-          traj.CompensateForBodyRotation(vessel.mainBody);
-          if (traj.Length() == 0)
-          {
-            DisableBoostback("Can't compute trajectory to ground");
-            return;
-          }
-          DrawTrack(traj,vessel.mainBody.transform,1,5);
-          //DrawPredictedTarget(traj.r[traj.Length()-1], vessel.mainBody.transform, predictedcol, tgtSize);
-          double lat,lon,alt;
-          vessel.mainBody.GetLatLonAlt(vessel.mainBody.transform.TransformPoint(traj.r[traj.Length()-1]),out lat,out lon,out alt);
-          if (_tgts.Count > 0)
-          {
-            float tlat = _tgts[_tgts.Count-1].lat;
-            float tlon = _tgts[_tgts.Count-1].lon;
-            Vector3d p = vessel.mainBody.GetWorldSurfacePosition(lat,lon,alt);
-            Vector3d t = vessel.mainBody.GetWorldSurfacePosition(tlat,tlon,alt);
-            Vector3d steer = t-p;
-            Vector3d att = new Vector3d(vessel.transform.up.x,vessel.transform.up.y,vessel.transform.up.z);
-            float ddot = (float)Vector3d.Dot(Vector3d.Normalize(att),Vector3d.Normalize(steer));
-            float att_err = (float)Math.Acos(ddot)*180/Mathf.PI;
-            Log("Target error = "+(int)steer.magnitude+"m Attitude error="+(int)att_err+"°", true);
-            vessel.Autopilot.SAS.SetTargetOrientation(steer, false);
-            float throttle = steerThrottle;
-            double v_err = steer.magnitude/traj.T;
-            ComputeMinMaxThrust(out _minThrust,out _maxThrust, true);
-            double amin = _minThrust/vessel.totalMass;
-            double amax = _maxThrust/vessel.totalMass;
-            if( _maxThrust == 0 )
-            {
-              DisableBoostback("No engine thrust available");
-              return;
-            }
-            if (att_err < 5)
-              throttle = (float)(0.2f*v_err/amax); // Compensate for delta V in 5+ seconds
-            state.mainThrottle = (float)throttle;
-            if (steer.magnitude < 100)
-            {
-              DisableBoostback("Predicted target error <100m. Stopping boostback burn");
-              return;
-            }
-            if (steer.magnitude > min_target_err*1.3f)
-            {
-              DisableBoostback("Predicted target error increased by 30%. Stopping boostback burn");
-              return;
-            }
-            min_target_err = Math.Min(min_target_err,steer.magnitude);
-          }
-          else
-          {
-            DisableBoostback("No target");
-            return;
+            pdController.ResetPIDs(corrFactor,ki1,kd1,accelFactor,ki2,kd2,kp1y,ki1y,kd1y,kp2y,ki2y,kd2y);
           }
         }
-        */
     }
 }

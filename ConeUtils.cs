@@ -115,12 +115,12 @@ namespace HopperGuidance
 
       // Find closest ( can be inside)
       Vector2 pmin = FindClosestPointOnConvexPolygon(F2, conemax);
-      //Console.WriteLine("pmin="+pmin);
+      Console.WriteLine("pmin="+pmin);
 
       // Now consider thrust cone 0 to amin. This is better check than polygon
       // cos we will be on an edge which causes problems
       bool inside_min = (pmin.magnitude < amin);
-      //Console.WriteLine("inside_min="+inside_min);
+      Console.WriteLine("inside_min="+inside_min);
 
       // Find closest point on boundary with at amin
       if (inside_min)
@@ -150,9 +150,9 @@ namespace HopperGuidance
           pmin.x = F2.x;
           pmin.y = amin;
         }
+        // Clamp x to inside cone
+        pmin.x = Mathf.Clamp(F2.x,0,pmin.y*Mathf.Sin(maxAngle));
       }
-      // Clamp x to inside cone
-      pmin.x = Mathf.Clamp(F2.x,0,pmin.y*Mathf.Sin(maxAngle));
 
       //Console.WriteLine("pmin="+pmin);
       // Transform back into 3D
@@ -180,6 +180,6 @@ namespace HopperGuidance
 
       return 0;
     }
-*/ 
+*/
   }
 }

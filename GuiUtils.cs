@@ -23,7 +23,7 @@ namespace HopperGuidance
 
           // Cast a ray from screen point
           Ray ray = FlightCamera.fetch.mainCamera.ScreenPointToRay(Input.mousePosition);
-          bool isHit = Physics.Raycast(ray.origin, ray.direction, out hit, Mathf.Infinity, 1 << 15);
+          bool isHit = Physics.Raycast(ray.origin, ray.direction, out hit, Mathf.Infinity, 1<<15);
           return isHit;
         }
     }

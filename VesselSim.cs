@@ -6,7 +6,7 @@ namespace HopperGuidance
 {
   public class VesselSim
   {
-    static void Simulate(Controller controller, ref Trajectory traj, Vector3d r, Vector3d v, Vector3d g, double dt, double maxT, string tgtLogFilename="target.dat")
+    static void Simulate(PDController controller, ref Trajectory traj, Vector3d r, Vector3d v, Vector3d g, double dt, double maxT, string tgtLogFilename="target.dat")
     {
       double t = 0;
       double throttle;
@@ -112,7 +112,7 @@ namespace HopperGuidance
       var solver = new Solve();
       var result = new SolveResult();
       var traj = new Trajectory();
-      var controller = new Controller();
+      var controller = new PDController();
       bool correct = false;
       Vector3d r0 = Vector3d.zero;
       Vector3d v0 = Vector3d.zero;
